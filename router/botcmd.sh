@@ -102,9 +102,10 @@ panel() {
         line2=$(sed -n '2p' /tmp/balance_report 2>/dev/null)
         bp=$(echo "$line2" | sed -n 's/.*(\([0-9]*\)%).*/\1/p')
         br=$(echo "$line2" | sed -n 's/Main: [0-9]* GB · \([0-9.]*\) GB left.*/\1/p')
-        local expdays
+        local expdays series
         expdays=$(echo "$line2" | sed -n 's/.*(\(~[0-9]*d\)).*/\1/p')
         bd=$(echo "${expdays:-}" | tr -dc '0-9')
+        series=$(cat /etc/balance-log/*.log 2>/dev/null | cut -d'|' -f2 | tail -14 | tr '\n' '|' | sed 's/|$//')
     fi
 
     # proxy — fast SOCKS probe (acceptable latency)
@@ -124,7 +125,7 @@ panel() {
     load=$(awk '{print $1}' /proc/loadavg)
     temp=$(awk '{printf "%d", $1/1000}' /sys/class/thermal/thermal_zone0/temp 2>/dev/null)
 
-    body=$(dashboard_body "$bp" "$br" "$bd" "$proxy" "$devcount" "$usage" "$dpct" "$dfree" "$load" "$temp")
+    body=$(dashboard_body "$bp" "$br" "$bd" "$proxy" "$devcount" "$usage" "$dpct" "$dfree" "$load" "$temp" "$series")
     panel_post "$chat" "$(card "<b>🔘 Control Panel</b>" "$body")" "$(panel_markup)"
 }
 
@@ -156,7 +157,7 @@ cmd_clients() {
             [ -z "$mac" ] && continue
             count=$((count+1))
             name=$(/root/usage.sh --name "$mac")
-            [ -z "$name" ] && name="unknown"
+            [ -z "$name" ] && name="unknown(${mac})"
             bytes=$(echo "$today" | awk -F'|' -v n="$name" '$1==n{b=$3} END{o=(b==""?0:b); print (o<0)?-o:o}')
             printf '%s|0|%s\n' "$name" "$bytes"
         done < /tmp/dhcp.leases
@@ -240,7 +241,7 @@ cmd_balance() {
         body=$(/root/balance.sh --report 2>/dev/null)
         [ -z "$body" ] && body="Balance unavailable — no cache yet."
     fi
-    text=$(printf '%s\n──────────────\n<pre>%s</pre>' "<b>📦 Data Balance</b>" "$body")
+    text=$(card "<b>📦 Data Balance</b>" "$body")
     [ -n "$ago" ] && text="${text}
 <i>cached as of ${ago}</i>"
     deliver "$1" "$text" "$(back_markup)"
@@ -293,7 +294,7 @@ handle_cb() {  # <chat> <data> <callback_query_id>
 OFFSET=0
 while :; do
     # Heartbeat stamp (Q7: watcher kills if stale >120s)
-    echo $(date +%s) > /tmp/botcmd.hb
+    date +%s > /tmp/botcmd.hb
 
     U=$(curl -s -m 30 "https://api.telegram.org/bot$TOKEN/getUpdates?timeout=25&offset=$OFFSET" 2>/dev/null)
     UID=$(echo "$U" | jq -r '.result[0].update_id // empty' 2>/dev/null)

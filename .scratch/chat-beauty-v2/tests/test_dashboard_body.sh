@@ -18,4 +18,12 @@ Devices  0 online · — today
 Disk     ▰▱▱▱▱▱▱▱▱▱  10% used (5.0M free)
 Load     1.20  63°C" "$body2"
 
+# With series sparkline appended to Data line (ticket 05 spec gap fix)
+body3=$(dashboard_body 58 88.2 14 '🟢 UP' 5 '1.20 GB' 74 '14.7M' 0.45 42 '146|140|130|100|88')
+assert_eq "dashboard with sparkline" "Data     ▰▰▰▰▰▰▱▱▱▱  58% · 88.2 GB left · 14d █▇▆▂▁
+Proxy    🟢 UP
+Devices  5 online · 1.20 GB today
+Disk     ▰▰▰▰▰▰▰▱▱▱  74% used (14.7M free)
+Load     0.45  42°C" "$body3"
+
 summary

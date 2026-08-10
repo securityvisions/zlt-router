@@ -79,11 +79,13 @@ balance_body() {  # balance_body <pct> <remain_gb> <quota_gb> <expires> <expdays
     }
 }
 
-dashboard_body() {  # dashboard_body <bal_pct> <bal_remain> <bal_days> <proxy> <dev> <usage> <disk_pct> <disk_free> <load> <temp>
-    # → the 5-line Panel summary inside the `<pre>` block
-    local bp="$1" br="$2" bd="$3" proxy="$4" dev="$5" usage="$6" dp="$7" dfree="$8" load="$9" temp="${10}"
+dashboard_body() {  # dashboard_body <bal_pct> <bal_remain> <bal_days> <proxy> <dev> <usage> <disk_pct> <disk_free> <load> <temp> [series]
+    # → the Panel summary block inside the `<pre>` block; optional series adds trend sparkline to Data line
+    local bp="$1" br="$2" bd="$3" proxy="$4" dev="$5" usage="$6" dp="$7" dfree="$8" load="$9" temp="${10}" series="${11}"
     [ "$bd" = "0" ] && bd=""  # treat 0-day history as no history
-    printf 'Data     %s  %s%% · %s GB left%s\n' "$(bar "$bp")" "$bp" "${br:-—}" "${bd:+ · ${bd}d}"
+    local trend=""
+    [ -n "$series" ] && trend=" $(spark "$series")"
+    printf 'Data     %s  %s%% · %s GB left%s%s\n' "$(bar "$bp")" "$bp" "${br:-—}" "${bd:+ · ${bd}d}" "$trend"
     printf 'Proxy    %s\n' "$proxy"
     printf 'Devices  %s online · %s today\n' "${dev:-0}" "${usage:-—}"
     printf 'Disk     %s  %s%% used (%s free)\n' "$(bar "$dp")" "$dp" "$dfree"

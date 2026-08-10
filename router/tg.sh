@@ -14,7 +14,7 @@ tg_send() {
 
 tg_card() {  # tg_card <title> <body>  — send an alert Card (alert_text + tg_send)
     local text
-    text=$(alert_text "$1" "$2")
+    text=$(alert_text "$1" "$(esc "$2")")
     tg_send "$text"
 }
 

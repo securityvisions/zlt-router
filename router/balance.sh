@@ -183,18 +183,6 @@ decide_tier() {  # total pct min_days proj
     echo none
 }
 
-tier_msg() {  # tier total pct min_days proj rate
-    local tier="$1" total="$2" pct="$3" min_days="$4" proj="$5" rate="$6"
-    local dstr="~∞"
-    [ "$proj" != "99999" ] && dstr="~${proj}d"
-    case "$tier" in
-        notice)    echo "🔶 Samantel notice: ${total} GB left (${pct}%), ${dstr} at current rate." ;;
-        warn)      echo "🟠 Samantel warning: ${total} GB left (${pct}%), expires in ${min_days}d, ${dstr} at current rate. Consider renewing." ;;
-        urgent)    echo "🔴 Samantel low: ${total} GB left (${pct}%), ${dstr} at current rate. Renew soon — Friday is 40% off!" ;;
-        exhausted) echo "📛 Samantel data exhausted! Renew now — Friday is 40% off!" ;;
-    esac
-}
-
 alert_tier() {  # tier total pct min_days proj rate
     local tier="$1" prev pv nv title body
     prev=$(cat "$TIER_STATE" 2>/dev/null || echo none)
