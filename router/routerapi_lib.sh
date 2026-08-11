@@ -175,11 +175,10 @@ EOF
     fi
 }
 
-ra_cost_rows_json() {  # <rate> — today's rows with toman + share, JSON on stdout
+ra_cost_table() {  # <rate> — stdin: name|mac|bytes -> {rows, total_gb, total_toman} (shared by cost & bill)
     local rate="$1" tmp total_gb total_toman name mac bytes toman gb share out="" first=1
-    tmp=$(ra_usage_today | while IFS='|' read -r name meta bytes; do
+    tmp=$(cat | while IFS='|' read -r name mac bytes; do
         [ -z "$name" ] && continue
-        case "$meta" in *:*) mac="$meta";; *) mac="";; esac
         ra_is_excluded_mac "$mac" && continue
         t=$(awk -v r="$rate" -v b="${bytes:-0}" 'BEGIN{ c=r*b/1073741824; print int(c/1000+0.5)*1000 }')
         g=$(awk -v b="${bytes:-0}" 'BEGIN{printf "%.4f", b/1073741824}')
@@ -203,37 +202,29 @@ ra_json_cost() {  # <yes|no>
     rate_full=$(ra_conf_val "$RA_BILLING_CONF" RATE_FULL_TOMAN);   [ -z "$rate_full" ]  && rate_full=7700
     rate_friday=$(ra_conf_val "$RA_BILLING_CONF" RATE_FRIDAY_TOMAN); [ -z "$rate_friday" ] && rate_friday=4620
     if [ "$friday" = "yes" ]; then rate=$rate_friday; else rate=$rate_full; fi
-    res=$(ra_cost_rows_json "$rate")
+    res=$(ra_usage_today | while IFS='|' read -r name meta bytes; do
+        [ -z "$name" ] && continue
+        case "$meta" in *:*) mac="$meta";; *) mac="";; esac
+        echo "$name|$mac|${bytes:-0}"
+    done | ra_cost_table "$rate")
     echo "{\"friday\":$([ "$friday" = "yes" ] && echo true || echo false),\"rate_full\":$rate_full,\"rate_friday\":$rate_friday,$(echo "$res" | sed 's/^{//')"
 }
 
 ra_json_bill() {  # <yes|no> [YYYY-MM]
-    local friday="${1:-no}" month="${2:-$(date +%Y-%m)}" rate_full rate_friday rate
+    local friday="${1:-no}" month="${2:-$(date +%Y-%m)}" rate_full rate_friday rate res key mac name
     rate_full=$(ra_conf_val "$RA_BILLING_CONF" RATE_FULL_TOMAN);   [ -z "$rate_full" ]  && rate_full=7700
     rate_friday=$(ra_conf_val "$RA_BILLING_CONF" RATE_FRIDAY_TOMAN); [ -z "$rate_friday" ] && rate_friday=4620
     if [ "$friday" = "yes" ]; then rate=$rate_friday; else rate=$rate_full; fi
-    local tmp total_gb total_toman name mac bytes toman gb share out="" first=1 key
-    tmp=$(ra_usage_month_rows "$month" | while IFS='|' read -r key bytes; do
+    res=$(ra_usage_month_rows "$month" | while IFS='|' read -r key bytes; do
         [ -z "$key" ] && continue
         case "$key" in *:*) mac="$key";; *) mac="";; esac
-        ra_is_excluded_mac "$mac" && continue
-        t=$(awk -v r="$rate" -v b="$bytes" 'BEGIN{ c=r*b/1073741824; print int(c/1000+0.5)*1000 }')
-        g=$(awk -v b="$bytes" 'BEGIN{printf "%.4f", b/1073741824}')
-        echo "$key|$mac|$bytes|$t|$g"
-    done | sort -t'|' -k3 -rn)
-    total_gb=$(echo "$tmp" | awk -F'|' '{g+=$3} END{printf "%.4f", g/1073741824}')
-    total_toman=$(echo "$tmp" | awk -F'|' '{t+=$4} END{print t+0}')
-    while IFS='|' read -r key mac bytes toman gb; do
-        [ -z "$key" ] && continue
         name=$(ra_name_for_key "$key")
-        [ -z "$name" ] && { case "$key" in *:*) name="Unknown-$(echo "$key" | cut -c1-8)";; *) name="$key";; esac; }
-        share=$(awk -v b="$bytes" -v t="$total_gb" 'BEGIN{ printf "%.1f", (t>0) ? (b/1073741824)/t*100 : 0 }')
-        if [ "$first" = 1 ]; then first=0; else out="$out,"; fi
-        out="$out{\"name\":\"$(ra_esc "$name")\",\"mac\":\"$(ra_esc "$mac")\",\"gb\":$gb,\"toman\":$toman,\"share\":$share}"
-    done <<EOF
-$tmp
-EOF
-    echo "{\"period\":\"$month\",\"friday\":$([ "$friday" = "yes" ] && echo true || echo false),\"rate_full\":$rate_full,\"rate_friday\":$rate_friday,\"rows\":[$out],\"total_gb\":${total_gb:-0},\"total_toman\":${total_toman:-0}}"
+        if [ -z "$name" ]; then
+            case "$key" in *:*) name="Unknown-$(echo "$key" | cut -c1-8)";; *) name="$key";; esac
+        fi
+        echo "$name|$mac|$bytes"
+    done | ra_cost_table "$rate")
+    echo "{\"period\":\"$month\",\"friday\":$([ "$friday" = "yes" ] && echo true || echo false),\"rate_full\":$rate_full,\"rate_friday\":$rate_friday,$(echo "$res" | sed 's/^{//')}"
 }
 
 ra_json_balance() {

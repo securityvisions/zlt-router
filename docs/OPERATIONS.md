@@ -69,8 +69,8 @@ curl -H 'X-Router-Token: <token>' http://192.168.1.1/cgi-bin/routerapi.sh/balanc
 ```
 
 Deploy: copy `router/routerapi.sh` + `router/routerapi_lib.sh` from this repo to `/www/cgi-bin/`,
-`chmod 755`, and write `/etc/routerapp.conf` (`TOKEN=...`, chmod 600). Contract:
-`~/router-app/API_CONTRACT.md`.
+`chmod 755`, and write `/etc/routerapp.conf` (`TOKEN=...`, chmod 600). Requires `jq` (already
+installed for the bot). Contract: `~/router-app/API_CONTRACT.md`.
 
 ## Useful commands (from the router)
 
