@@ -16,8 +16,10 @@ the bot lacks (real charts, live bandwidth, direct actions, in-app notifications
 Two pieces, one seam:
 
 - **Router JSON API** — uhttpd CGI (`/cgi-bin/routerapi.sh/*`) reading/writing the same state
-  files the bot uses, gated by a shared token (`/etc/routerapp.conf`, header `X-Router-Token`).
-  Contract in `~/router-app/API_CONTRACT.md`. Plus an hourly telemetry snapshot for charts.
+  files the bot uses, gated by a shared token (`/etc/routerapp.conf`). Auth is HTTP Basic
+  (`Authorization: Basic base64(xirouter:<token>)`; token = password, username fixed
+  `xirouter`) — uhttpd drops custom `X-*` headers, so a plain header token never reaches the
+  CGI. Contract in `~/router-app/API_CONTRACT.md`. Plus an hourly telemetry snapshot for charts.
 - **Xirouter Android app** (`~/router-app`) — Kotlin/Compose, Persian RTL, OkHttp +
   kotlinx-serialization, Room local history, WorkManager notifications.
 
@@ -35,6 +37,25 @@ Two pieces, one seam:
 - **Actions are guarded** — every action confirms; destructive ones require the optional PIN app lock.
 - **Cost model** is the bot's documented one: rate × GB (7,700 full / 4,620 Friday), rounded to
   the nearest 1,000 Toman, per-device share %.
+
+### Delivered-state notes (auth transport, from live deployment)
+
+The original plan sent the token in an `X-Router-Token` header. Live deployment proved that
+**uhttpd only forwards a fixed whitelist of request headers to CGI** (HTTP_ACCEPT, HTTP_COOKIE,
+HTTP_AUTHORIZATION, HTTP_HOST, HTTP_REFERER, HTTP_USER_AGENT, …) and silently drops custom
+`X-*` headers, so the header design could never authenticate. The seam now uses **HTTP Basic
+auth** end-to-end:
+
+- Router: `ra_authed` accepts `Authorization: Basic base64(xirouter:<token>)` (token as the
+  password, username ignored); the legacy `X-Router-Token` header is still accepted by the lib
+  for back-compat and in-shell tests.
+- App: `ApiClient` sends the Basic header (username `xirouter`); the token field in Settings is
+  unchanged.
+- Deployment also fixed three adjacent defects: the CGI dispatcher lost the status code in a
+  subshell (every response was HTTP 200) — `ra_route` now emits a `@@STATUS:NNN` marker the
+  dispatcher strips; uhttpd ignores a bare `Status: NNN` and needs the reason phrase; and
+  `ra_json_bill` emitted a trailing `}` (invalid JSON the app's strict decoder rejected).
+  See `issues/13-router-api-auth-transport.md`.
 
 ## Out of scope
 

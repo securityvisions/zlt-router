@@ -5,8 +5,15 @@ scripts and state files on the router, and nothing on the LAN can read it except
 bot. The Xirouter Android app (a richer, chart-driven companion) needs a machine-readable seam.
 We added a **JSON HTTP API** served by the router's existing uhttpd, implemented as a small CGI
 dispatcher (`/www/cgi-bin/routerapi.sh`) plus a pure builder library (`routerapi_lib.sh`), gated
-by a shared token in a root-only config (`/etc/routerapp.conf`, header `X-Router-Token`). The
-dispatcher shells out to the existing state files and scripts the bot already uses — one state,
+by a shared token in a root-only config (`/etc/routerapp.conf`). Auth uses **HTTP Basic**: the
+token is the password, the username is fixed (`xirouter`), and the client sends
+`Authorization: Basic base64(xirouter:<token>)`. The original design sent the token in a custom
+`X-Router-Token` header — but uhttpd only forwards a fixed whitelist of request headers to CGI
+(HTTP_ACCEPT, HTTP_COOKIE, HTTP_AUTHORIZATION, HTTP_HOST, HTTP_REFERER, HTTP_USER_AGENT, …) and
+**silently drops custom `X-*` headers**, so the token never reached the script. HTTP
+Authorization is on the whitelist, so Basic auth is the minimal standard transport that
+survives uhttpd; the lib still accepts the legacy header for back-compat and in-shell tests.
+The dispatcher shells out to the existing state files and scripts the bot already uses — one state,
 two surfaces — and emits JSON via `jq`-compatible builders.
 
 This was chosen over a long-running ash HTTP daemon (faster per-request, but hand-rolled HTTP

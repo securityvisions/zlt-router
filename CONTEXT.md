@@ -21,5 +21,8 @@ Shared vocabulary for the home-network project. Use these terms exactly; don't d
 - **Monthly log** — `/etc/usage-log/YYYY-MM.log`; the nightly snapshot appends per-device usage for monthly billing.
 - **Alerts** — scheduled Telegram messages (balance, usage+cost, proxy state-change, new device, disk, reboot).
 - **Router API** — the JSON HTTP surface served by uhttpd CGI (`/cgi-bin/routerapi.sh/*`), the seam the Xirouter app talks to. Reads and writes the same state files the bot uses; contract lives in `~/router-app/API_CONTRACT.md`.
-- **API token** — the shared secret in `/etc/routerapp.conf` that gates the Router API (`X-Router-Token` header).
+- **API token** — the shared secret in `/etc/routerapp.conf` that gates the Router API. It is
+  sent as HTTP Basic auth (`Authorization: Basic base64(xirouter:<token>)`; the username is
+  fixed `xirouter`) because uhttpd does not forward custom `X-*` headers to CGI. The app's
+  token field holds it; the bot is unaffected.
 - **Telemetry log** — `/etc/telemetry/hourly.log`; the hourly `ts|total_gb|balance_gb|proxy_state` rows that feed the app's charts (the router's finer-grained history store beside the daily balance log).

@@ -33,7 +33,9 @@ RA_WATCHLIST="${RA_WATCHLIST:-$RA_USAGE_LOG_DIR/watchlist}"
 RA_BILLING_CONF="${RA_BILLING_CONF:-/etc/billing.conf}"
 RA_USAGE_SH="${RA_USAGE_SH:-/root/usage.sh}"
 RA_EXCLUDED_MACS="${RA_EXCLUDED_MACS:-}"
-RA_NODES="${RA_NODES:-$(printf 'REALITY-443-parsa|skReality\nhysteria2|skWrAzdt')}"
+RA_NODES="${RA_NODES:-$(uci show passwall 2>/dev/null | sed -n "s/^passwall\.\([^@.][^.]*\)\.remarks='\([^']*\)'/\2|\1/p")}"
+[ -n "$RA_NODES" ] || RA_NODES='REALITY-443-parsa|skReality
+hysteria2|skWrAzdt'
 DIV=1073741824
 
 # ---------- tiny JSON helpers ----------
@@ -57,11 +59,25 @@ ra_name_for_key() {  # <key> — custom name from user-names, else ""
 }
 
 # ---------- auth ----------
+# The token rides the standard HTTP Authorization header (Basic auth; the token
+# is the password, username ignored) because uhttpd does not forward custom
+# X-* headers to CGI. The legacy X-Router-Token header is still accepted for
+# back-compat and in-shell tests.
 ra_authed() {
-    [ -n "$HTTP_X_ROUTER_TOKEN" ] || return 1
-    local want
+    local want decoded
     want=$(sed -n 's/^TOKEN=//p' "$RA_CONF" 2>/dev/null | head -1 | tr -d '"' | tr -d ' ')
-    [ -n "$want" ] && [ "$want" = "$HTTP_X_ROUTER_TOKEN" ]
+    [ -n "$want" ] || return 1
+    if [ -n "$HTTP_X_ROUTER_TOKEN" ] && [ "$HTTP_X_ROUTER_TOKEN" = "$want" ]; then
+        return 0
+    fi
+    case "$HTTP_AUTHORIZATION" in
+        Basic*|basic*)
+            decoded=$(printf '%s' "${HTTP_AUTHORIZATION#* }" | base64 -d 2>/dev/null)
+            [ "$decoded" = "$want" ] && return 0
+            case "$decoded" in *:*) [ "${decoded#*:}" = "$want" ] && return 0 ;; esac
+            ;;
+    esac
+    return 1
 }
 
 # ---------- state functions (the test seam; router defaults here) ----------
@@ -82,7 +98,10 @@ ra_proxy_node() {
     id=$(uci get passwall.@global[0].tcp_node 2>/dev/null)
     [ -z "$id" ] && { echo "unknown"; return; }
     name=$(echo "$RA_NODES" | awk -F'|' -v id="$id" '$2==id{print $1; exit}')
-    [ -n "$name" ] && echo "$name" || echo "$id"
+    [ -n "$name" ] && echo "$name" || {
+        name=$(uci get "passwall.$id.remarks" 2>/dev/null)   # fall back to the node's own remark
+        [ -n "$name" ] && echo "$name" || echo "$id"
+    }
 }
 ra_usage_today() { "$RA_USAGE_SH" --today 2>/dev/null; }   # name|meta|bytes lines
 ra_usage_month_rows() {  # [YYYY-MM] -> "key|bytes" summed per key (tolerant parse)
@@ -105,9 +124,26 @@ ra_balance_series() {  # date|gb lines, newest first (last 90)
 ra_url_test() {  # <url> -> result string
     curl -sS -m 10 -o /dev/null -w 'HTTP %{http_code} in %{time_total}s (IP %{remote_ip})' "$1" 2>/dev/null
 }
+ra_node_id_by_remark() {  # <remark> -> first passwall node id with that remark
+    uci show passwall 2>/dev/null |
+        sed -n "s/^passwall\.\([^@.][^.]*\)\.remarks='\([^']*\)'/\2|\1/p" |
+        awk -F'|' -v r="$1" '$1==r{print $2; exit}'
+}
+ra_node_id_by_protocol() {  # <protocol> -> first passwall node id with that protocol (e.g. hysteria2)
+    uci show passwall 2>/dev/null |
+        sed -n "s/^passwall\.\([^@.][^.]*\)\.protocol='\([^']*\)'/\2|\1/p" |
+        awk -F'|' -v p="$1" '$1==p{print $2; exit}'
+}
+ra_resolve_node() {  # <name> -> node id: remark, else protocol (hysteria2), else RA_NODES alias
+    local id
+    id=$(ra_node_id_by_remark "$1")
+    [ -z "$id" ] && id=$(ra_node_id_by_protocol "$1")
+    [ -z "$id" ] && id=$(echo "$RA_NODES" | awk -F'|' -v n="$1" '$1==n{print $2; exit}')
+    echo "$id"
+}
 ra_uci_switch() {  # <node name> — apply the documented passwall switch
     local id
-    id=$(echo "$RA_NODES" | awk -F'|' -v n="$1" '$1==n{print $2; exit}')
+    id=$(ra_resolve_node "$1")
     [ -z "$id" ] && return 1
     uci set passwall.@global[0].tcp_node="$id" 2>/dev/null
     uci commit passwall 2>/dev/null
@@ -224,7 +260,7 @@ ra_json_bill() {  # <yes|no> [YYYY-MM]
         fi
         echo "$name|$mac|$bytes"
     done | ra_cost_table "$rate")
-    echo "{\"period\":\"$month\",\"friday\":$([ "$friday" = "yes" ] && echo true || echo false),\"rate_full\":$rate_full,\"rate_friday\":$rate_friday,$(echo "$res" | sed 's/^{//')}"
+    echo "{\"period\":\"$month\",\"friday\":$([ "$friday" = "yes" ] && echo true || echo false),\"rate_full\":$rate_full,\"rate_friday\":$rate_friday,$(echo "$res" | sed 's/^{//')"
 }
 
 ra_json_balance() {
@@ -400,7 +436,7 @@ ra_switch_proxy() {
     local node
     node=$(echo "$RA_BODY" | jq -r '.node // ""' 2>/dev/null)
     [ -z "$node" ] && { RA_STATUS=400; echo '{"error":"node required"}'; return; }
-    if ! echo "$RA_NODES" | awk -F'|' -v n="$node" '$1==n{f=1} END{exit !f}'; then
+    if [ -z "$(ra_resolve_node "$node")" ]; then
         RA_STATUS=400; echo '{"error":"unknown node"}'; return
     fi
     ra_uci_switch "$node"
@@ -427,24 +463,27 @@ ra_route() {
     if ! ra_authed; then
         RA_STATUS=401
         echo '{"error":"unauthorized"}'
-        return
+    else
+        case "$PATH_INFO" in
+            /status)        ra_json_status ;;
+            /usage)         ra_json_usage "$(ra_qp period)" ;;
+            /cost)          ra_json_cost "$(ra_qp friday)" ;;
+            /bill)          ra_json_bill "$(ra_qp friday)" "$(ra_qp month)" ;;
+            /balance)       ra_json_balance ;;
+            /clients)       ra_json_clients ;;
+            /live)          ra_json_live ;;
+            /history)       ra_json_history "$(ra_qp kind)" "$(ra_qp days)" ;;
+            /devices)       ra_json_devices ;;
+            /device/rename) ra_rename_device ;;
+            /device/watch)  ra_watch_device ;;
+            /friday)        ra_set_friday ;;
+            /test)          ra_test_url ;;
+            /proxy/switch)  ra_switch_proxy ;;
+            /reboot)        ra_reboot ;;
+            *)              RA_STATUS=404; echo '{"error":"unknown endpoint"}' ;;
+        esac
     fi
-    case "$PATH_INFO" in
-        /status)        ra_json_status ;;
-        /usage)         ra_json_usage "$(ra_qp period)" ;;
-        /cost)          ra_json_cost "$(ra_qp friday)" ;;
-        /bill)          ra_json_bill "$(ra_qp friday)" "$(ra_qp month)" ;;
-        /balance)       ra_json_balance ;;
-        /clients)       ra_json_clients ;;
-        /live)          ra_json_live ;;
-        /history)       ra_json_history "$(ra_qp kind)" "$(ra_qp days)" ;;
-        /devices)       ra_json_devices ;;
-        /device/rename) ra_rename_device ;;
-        /device/watch)  ra_watch_device ;;
-        /friday)        ra_set_friday ;;
-        /test)          ra_test_url ;;
-        /proxy/switch)  ra_switch_proxy ;;
-        /reboot)        ra_reboot ;;
-        *)              RA_STATUS=404; echo '{"error":"unknown endpoint"}' ;;
-    esac
+    # Status marker for the dispatcher: it runs us in a subshell so it cannot
+    # read RA_STATUS; it strips this trailing line before emitting the JSON.
+    echo "@@STATUS:$RA_STATUS"
 }
