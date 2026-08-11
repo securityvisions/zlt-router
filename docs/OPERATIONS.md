@@ -15,6 +15,7 @@ How the deployed system is scheduled, configured, queried, and rolled back.
 55  23 * * *  /root/usage.sh --snapshot    # nightly usage snapshot (feeds monthly bill)
 0    7 1 * *  /root/monthly.sh             # previous month's bill
 0    9 * * 5  /root/friday.sh              # Friday-discount reminder
+0    * * * *  /root/snap.sh                # hourly telemetry snapshot (Xirouter charts)
 ```
 
 Boot (`/etc/rc.local`): reboot alert (`tg.sh --reboot`) + bot start (`botcmd-start.sh`).
@@ -24,6 +25,7 @@ Boot (`/etc/rc.local`): reboot alert (`tg.sh --reboot`) + bot start (`botcmd-sta
 | File | Contents |
 |---|---|
 | `/etc/tg.conf` | `TOKEN`, `CHAT_ID` (Telegram bot) |
+| `/etc/routerapp.conf` | `TOKEN` (Xirouter Router API — the app sends it as `X-Router-Token`) |
 | `/etc/samantel.conf` | `SAMANTEL_PHONE`, `SAMANTEL_PASS`, balance thresholds (`BALANCE_WARN_GB`, `BALANCE_URGENT_GB`, `BALANCE_WARN_DAYS`, `BALANCE_URGENT_DAYS`, `BALANCE_RATE_ALERT_GBH`, `MONITOR_REFRESH_MIN`) |
 | `/etc/billing.conf` | `RATE_FULL_TOMAN`, `RATE_FRIDAY_TOMAN`, `ROUND`, `LAST_FRIDAY`, `FRIDAY_REMINDER` |
 | `/etc/config/adblock` | blocklist feeds, enabled |
@@ -54,6 +56,21 @@ The VPS at `85.121.124.158` runs the **s-ui** panel with a sing-box core (replac
 - `/tmp/` — logs (`tg.log`, `botcmd.log`, `balance.log`), states (`hyst_state`, `devices_known`, `balance_tier`, `balance_anchor`, `balance_rate`, `samantel_token`), bot guard (`botcmd.lock`, `botcmd.pid`), adblock blocklist.
 - `/etc/usage-log/` — nlbw baseline (`last`) + monthly usage logs.
 - `/etc/balance-log/` — daily balance snapshots (drain-rate source).
+- `/etc/telemetry/` — `hourly.log` (hourly `ts|total_gb|balance_gb|proxy_state` rows for the Xirouter charts).
+
+## Router API (Xirouter app)
+
+The app talks to `http://192.168.1.1/cgi-bin/routerapi.sh/*` with header `X-Router-Token: <token>`
+(see `docs/adr/0002-router-json-api.md`). Test from the LAN:
+
+```sh
+curl -H 'X-Router-Token: <token>' http://192.168.1.1/cgi-bin/routerapi.sh/status
+curl -H 'X-Router-Token: <token>' http://192.168.1.1/cgi-bin/routerapi.sh/balance
+```
+
+Deploy: copy `router/routerapi.sh` + `router/routerapi_lib.sh` from this repo to `/www/cgi-bin/`,
+`chmod 755`, and write `/etc/routerapp.conf` (`TOKEN=...`, chmod 600). Contract:
+`~/router-app/API_CONTRACT.md`.
 
 ## Useful commands (from the router)
 

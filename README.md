@@ -7,6 +7,7 @@ The system lives on the router (shell scripts + cron). This repo documents it: w
 ## System overview
 
 - **Telegram bot (@xirouterbot)** — interactive button panel + text commands; the single surface for status, usage, costs, bills, balance, proxy health, clients, and URL tests.
+- **Router API** — the JSON HTTP seam the [Xirouter](https://github.com) Android app talks to (see `docs/adr/0002-router-json-api.md`; the app lives in `~/router-app`, contract in `API_CONTRACT.md`).
 - **Scheduled alerts** — Samantel balance (daily + tiered warnings + realtime depletion monitor), per-device usage & cost (daily), proxy state changes (VLESS REALITY default, hysteria2 manual fallback), new devices, disk space, router reboots, monthly bill, Friday-discount reminder.
 - **Usage & cost sharing** — per-device usage from nlbwmon, converted to Toman (full / Friday-discount rate, rounded to 1,000 Toman), with per-device share percentages; monthly billing from nightly snapshots.
 - **Balance monitoring** — read-only Samantel integration with cached login, multi-package awareness, drain-rate projection, and a realtime monitor that catches same-day heavy usage.
