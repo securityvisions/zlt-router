@@ -38,6 +38,13 @@ RA_NODES="${RA_NODES:-$(uci show passwall 2>/dev/null | sed -n "s/^passwall\.\([
 hysteria2|skWrAzdt'
 DIV=1073741824
 
+# Shared home-network business module (one canonical copy on the router at
+# /root/hnlib.sh): the balance-report reader and cost table live behind it so
+# the Router API, the bot, the billing report and telemetry share one
+# implementation. Tests point HN_LIB at the repo copy.
+HN_LIB="${HN_LIB:-/root/hnlib.sh}"
+[ -f "$HN_LIB" ] && . "$HN_LIB"
+
 # ---------- tiny JSON helpers ----------
 ra_esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 ra_ts()  { date +%s; }
@@ -211,73 +218,76 @@ EOF
     fi
 }
 
-ra_cost_table() {  # <rate> — stdin: name|mac|bytes -> {rows, total_gb, total_toman} (shared by cost & bill)
-    local rate="$1" tmp total_gb total_toman name mac bytes toman gb share out="" first=1
-    tmp=$(cat | while IFS='|' read -r name mac bytes; do
-        [ -z "$name" ] && continue
-        ra_is_excluded_mac "$mac" && continue
-        t=$(awk -v r="$rate" -v b="${bytes:-0}" 'BEGIN{ c=r*b/1073741824; print int(c/1000+0.5)*1000 }')
-        g=$(awk -v b="${bytes:-0}" 'BEGIN{printf "%.4f", b/1073741824}')
-        echo "$name|$mac|${bytes:-0}|$t|$g"
-    done | sort -t'|' -k3 -rn)
-    total_gb=$(echo "$tmp" | awk -F'|' '{g+=$3} END{printf "%.4f", g/1073741824}')
-    total_toman=$(echo "$tmp" | awk -F'|' '{t+=$4} END{print t+0}')
-    while IFS='|' read -r name mac bytes toman gb; do
-        [ -z "$name" ] && continue
-        share=$(awk -v b="$bytes" -v t="$total_gb" 'BEGIN{ printf "%.1f", (t>0) ? (b/1073741824)/t*100 : 0 }')
-        if [ "$first" = 1 ]; then first=0; else out="$out,"; fi
-        out="$out{\"name\":\"$(ra_esc "$name")\",\"mac\":\"$(ra_esc "$mac")\",\"gb\":$gb,\"toman\":$toman,\"share\":$share}"
-    done <<EOF
-$tmp
-EOF
-    echo "{\"rows\":[$out],\"total_gb\":${total_gb:-0},\"total_toman\":${total_toman:-0}}"
+# ra_cost_json_parts — stdin: ROW|TOTAL lines from hn_cost_table -> rows-json|total_gb|total_toman
+ra_cost_json_parts() {
+    local rows="" first=1 tag name mac gb toman share total_gb total_toman
+    while IFS='|' read -r tag name mac gb toman share; do
+        case "$tag" in
+            ROW)
+                if [ "$first" = 1 ]; then first=0; else rows="$rows,"; fi
+                rows="$rows{\"name\":\"$(ra_esc "$name")\",\"mac\":\"$(ra_esc "$mac")\",\"gb\":$gb,\"toman\":$toman,\"share\":$share}" ;;
+            TOTAL) total_gb="$name"; total_toman="$mac" ;;
+        esac
+    done
+    echo "$rows|${total_gb:-0}|${total_toman:-0}"
 }
 
 ra_json_cost() {  # <yes|no>
-    local friday="${1:-no}" rate_full rate_friday rate res
+    local friday="${1:-no}" rate_full rate_friday rate round res parts rows rest total_gb total_toman
     rate_full=$(ra_conf_val "$RA_BILLING_CONF" RATE_FULL_TOMAN);   [ -z "$rate_full" ]  && rate_full=7700
     rate_friday=$(ra_conf_val "$RA_BILLING_CONF" RATE_FRIDAY_TOMAN); [ -z "$rate_friday" ] && rate_friday=4620
     if [ "$friday" = "yes" ]; then rate=$rate_friday; else rate=$rate_full; fi
+    round=$(ra_conf_val "$RA_BILLING_CONF" ROUND); [ -z "$round" ] && round=1000
     res=$(ra_usage_today | while IFS='|' read -r name meta bytes; do
         [ -z "$name" ] && continue
         case "$meta" in *:*) mac="$meta";; *) mac="";; esac
+        ra_is_excluded_mac "$mac" && continue
         echo "$name|$mac|${bytes:-0}"
-    done | ra_cost_table "$rate")
-    echo "{\"friday\":$([ "$friday" = "yes" ] && echo true || echo false),\"rate_full\":$rate_full,\"rate_friday\":$rate_friday,$(echo "$res" | sed 's/^{//')"
+    done | hn_cost_table "$rate" "$round")
+    parts=$(echo "$res" | ra_cost_json_parts)
+    rows=${parts%%|*}; rest=${parts#*|}
+    total_gb=${rest%%|*}; total_toman=${rest#*|}
+    echo "{\"friday\":$([ "$friday" = "yes" ] && echo true || echo false),\"rate_full\":$rate_full,\"rate_friday\":$rate_friday,\"rows\":[$rows],\"total_gb\":${total_gb:-0},\"total_toman\":${total_toman:-0}}"
 }
 
 ra_json_bill() {  # <yes|no> [YYYY-MM]
-    local friday="${1:-no}" month="${2:-$(date +%Y-%m)}" rate_full rate_friday rate res key mac name
+    local friday="${1:-no}" month="${2:-$(date +%Y-%m)}" rate_full rate_friday rate round res parts
+    local rows rest total_gb total_toman key mac name
     rate_full=$(ra_conf_val "$RA_BILLING_CONF" RATE_FULL_TOMAN);   [ -z "$rate_full" ]  && rate_full=7700
     rate_friday=$(ra_conf_val "$RA_BILLING_CONF" RATE_FRIDAY_TOMAN); [ -z "$rate_friday" ] && rate_friday=4620
     if [ "$friday" = "yes" ]; then rate=$rate_friday; else rate=$rate_full; fi
+    round=$(ra_conf_val "$RA_BILLING_CONF" ROUND); [ -z "$round" ] && round=1000
     res=$(ra_usage_month_rows "$month" | while IFS='|' read -r key bytes; do
         [ -z "$key" ] && continue
         case "$key" in *:*) mac="$key";; *) mac="";; esac
+        ra_is_excluded_mac "$mac" && continue
         name=$(ra_name_for_key "$key")
         if [ -z "$name" ]; then
             case "$key" in *:*) name="Unknown-$(echo "$key" | cut -c1-8)";; *) name="$key";; esac
         fi
         echo "$name|$mac|$bytes"
-    done | ra_cost_table "$rate")
-    echo "{\"period\":\"$month\",\"friday\":$([ "$friday" = "yes" ] && echo true || echo false),\"rate_full\":$rate_full,\"rate_friday\":$rate_friday,$(echo "$res" | sed 's/^{//')"
+    done | hn_cost_table "$rate" "$round")
+    parts=$(echo "$res" | ra_cost_json_parts)
+    rows=${parts%%|*}; rest=${parts#*|}
+    total_gb=${rest%%|*}; total_toman=${rest#*|}
+    echo "{\"period\":\"$month\",\"friday\":$([ "$friday" = "yes" ] && echo true || echo false),\"rate_full\":$rate_full,\"rate_friday\":$rate_friday,\"rows\":[$rows],\"total_gb\":${total_gb:-0},\"total_toman\":${total_toman:-0}}"
 }
 
 ra_json_balance() {
-    local text ts total plans line2 mainq mainr pct expires days expired drain series out="" first=1
+    local ts total plans quota remain pct expires days expired drain series
+    local out="" first=1 d v fields
     if [ ! -f "$RA_BALANCE_REPORT" ]; then echo '{"cached":false,"as_of_unix":0}'; return; fi
-    text=$(cat "$RA_BALANCE_REPORT" 2>/dev/null)
     ts=$(cat "$RA_BALANCE_REPORT_TS" 2>/dev/null || echo 0); [ -z "$ts" ] && ts=0
-    total=$(echo "$text" | sed -n '1{s/.* \([0-9.]*\) GB left across \([0-9]*\) plan.*/\1/p}')
-    plans=$(echo "$text" | sed -n '1{s/.* \([0-9.]*\) GB left across \([0-9]*\) plan.*/\2/p}')
-    line2=$(echo "$text" | sed -n '2p')
-    mainq=$(echo "$line2" | sed -n 's/Main: \([0-9]*\) GB.*/\1/p')
-    mainr=$(echo "$line2" | sed -n 's/Main: [0-9]* GB · \([0-9.]*\) GB left.*/\1/p')
-    pct=$(echo "$line2" | sed -n 's/.*(\([0-9]*\)%).*/\1/p')
-    expires=$(echo "$line2" | sed -n 's/.*expires \([0-9-]*\) (.*/\1/p')
-    days=$(echo "$line2" | sed -n 's/.*(\(~[0-9]*\)d).*/\1/p' | tr -dc '0-9')
-    expired=$(echo "$text" | sed -n 's/^+\([0-9]*\) expired plan.*/\1/p')
-    drain=$(echo "$text" | sed -n 's/^Drain[[:space:]]*//p' | head -1 | sed 's/ (est.*//')
+    fields=$(hn_balance_fields "$RA_BALANCE_REPORT")
+    total=$(echo "$fields" | sed -n 's/^total=//p')
+    plans=$(echo "$fields" | sed -n 's/^plans=//p')
+    quota=$(echo "$fields" | sed -n 's/^quota=//p')
+    remain=$(echo "$fields" | sed -n 's/^remain=//p')
+    pct=$(echo "$fields" | sed -n 's/^pct=//p')
+    expires=$(echo "$fields" | sed -n 's/^expires=//p')
+    days=$(echo "$fields" | sed -n 's/^days=//p')
+    expired=$(echo "$fields" | sed -n 's/^expired=//p')
+    drain=$(echo "$fields" | sed -n 's/^drain=//p')
     series=$(ra_balance_series)
     while IFS='|' read -r d v; do
         [ -z "$d" ] && continue
@@ -286,7 +296,7 @@ ra_json_balance() {
     done <<EOF
 $series
 EOF
-    echo "{\"cached\":true,\"as_of_unix\":$ts,\"total_gb\":${total:-null},\"plans\":${plans:-null},\"main\":{\"quota\":${mainq:-null},\"remain\":${mainr:-null},\"pct\":${pct:-null},\"expires\":\"$expires\",\"days\":${days:-null}},\"expired\":${expired:-0},\"drain\":\"$(ra_esc "$drain")\",\"series\":[$out]}"
+    echo "{\"cached\":true,\"as_of_unix\":$ts,\"total_gb\":${total:-null},\"plans\":${plans:-null},\"main\":{\"quota\":${quota:-null},\"remain\":${remain:-null},\"pct\":${pct:-null},\"expires\":\"$expires\",\"days\":${days:-null}},\"expired\":${expired:-0},\"drain\":\"$(ra_esc "$drain")\",\"series\":[$out]}"
 }
 
 ra_json_clients() {

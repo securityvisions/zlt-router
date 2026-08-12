@@ -13,6 +13,7 @@ log() { echo "[$(date '+%F %T')] $*" >> "$LOG"; }
 
 # ── Rendering core (chat-beauty-v2: shared botlib) ──────────────────────────
 . /root/botlib.sh 2>/dev/null || { echo "botlib.sh missing" >&2; exit 1; }
+. /root/hnlib.sh 2>/dev/null || { echo "hnlib.sh missing" >&2; exit 1; }
 
 # ── Telegram send (Q12: all botcmd output is HTML) ─────────────────────────
 send() {  # send <chat_id> <text> [reply_markup]
@@ -94,17 +95,16 @@ set_friday() { sed -i "s/^LAST_FRIDAY=.*/LAST_FRIDAY=$1/" /etc/billing.conf 2>/d
 # ── Panel entry: dashboard card (Q10 + Q6) ─────────────────────────────────
 panel() {
     local chat="$1"
-    local line2 bp br bd proxy devcount usage disk dpct dfree load temp
+    local bp br bd proxy devcount usage disk dpct dfree load temp
 
-    # balance — parse values for the gauge + day-count
+    # balance — parse values for the gauge + day-count (shared hnlib reader)
     bp=0; br="—"; bd=""
     if [ -f /tmp/balance_report ]; then
-        line2=$(sed -n '2p' /tmp/balance_report 2>/dev/null)
-        bp=$(echo "$line2" | sed -n 's/.*(\([0-9]*\)%).*/\1/p')
-        br=$(echo "$line2" | sed -n 's/Main: [0-9]* GB · \([0-9.]*\) GB left.*/\1/p')
-        local expdays series
-        expdays=$(echo "$line2" | sed -n 's/.*(\(~[0-9]*d\)).*/\1/p')
-        bd=$(echo "${expdays:-}" | tr -dc '0-9')
+        local bf series
+        bf=$(hn_balance_fields /tmp/balance_report)
+        bp=$(echo "$bf" | sed -n 's/^pct=//p')
+        br=$(echo "$bf" | sed -n 's/^remain=//p')
+        bd=$(echo "$bf" | sed -n 's/^days=//p')
         series=$(cat /etc/balance-log/*.log 2>/dev/null | cut -d'|' -f2 | tail -14 | tr '\n' '|' | sed 's/|$//')
     fi
 
@@ -220,15 +220,17 @@ cmd_usage() {
 }
 
 cmd_balance() {
-    local body text ts ago line2 pct remain quota expires expdays drain series
+    local body text ts ago bf pct remain quota expires expdays drain series
     if [ -f /tmp/balance_report ]; then
-        line2=$(sed -n '2p' /tmp/balance_report 2>/dev/null)
-        pct=$(echo "$line2" | sed -n 's/.*(\([0-9]*\)%).*/\1/p')
-        remain=$(echo "$line2" | sed -n 's/Main: [0-9]* GB · \([0-9.]*\) GB left.*/\1/p')
-        quota=$(echo "$line2" | sed -n 's/Main: \([0-9]*\) GB.*/\1/p')
-        expires=$(echo "$line2" | sed -n 's/.*expires \([0-9-]*\) (.*/\1/p')
-        expdays=$(echo "$line2" | sed -n 's/.*(\(~[0-9]*d\)).*/\1/p')
-        drain=$(sed -n '/^Drain/p' /tmp/balance_report 2>/dev/null | sed 's/^Drain[[:space:]]*//; s/ (est.*//')
+        bf=$(hn_balance_fields /tmp/balance_report)
+        pct=$(echo "$bf" | sed -n 's/^pct=//p')
+        remain=$(echo "$bf" | sed -n 's/^remain=//p')
+        quota=$(echo "$bf" | sed -n 's/^quota=//p')
+        expires=$(echo "$bf" | sed -n 's/^expires=//p')
+        days=$(echo "$bf" | sed -n 's/^days=//p')
+        expdays=""
+        [ -n "$days" ] && expdays="~${days}d"   # balance_body renders (expdays)
+        drain=$(echo "$bf" | sed -n 's/^drain=//p')
         series=$(cat /etc/balance-log/*.log 2>/dev/null | cut -d'|' -f2 | tail -14 | tr '\n' '|' | sed 's/|$//')
         if [ -n "$pct" ] && [ -n "$remain" ]; then
             body=$(balance_body "$pct" "$remain" "$quota" "$expires" "$expdays" "$drain" "$series")

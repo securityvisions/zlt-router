@@ -8,6 +8,8 @@ RA_LIB="$HERE/../routerapi_lib.sh"
 if [ -f "$HERE/routerapi_lib.sh" ]; then
     RA_LIB="$HERE/routerapi_lib.sh"
 fi
+# Point the Router API lib at the repo copy of the shared business module too.
+export HN_LIB="${HN_LIB:-$HERE/../hnlib.sh}"
 . "$RA_LIB"
 
 PASS=0; FAIL=0

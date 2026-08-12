@@ -4,12 +4,13 @@
 # Cron (Iran time):  0 * * * *  /root/snap.sh
 LOG="${RA_TELEMETRY_LOG:-/etc/telemetry/hourly.log}"
 mkdir -p "$(dirname "$LOG")" 2>/dev/null
+. /root/hnlib.sh 2>/dev/null
 
 total=$(/usr/sbin/nlbw -c json -g mac 2>/dev/null | jq -r '[.data[] | .[2] + .[4]] | add // 0')
 [ -z "$total" ] && total=0
 total=$(awk -v b="$total" 'BEGIN{printf "%.3f", b/1073741824}')
 
-balance=$(sed -n 's/Main: [0-9]* GB · \([0-9.]*\) GB left.*/\1/p' /tmp/balance_report 2>/dev/null)
+balance=$(hn_balance_fields | sed -n 's/^remain=//p')
 
 proxy=down
 code=$(curl -sS -m 5 --socks5 127.0.0.1:1070 -o /dev/null -w '%{http_code}' \

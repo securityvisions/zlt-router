@@ -27,4 +27,9 @@ assert_json_eq "bill full: 2GB iPhone -> 15000, 0.5GB laptop -> 4000" '{"period"
 out=$(ra_json_bill yes 2026-08)
 assert_json_eq "bill friday: 2GB -> 9000, 0.5GB -> 2000" '{"period":"2026-08","friday":true,"rate_full":7700,"rate_friday":4620,"rows":[{"name":"iPhone","mac":"aa:bb:cc:dd:ee:ff","gb":2.0,"toman":9000,"share":80.0},{"name":"laptop","mac":"96:04:e1:00:00:00","gb":0.5,"toman":2000,"share":20.0}],"total_gb":2.5,"total_toman":11000}' "$out"
 
+# ROUND from billing.conf must flow through to /bill: iPhone 2GB=15400 → 16000 at ROUND=2000
+printf 'RATE_FULL_TOMAN=7700\nRATE_FRIDAY_TOMAN=4620\nROUND=2000\n' > "$TMP/billing.conf"
+out=$(ra_json_bill no 2026-08)
+assert_json_eq "bill honors ROUND=2000" '{"period":"2026-08","friday":false,"rate_full":7700,"rate_friday":4620,"rows":[{"name":"iPhone","mac":"aa:bb:cc:dd:ee:ff","gb":2.0,"toman":16000,"share":80.0},{"name":"laptop","mac":"96:04:e1:00:00:00","gb":0.5,"toman":4000,"share":20.0}],"total_gb":2.5,"total_toman":20000}' "$out"
+
 summary

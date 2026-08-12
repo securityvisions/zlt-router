@@ -65,12 +65,15 @@ The app talks to `http://192.168.1.1/cgi-bin/routerapi.sh/*` with header `X-Rout
 
 ```sh
 curl -H 'X-Router-Token: <token>' http://192.168.1.1/cgi-bin/routerapi.sh/status
-curl -H 'X-Router-Token: <token>' http://192.168.1.1/cgi-bin/routerapi.sh/balance
+curl -u xirouter:<token> http://192.168.1.1/cgi-bin/routerapi.sh/balance
 ```
 
-Deploy: copy `router/routerapi.sh` + `router/routerapi_lib.sh` from this repo to `/www/cgi-bin/`,
-`chmod 755`, and write `/etc/routerapp.conf` (`TOKEN=...`, chmod 600). Requires `jq` (already
-installed for the bot). Contract: `~/router-app/API_CONTRACT.md`.
+Deploy: copy `router/routerapi.sh` + `router/routerapi_lib.sh` from this repo to `/www/cgi-bin/`
+and `router/hnlib.sh` to `/root/hnlib.sh`, `chmod 755`, and write `/etc/routerapp.conf`
+(`TOKEN=...`, chmod 600). Requires `jq` (already installed for the bot). Auth is HTTP Basic
+(`xirouter:<token>`) — uhttpd drops custom `X-*` headers. `hnlib.sh` is the one shared business
+module (balance report reader + cost table) sourced by the bot, the telemetry snapshot, the
+billing report and the Router API. Contract: `~/router-app/API_CONTRACT.md`.
 
 ## Useful commands (from the router)
 

@@ -28,4 +28,10 @@ ra_usage_today() { echo "d|00:11:22:33:44:55|536870912"; }
 out=$(ra_json_cost no)
 assert_json_eq "cost rounds half up to nearest 1000" '{"friday":false,"rate_full":7700,"rate_friday":4620,"rows":[{"name":"d","mac":"00:11:22:33:44:55","gb":0.5,"toman":4000,"share":100.0}],"total_gb":0.5,"total_toman":4000}' "$out"
 
+# ROUND from the billing config must flow through to /cost: 0.7 GB @ full = 5390 -> 6000 at ROUND=2000
+printf 'RATE_FULL_TOMAN=7700\nRATE_FRIDAY_TOMAN=4620\nROUND=2000\n' > "$TMP/billing.conf"
+ra_usage_today() { echo "d|00:11:22:33:44:55|751619276"; }
+out=$(ra_json_cost no)
+assert_json_eq "cost honors configurable ROUND=2000" '{"friday":false,"rate_full":7700,"rate_friday":4620,"rows":[{"name":"d","mac":"00:11:22:33:44:55","gb":0.7,"toman":6000,"share":100.0}],"total_gb":0.7,"total_toman":6000}' "$out"
+
 summary
