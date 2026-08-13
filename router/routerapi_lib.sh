@@ -28,6 +28,7 @@ RA_TELEMETRY_LOG="${RA_TELEMETRY_LOG:-/etc/telemetry/hourly.log}"
 RA_DHCP_LEASES="${RA_DHCP_LEASES:-/tmp/dhcp.leases}"
 RA_BALANCE_REPORT="${RA_BALANCE_REPORT:-/tmp/balance_report}"
 RA_BALANCE_REPORT_TS="${RA_BALANCE_REPORT_TS:-/tmp/balance_report.ts}"
+RA_PACKAGES_JSON="${RA_PACKAGES_JSON:-/tmp/samantel_packages.json}"
 RA_USER_NAMES="${RA_USER_NAMES:-$RA_USAGE_LOG_DIR/user-names}"
 RA_WATCHLIST="${RA_WATCHLIST:-$RA_USAGE_LOG_DIR/watchlist}"
 RA_BILLING_CONF="${RA_BILLING_CONF:-/etc/billing.conf}"
@@ -274,9 +275,9 @@ ra_json_bill() {  # <yes|no> [YYYY-MM]
 }
 
 ra_json_balance() {
-    local ts total plans quota remain pct expires days expired drain series
+    local ts total plans quota remain pct expires days expired drain series packages aggregate
     local out="" first=1 d v fields
-    if [ ! -f "$RA_BALANCE_REPORT" ]; then echo '{"cached":false,"as_of_unix":0}'; return; fi
+    if [ ! -f "$RA_BALANCE_REPORT" ]; then echo '{"cached":false,"as_of_unix":0,"data_plan":null,"packages":[]}'; return; fi
     ts=$(cat "$RA_BALANCE_REPORT_TS" 2>/dev/null || echo 0); [ -z "$ts" ] && ts=0
     fields=$(hn_balance_fields "$RA_BALANCE_REPORT")
     total=$(echo "$fields" | sed -n 's/^total=//p')
@@ -288,6 +289,12 @@ ra_json_balance() {
     days=$(echo "$fields" | sed -n 's/^days=//p')
     expired=$(echo "$fields" | sed -n 's/^expired=//p')
     drain=$(echo "$fields" | sed -n 's/^drain=//p')
+    if [ -s "$RA_PACKAGES_JSON" ]; then
+        packages=$(jq -c '.packages // []' "$RA_PACKAGES_JSON" 2>/dev/null)
+        aggregate=$(jq -c '.data_plan // null' "$RA_PACKAGES_JSON" 2>/dev/null)
+    fi
+    [ -n "$packages" ] || packages='[]'
+    [ -n "$aggregate" ] || aggregate="{\"provider\":\"Samantel\",\"subscriber\":null,\"quota_gb\":${quota:-null},\"remain_gb\":${total:-null},\"consumed_gb\":null,\"activation\":null,\"expiry\":\"${expires}\",\"status\":\"unknown\",\"freshness\":{\"as_of_unix\":$ts,\"source\":\"legacy_report\"}}"
     series=$(ra_balance_series)
     while IFS='|' read -r d v; do
         [ -z "$d" ] && continue
@@ -296,7 +303,7 @@ ra_json_balance() {
     done <<EOF
 $series
 EOF
-    echo "{\"cached\":true,\"as_of_unix\":$ts,\"total_gb\":${total:-null},\"plans\":${plans:-null},\"main\":{\"quota\":${quota:-null},\"remain\":${remain:-null},\"pct\":${pct:-null},\"expires\":\"$expires\",\"days\":${days:-null}},\"expired\":${expired:-0},\"drain\":\"$(ra_esc "$drain")\",\"series\":[$out]}"
+    echo "{\"cached\":true,\"as_of_unix\":$ts,\"data_plan\":$aggregate,\"packages\":$packages,\"total_gb\":${total:-null},\"plans\":${plans:-null},\"main\":{\"quota\":${quota:-null},\"remain\":${remain:-null},\"pct\":${pct:-null},\"expires\":\"$expires\",\"days\":${days:-null}},\"expired\":${expired:-0},\"drain\":\"$(ra_esc "$drain")\",\"series\":[$out]}"
 }
 
 ra_json_clients() {

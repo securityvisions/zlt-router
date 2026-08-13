@@ -28,6 +28,8 @@ TIER_STATE=/tmp/balance_tier
 RATE_STATE=/tmp/balance_rate
 HIST_DIR=/etc/balance-log
 LOGF=/tmp/balance.log
+PACKAGES_CACHE="${SAMANTEL_PACKAGES_CACHE:-/tmp/samantel_packages.json}"
+PACKAGE_IDS="${SAMANTEL_PACKAGE_IDS:-/etc/samantel-package-ids.json}"
 
 log() { echo "[$(date '+%F %T')] $*" >> "$LOGF"; }
 
@@ -82,9 +84,56 @@ fetch_remain() {
     echo "$body"
 }
 
+# Cache the lossless package projection used by the Router API. ISP-issued IDs win;
+# otherwise a persisted fingerprint mapping is created once for migration.
+cache_packages() {  # raw Remain response on stdin
+    local raw now tmp ids_tmp
+    raw=$(cat); [ -n "$raw" ] || return 1
+    now=$(date +%s); tmp="$PACKAGES_CACHE.$$"; ids_tmp="$PACKAGE_IDS.$$"
+    mkdir -p "$(dirname "$PACKAGE_IDS")" 2>/dev/null
+    [ -s "$PACKAGE_IDS" ] || echo '{}' > "$PACKAGE_IDS"
+    jq -c --argjson d "$DIV" --argjson now "$now" --arg subscriber "${SAMANTEL_PHONE:-}" --slurpfile ids "$PACKAGE_IDS" '
+      def text($keys): . as $o | first($keys[] as $k | $o[$k] | select(. != null and . != "")) // null;
+      def date($keys): text($keys) | if . == null then null else tostring[0:10] end;
+      def num($keys): text($keys) | if . == null then null else (tonumber? // null) end;
+      def gb($keys): num($keys) | if . == null then null else ((fabs / $d * 10 | round) / 10) end;
+      def fingerprint: [(.BalanceName // ""), (.GrossBal // ""), (.ActDate // .StartDate // ""), (.ExpDate // ""), $subscriber] | join("|");
+      def issued_id: text(["PackageId","PackageID","OfferId","OfferID","BalanceId","BalanceID","Id","ID"]);
+      [.result[] | select((.BalanceName // "") | contains("Benefit Data")) |
+        fingerprint as $fp | issued_id as $issued |
+        (if $issued != null then "samantel:" + ($issued|tostring) else ($ids[0][$fp] // ("samantel:migration:" + ($fp|@base64))) end) as $id |
+        (gb(["GrossBal"])) as $quota | (gb(["BalanceValue"])) as $remain |
+        {id:$id, provider:"Samantel", subscriber:(if $subscriber == "" then null else $subscriber end),
+         type:text(["BalanceType","Type","OfferType"]), name:text(["BalanceName","OfferName","Name"]),
+         category:(text(["Category","OfferCategory"]) // "data"), window:text(["Window","Period","Cycle"]),
+         quota_gb:$quota, remain_gb:$remain,
+         consumed_gb:(if $quota != null and $remain != null then (($quota-$remain)*10|round)/10 else null end),
+         activation:date(["ActDate","ActivationDate","StartDate"]), expiry:date(["ExpDate","ExpiryDate","EndDate"]),
+         status:(text(["Status","BalanceStatus"]) // (if $remain != null and $remain <= 0 then "depleted" else "active" end)),
+         priority:(num(["Priority","Order","Sequence"]) // 0),
+         freshness:{as_of_unix:$now, source:"samantel_remain"}, _fingerprint:$fp, _issued:($issued != null)}]
+      | sort_by(.priority, .expiry // "9999-99-99", .id) as $packages
+      | {data_plan:{provider:"Samantel",subscriber:(if $subscriber == "" then null else $subscriber end),
+          quota_gb:([$packages[].quota_gb // 0]|add), remain_gb:([$packages[].remain_gb // 0]|add),
+          consumed_gb:([$packages[].consumed_gb // 0]|add), activation:([$packages[].activation]|map(select(. != null))|min // null),
+          expiry:([$packages[].expiry]|map(select(. != null))|max // null),
+          status:(if ($packages|length)==0 then "unknown" elif any($packages[]; .status=="active") then "active" else "inactive" end),
+          freshness:{as_of_unix:$now,source:"samantel_remain"}},
+        packages:[$packages[] | del(._fingerprint, ._issued)],
+        ids:($ids[0] + (reduce $packages[] as $p ({}; if $p._issued then . else .[$p._fingerprint]=$p.id end)))}' <<EOF > "$tmp" || { rm -f "$tmp"; return 1; }
+$raw
+EOF
+    jq -c '.ids' "$tmp" > "$ids_tmp" && mv "$ids_tmp" "$PACKAGE_IDS"
+    jq -c 'del(.ids)' "$tmp" > "$PACKAGES_CACHE.$$" && mv "$PACKAGES_CACHE.$$" "$PACKAGES_CACHE"
+    rm -f "$tmp"
+}
+
 # rows sorted by remaining desc: quota_gb|remain_gb|expiry (tabs)
 balance_rows() {
-    fetch_remain | jq -r --argjson d "$DIV" '
+    local body
+    body=$(fetch_remain) || return 1
+    printf '%s' "$body" | cache_packages || return 1
+    printf '%s' "$body" | jq -r --argjson d "$DIV" '
         [.result[] | select(.BalanceName | contains("Benefit Data")) |
          ((.GrossBal|tonumber|fabs)/$d|floor) as $q |
          ((.BalanceValue|tonumber|fabs)/$d*10|round/10) as $r |

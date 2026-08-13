@@ -16,6 +16,8 @@ Shared vocabulary for the home-network project. Use these terms exactly; don't d
 - **Dashboard card** — the Panel's entry card: a compact live summary (data-plan balance, proxy state, devices, disk) from cached values, with the Panel grid beneath it.
 - **Samantel** — the ISP (Iran). Its PWA API (`pwa.samantel.ir`) is queried read-only for data-package balance.
 - **Remain counters** — Samantel `Remain` API fields, in KiB. `BalanceValue` = remaining (negative), `GrossBal` = quota. remaining GiB = |BalanceValue| ÷ 1048576.
+- **Data plan** — the account-level internet offering exposed by the Router API; quota, remaining, and consumed amounts aggregate all current Packages.
+- **Package** — one independently tracked Samantel allowance. The Router API exposes every Package with an opaque stable ID, provider/subscriber, verbatim ISP type/name, optional normalized category/window, amounts, dates, status, priority, and freshness. ISP-issued IDs are canonical; a persisted fingerprint ID exists only for migration when the ISP supplies none.
 - **Toman** — cost unit (10 Toman = 1 Rial). Billing uses per-GB rates from `/etc/billing.conf` (7,700 T/GB full, 4,620 T/GB Friday).
 - **Baseline** — the per-MAC snapshot in `/etc/usage-log/last`; daily usage is the diff vs this baseline.
 - **Monthly log** — `/etc/usage-log/YYYY-MM.log`; the nightly snapshot appends per-device usage for monthly billing.
