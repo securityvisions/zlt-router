@@ -51,6 +51,13 @@ assert_eq "normal: days" 363 "$(echo "$out" | field days)"
 assert_eq "normal: expired" 1 "$(echo "$out" | field expired)"
 assert_eq "normal: drain" "~3.5 GB/day → ~41d left" "$(echo "$out" | field drain)"
 
+# ── hn_balance_field — the field accessor on hn_balance_fields output ─────────
+assert_eq "field: total" 146.5 "$(hn_balance_field "$out" total)"
+assert_eq "field: pct" 97 "$(hn_balance_field "$out" pct)"
+assert_eq "field: remain" 146.5 "$(hn_balance_field "$out" remain)"
+assert_eq "field: expires" 2027-08-05 "$(hn_balance_field "$out" expires)"
+assert_eq "field: unknown -> empty" "" "$(hn_balance_field "$out" no_such_field)"
+
 echo "No data packages found." > "$TMP/nodata"
 out=$(hn_balance_fields "$TMP/nodata")
 assert_eq "nodata: available" 0 "$(echo "$out" | field available)"
@@ -58,6 +65,39 @@ assert_eq "nodata: remain is empty" "" "$(echo "$out" | field remain)"
 
 out=$(hn_balance_fields "$TMP/absent")
 assert_eq "missing: available" 0 "$(echo "$out" | field available)"
+
+# ── hn_balance_series — one reader for the sparkline (pipe) and history (rows) ─
+mkdir -p "$TMP/balance-log"
+cat > "$TMP/balance-log/2026-08.log" <<'EOF'
+2026-08-06|146.5
+2026-08-07|145.0
+2026-08-08|143.2
+EOF
+cat > "$TMP/balance-log/2026-09.log" <<'EOF'
+2026-09-01|140.1
+2026-09-02|138.0
+EOF
+export HN_BALANCE_LOG_DIR="$TMP/balance-log"
+
+assert_eq "series: rows chronological" "2026-08-06|146.5
+2026-08-07|145.0
+2026-08-08|143.2
+2026-09-01|140.1
+2026-09-02|138.0" "$(hn_balance_series 10 rows)"
+assert_eq "series: rows last 3" "2026-08-08|143.2
+2026-09-01|140.1
+2026-09-02|138.0" "$(hn_balance_series 3 rows)"
+assert_eq "series: pipe sparkline" "146.5|145.0|143.2|140.1|138.0" "$(hn_balance_series 5 pipe)"
+assert_eq "series: pipe last 2" "140.1|138.0" "$(hn_balance_series 2 pipe)"
+
+# a malformed line (no date, no numeric value) must be ignored by the filter
+echo "garbage|line" >> "$TMP/balance-log/2026-09.log"
+assert_eq "series: ignores malformed rows" "2026-08-06|146.5
+2026-08-07|145.0
+2026-08-08|143.2
+2026-09-01|140.1
+2026-09-02|138.0" "$(hn_balance_series 10 rows)"
+unset HN_BALANCE_LOG_DIR
 
 # ── hn_cost_table ────────────────────────────────────────────────────────────
 cat > "$TMP/rows" <<EOF

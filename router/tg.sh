@@ -2,6 +2,7 @@
 # Telegram alert helper — shared library + CLI (chat-beauty-v2 #06: card restyle)
 . /etc/tg.conf 2>/dev/null || { echo "tg.conf missing" >&2; exit 1; }
 . /root/botlib.sh 2>/dev/null || { echo "botlib.sh missing" >&2; exit 1; }
+. /root/hnlib.sh 2>/dev/null || { echo "hnlib.sh missing" >&2; exit 1; }
 
 tg_send() {
     local text="$1"
@@ -23,17 +24,16 @@ case "$1" in
         shift; tg_card "$1" "$2"
         ;;
     --disk)
-        set -- $(df -h / | awk 'NR==2')
-        avail="$4"; pct="$5"
-        n=${pct%\%}
-        if [ "$n" -gt 85 ] 2>/dev/null; then
-            tg_card "⚠️ Storage high" "${pct} used (${avail} free)"
+        set -- $(hn_sys_disk)
+        avail="$2"; pct="$1"
+        if [ "$pct" -gt 85 ] 2>/dev/null; then
+            tg_card "⚠️ Storage high" "${pct}% used (${avail} free)"
         fi
         ;;
     --reboot)
-        load=$(awk '{print $1}' /proc/loadavg)
-        up=$(uptime | sed 's/.*up \([^,]*\),.*/\1/')
-        temp=$(awk '{print int($1/1000)}' /sys/class/thermal/thermal_zone0/temp 2>/dev/null)
+        load=$(hn_sys_load)
+        up=$(hn_sys_uptime)
+        temp=$(hn_sys_temp_c)
         tg_card "🔄 Router back online" "uptime ${up} · load ${load} · temp ${temp}°C"
         ;;
     *)

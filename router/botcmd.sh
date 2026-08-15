@@ -102,16 +102,14 @@ panel() {
     if [ -f /tmp/balance_report ]; then
         local bf series
         bf=$(hn_balance_fields /tmp/balance_report)
-        bp=$(echo "$bf" | sed -n 's/^pct=//p')
-        br=$(echo "$bf" | sed -n 's/^remain=//p')
-        bd=$(echo "$bf" | sed -n 's/^days=//p')
-        series=$(cat /etc/balance-log/*.log 2>/dev/null | cut -d'|' -f2 | tail -14 | tr '\n' '|' | sed 's/|$//')
+        bp=$(hn_balance_field "$bf" pct)
+        br=$(hn_balance_field "$bf" remain)
+        bd=$(hn_balance_field "$bf" days)
+        series=$(hn_balance_series 14 pipe)
     fi
 
     # proxy — fast SOCKS probe (acceptable latency)
-    local code
-    code=$(curl -sS -m 5 --socks5 127.0.0.1:1070 -o /dev/null -w "%{http_code}" https://www.gstatic.com/generate_204 2>/dev/null)
-    proxy=$([ "$code" = "204" ] && echo "🟢 UP" || echo "🔴 DOWN")
+    proxy=$(hn_sys_proxy_state | awk -F'|' '{print ($1=="up") ? "🟢 UP" : "🔴 DOWN"}')
 
     # devices + usage
     devcount=$(wc -l < /tmp/dhcp.leases 2>/dev/null | tr -d ' ')
@@ -119,11 +117,11 @@ panel() {
     [ -z "$usage" ] && usage="—"
 
     # disk + load/temp
-    disk=$(df -h / | awk 'NR==2{gsub(/%/,"",$5); print $5"|"$4}')
+    disk=$(hn_sys_disk)
     dpct=${disk%%|*}; dpct=${dpct:-0}
     dfree=${disk##*|}
-    load=$(awk '{print $1}' /proc/loadavg)
-    temp=$(awk '{printf "%d", $1/1000}' /sys/class/thermal/thermal_zone0/temp 2>/dev/null)
+    load=$(hn_sys_load)
+    temp=$(hn_sys_temp_c)
 
     body=$(dashboard_body "$bp" "$br" "$bd" "$proxy" "$devcount" "$usage" "$dpct" "$dfree" "$load" "$temp" "$series")
     panel_post "$chat" "$(card "<b>🔘 Control Panel</b>" "$body")" "$(panel_markup)"
@@ -132,12 +130,12 @@ panel() {
 # ── Panel commands ──────────────────────────────────────────────────────────
 cmd_status() {
     local load up mem temp diskpct freespace badge body
-    load=$(awk '{print $1}' /proc/loadavg)
-    up=$(uptime | sed 's/.*up \([^,]*\),.*/\1/')
-    mem=$(free | awk '/Mem:/{printf "%d/%d MB", ($3>1024)?$3/1024:$3, ($2>1024)?$2/1024:$2}')
-    temp=$(awk '{print int($1/1000)}' /sys/class/thermal/thermal_zone0/temp 2>/dev/null)
+    load=$(hn_sys_load)
+    up=$(hn_sys_uptime)
+    mem=$(hn_sys_mem | awk '{printf "%d/%d MB", $1, $2}')
+    temp=$(hn_sys_temp_c)
     badge=$(temp_badge "$temp")
-    disk=$(df -h / | awk 'NR==2{gsub(/%/,"",$5); print $5"|"$4}')
+    disk=$(hn_sys_disk)
     diskpct=${disk%%|*}
     diskpct=${diskpct:-0}
     freespace=${disk##*|}
@@ -168,7 +166,7 @@ cmd_clients() {
 
 cmd_disk() {
     local body disk dpct freespace
-    disk=$(df -h / | awk 'NR==2{gsub(/%/,"",$5); print $5"|"$4}')
+    disk=$(hn_sys_disk)
     dpct=${disk%%|*}; dpct=${dpct:-0}
     freespace=${disk##*|}
     body="Usage $(bar "$dpct")  ${dpct}% (${freespace} free)
@@ -177,14 +175,14 @@ $(df -h / | awk 'NR==1{print}')"
 }
 
 cmd_hyst() {
-    local code t body
-    code=$(curl -sS -m 8 --socks5 127.0.0.1:1070 -o /dev/null -w "%{http_code}" https://www.gstatic.com/generate_204 2>/dev/null)
-    t=$(curl -sS -m 8 --socks5 127.0.0.1:1070 -o /dev/null -w "%{time_total}" https://www.gstatic.com/generate_204 2>/dev/null)
-    if [ "$code" = "204" ]; then
+    local ps state t body
+    ps=$(hn_sys_proxy_state)   # "up|<latency>" or "down|"
+    state=${ps%%|*}; t=${ps##*|}
+    if [ "$state" = "up" ]; then
         body="Hysteria UP (${t}s)"
         deliver "$1" "$(card "<b>🟢 Proxy</b>" "$body")" "$(back_markup)"
     else
-        body="Hysteria DOWN (HTTP ${code:-timeout})"
+        body="Hysteria DOWN"
         deliver "$1" "$(card "<b>🔴 Proxy</b>" "$body")" "$(back_markup)"
     fi
 }
@@ -223,15 +221,15 @@ cmd_balance() {
     local body text ts ago bf pct remain quota expires expdays drain series
     if [ -f /tmp/balance_report ]; then
         bf=$(hn_balance_fields /tmp/balance_report)
-        pct=$(echo "$bf" | sed -n 's/^pct=//p')
-        remain=$(echo "$bf" | sed -n 's/^remain=//p')
-        quota=$(echo "$bf" | sed -n 's/^quota=//p')
-        expires=$(echo "$bf" | sed -n 's/^expires=//p')
-        days=$(echo "$bf" | sed -n 's/^days=//p')
+        pct=$(hn_balance_field "$bf" pct)
+        remain=$(hn_balance_field "$bf" remain)
+        quota=$(hn_balance_field "$bf" quota)
+        expires=$(hn_balance_field "$bf" expires)
+        days=$(hn_balance_field "$bf" days)
         expdays=""
         [ -n "$days" ] && expdays="~${days}d"   # balance_body renders (expdays)
-        drain=$(echo "$bf" | sed -n 's/^drain=//p')
-        series=$(cat /etc/balance-log/*.log 2>/dev/null | cut -d'|' -f2 | tail -14 | tr '\n' '|' | sed 's/|$//')
+        drain=$(hn_balance_field "$bf" drain)
+        series=$(hn_balance_series 14 pipe)
         if [ -n "$pct" ] && [ -n "$remain" ]; then
             body=$(balance_body "$pct" "$remain" "$quota" "$expires" "$expdays" "$drain" "$series")
         else

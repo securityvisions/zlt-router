@@ -6,9 +6,11 @@
 # the bot, the telemetry snapshot, the billing report and the Router API used
 # to re-implement separately (with drifting regexes and rounding).
 #
-# Design: every function takes its inputs explicitly (path, rate — nothing is
+# Design: business readers take their inputs explicitly (path, rate — nothing is
 # read from uci or the live router), so tests call them directly with fixtures.
-# This module touches no router state by itself.
+# The system-state readers (hn_sys_*) are the one place that touches the live
+# router; they are fixture-testable via env-configurable sources (HN_SYS_*) or
+# function overrides.
 
 # ── balance report ───────────────────────────────────────────────────────────
 
@@ -33,6 +35,29 @@ hn_balance_fields() {
     printf 'days=%s\n'    "$(printf '%s\n' "$line2" | sed -n 's/.*(\(~[0-9]*\)d).*/\1/p' | tr -dc '0-9')"
     printf 'expired=%s\n' "$(printf '%s\n' "$text" | sed -n 's/^+\([0-9]*\) expired plan.*/\1/p')"
     printf 'drain=%s\n'   "$(printf '%s\n' "$text" | sed -n 's/^Drain[[:space:]]*//p' | head -1 | sed 's/ (est.*//')"
+}
+
+# hn_balance_field <fields> <name> — extract one field from hn_balance_fields
+# output. Callers never re-implement the sed extraction (botcmd, Router API).
+hn_balance_field() {
+    printf '%s\n' "$1" | sed -n "s/^$2=//p" | head -1
+}
+
+# hn_balance_series [days] [format] — balance history from the daily log,
+# ascending (chronological), last `days` points. format: rows (date|gb lines,
+# for the API history) or pipe (gb values joined by |, for the bot sparkline).
+# Log dir configurable via HN_BALANCE_LOG_DIR so tests point it at fixtures.
+hn_balance_series() {
+    local days="${1:-90}" format="${2:-rows}" dir="${HN_BALANCE_LOG_DIR:-/etc/balance-log}"
+    local rows
+    rows=$(cat "$dir"/*.log 2>/dev/null |
+        awk -F'|' '$1 ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/ && $2 ~ /[0-9]/ { print $1 "|" $2 }' |
+        sort | tail -n "$days")
+    if [ "$format" = "pipe" ]; then
+        printf '%s\n' "$rows" | cut -d'|' -f2 | tr '\n' '|' | sed 's/|$//'
+    else
+        printf '%s\n' "$rows"
+    fi
 }
 
 # ── cost table ───────────────────────────────────────────────────────────────
@@ -61,4 +86,70 @@ hn_cost_table() {
         echo "ROW|$name|$mac|$gb|$toman|$share"
     done
     echo "TOTAL|$total_gb|$total_toman"
+}
+
+# ── system state ─────────────────────────────────────────────────────────────
+
+# The deep reader behind "what is the router doing right now" — shared by the
+# Router API (/status, /live), the bot dashboard, the hourly snapshot and the
+# disk/reboot alerts. One implementation of each metric instead of four.
+# The file-backed readers take the source file as an argument (fixture-friendly,
+# same as hn_balance_fields); the command-backed readers are overridable as
+# functions in tests (same trick the Router API tests use for ra_*).
+
+# hn_sys_load [loadavg_file] — 1-min load average.
+hn_sys_load() {
+    awk '{print $1}' "${1:-${HN_SYS_LOADAVG:-/proc/loadavg}}" 2>/dev/null
+}
+
+# hn_sys_temp_c [thermal_file] — CPU temperature in °C (source is millidegrees).
+hn_sys_temp_c() {
+    awk '{printf "%d", $1/1000}' "${1:-${HN_SYS_THERMAL:-/sys/class/thermal/thermal_zone0/temp}}" 2>/dev/null
+}
+
+# hn_sys_mem — "used_mb total_mb" from free (BusyBox free ignores -m; compute from KB).
+hn_sys_mem() {
+    free | awk '/Mem:/{printf "%d %d", ($3>1024)?$3/1024:$3, ($2>1024)?$2/1024:$2}'
+}
+
+# hn_sys_disk — "pct|free" for the root filesystem.
+hn_sys_disk() {
+    df -h / | awk 'NR==2{gsub(/%/,"",$5); print $5"|"$4}'
+}
+
+# hn_sys_uptime — "3 days, 4:12".
+hn_sys_uptime() {
+    uptime | sed 's/.*up \([^,]*\),.*/\1/'
+}
+
+# hn_sys_proxy_state — "up|<latency_s>" or "down|" via the SOCKS 1070 204 probe.
+# Sources configurable via env (HN_SYS_PROXY_SOCKS, HN_SYS_PROXY_URL, HN_SYS_PROXY_TIMEOUT).
+hn_sys_proxy_state() {
+    local out code t
+    out=$(curl -sS -m "${HN_SYS_PROXY_TIMEOUT:-5}" --socks5 "${HN_SYS_PROXY_SOCKS:-127.0.0.1:1070}" -o /dev/null \
+        -w '%{http_code}|%{time_total}' "${HN_SYS_PROXY_URL:-https://www.gstatic.com/generate_204}" 2>/dev/null)
+    code=${out%%|*}; t=${out##*|}
+    if [ "$code" = "204" ]; then echo "up|${t:-0}"; else echo "down|"; fi
+}
+
+# hn_sys_nlbw_total — total bytes across all devices (nlbwmon rx+tx sum).
+# Binary configurable via HN_SYS_NLBW so tests point it at a fixture.
+hn_sys_nlbw_total() {
+    "${HN_SYS_NLBW:-/usr/sbin/nlbw}" -c json -g mac 2>/dev/null | jq -r '[.data[] | .[2] + .[4]] | add // 0'
+}
+
+# hn_sys_nlbw_macs — per-device nlbwmon rows as mac|rx|tx (for /live).
+hn_sys_nlbw_macs() {
+    "${HN_SYS_NLBW:-/usr/sbin/nlbw}" -c json -g mac 2>/dev/null | jq -r '.data[] | [.[0], .[2], .[4]] | @tsv' 2>/dev/null | tr '\t' '|'
+}
+
+# hn_sys_snapshot — all seven metrics as key=value lines (the hn_balance_fields shape).
+hn_sys_snapshot() {
+    echo "load=$(hn_sys_load)"
+    echo "mem=$(hn_sys_mem)"
+    echo "temp_c=$(hn_sys_temp_c)"
+    echo "disk=$(hn_sys_disk)"
+    echo "uptime=$(hn_sys_uptime)"
+    echo "proxy=$(hn_sys_proxy_state)"
+    echo "nlbw_total=$(hn_sys_nlbw_total)"
 }

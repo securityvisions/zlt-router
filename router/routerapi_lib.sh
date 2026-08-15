@@ -89,18 +89,15 @@ ra_authed() {
 }
 
 # ---------- state functions (the test seam; router defaults here) ----------
-ra_load()        { awk '{print $1}' /proc/loadavg 2>/dev/null; }
-ra_mem()         { free | awk '/Mem:/{printf "%d %d", ($3>1024)?$3/1024:$3, ($2>1024)?$2/1024:$2}'; }
-ra_temp_c()      { awk '{printf "%d", $1/1000}' /sys/class/thermal/thermal_zone0/temp 2>/dev/null; }
-ra_disk()        { df -h / | awk 'NR==2{gsub(/%/,"",$5); print $5"|"$4}'; }
-ra_uptime()      { uptime | sed 's/.*up \([^,]*\),.*/\1/'; }
-ra_proxy_state() {
-    local out code t
-    out=$(curl -sS -m 5 --socks5 127.0.0.1:1070 -o /dev/null \
-        -w '%{http_code}|%{time_total}' https://www.gstatic.com/generate_204 2>/dev/null)
-    code=${out%%|*}; t=${out##*|}
-    if [ "$code" = "204" ]; then echo "up|${t:-0}"; else echo "down|"; fi
-}
+# Thin delegates to the shared hn_sys_* readers in hnlib.sh — the deep module
+# behind /status, the bot dashboard, snap.sh and tg.sh. Tests override these
+# ra_* wrappers with fixtures (or HN_SYS_* env paths for the file-backed ones).
+ra_load()        { hn_sys_load; }
+ra_mem()         { hn_sys_mem; }
+ra_temp_c()      { hn_sys_temp_c; }
+ra_disk()        { hn_sys_disk; }
+ra_uptime()      { hn_sys_uptime; }
+ra_proxy_state() { hn_sys_proxy_state; }
 ra_proxy_node() {
     local id name
     id=$(uci get passwall.@global[0].tcp_node 2>/dev/null)
@@ -118,16 +115,12 @@ ra_usage_month_rows() {  # [YYYY-MM] -> "key|bytes" summed per key (tolerant par
     awk -F'|' '{ b=$NF; k=$(NF-1); if (b ~ /^[0-9]+$/ && k ~ /./) { s[k]+=b } }
         END { for (k in s) print k "|" s[k] }' "$f" 2>/dev/null
 }
-ra_nlbw_macs() {
-    /usr/sbin/nlbw -c json -g mac 2>/dev/null | jq -r '.data[] | [.[0], .[2], .[4]] | @tsv' 2>/dev/null | tr '\t' '|'
-}
+ra_nlbw_macs() { hn_sys_nlbw_macs; }
 ra_wan_bytes() {
     awk '!/^lo:/ && /:/ { gsub(":","",$1); rx+=$2; tx+=$10 } END { print rx"|"tx }' /proc/net/dev 2>/dev/null
 }
-ra_balance_series() {  # date|gb lines, newest first (last 90)
-    cat "$RA_BALANCE_LOG_DIR"/*.log 2>/dev/null |
-        awk -F'|' '$1 ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/ && $2 ~ /[0-9]/ { print $1 "|" $2 }' |
-        sort -r | head -90
+ra_balance_series() {  # date|gb lines, newest first (last 90) — the shared reader, reversed for the API
+    HN_BALANCE_LOG_DIR="$RA_BALANCE_LOG_DIR" hn_balance_series 90 rows | sort -r
 }
 ra_url_test() {  # <url> -> result string
     curl -sS -m 10 -o /dev/null -w 'HTTP %{http_code} in %{time_total}s (IP %{remote_ip})' "$1" 2>/dev/null
@@ -280,15 +273,15 @@ ra_json_balance() {
     if [ ! -f "$RA_BALANCE_REPORT" ]; then echo '{"cached":false,"as_of_unix":0,"data_plan":null,"packages":[]}'; return; fi
     ts=$(cat "$RA_BALANCE_REPORT_TS" 2>/dev/null || echo 0); [ -z "$ts" ] && ts=0
     fields=$(hn_balance_fields "$RA_BALANCE_REPORT")
-    total=$(echo "$fields" | sed -n 's/^total=//p')
-    plans=$(echo "$fields" | sed -n 's/^plans=//p')
-    quota=$(echo "$fields" | sed -n 's/^quota=//p')
-    remain=$(echo "$fields" | sed -n 's/^remain=//p')
-    pct=$(echo "$fields" | sed -n 's/^pct=//p')
-    expires=$(echo "$fields" | sed -n 's/^expires=//p')
-    days=$(echo "$fields" | sed -n 's/^days=//p')
-    expired=$(echo "$fields" | sed -n 's/^expired=//p')
-    drain=$(echo "$fields" | sed -n 's/^drain=//p')
+    total=$(hn_balance_field "$fields" total)
+    plans=$(hn_balance_field "$fields" plans)
+    quota=$(hn_balance_field "$fields" quota)
+    remain=$(hn_balance_field "$fields" remain)
+    pct=$(hn_balance_field "$fields" pct)
+    expires=$(hn_balance_field "$fields" expires)
+    days=$(hn_balance_field "$fields" days)
+    expired=$(hn_balance_field "$fields" expired)
+    drain=$(hn_balance_field "$fields" drain)
     if [ -s "$RA_PACKAGES_JSON" ]; then
         packages=$(jq -c '.packages // []' "$RA_PACKAGES_JSON" 2>/dev/null)
         aggregate=$(jq -c '.data_plan // null' "$RA_PACKAGES_JSON" 2>/dev/null)

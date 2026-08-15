@@ -13,6 +13,7 @@
 #
 # Memory/storage: no resident processes, state in /tmp, tiny text history log.
 . /etc/samantel.conf 2>/dev/null || exit 1
+. /root/hnlib.sh 2>/dev/null || exit 1
 
 DIV="${BALANCE_DIV:-1048576}"
 WARN_GB="${BALANCE_WARN_GB:-10}"
@@ -155,9 +156,7 @@ rows_min_days() {
 }
 
 # ---------- realtime usage (nlbw total, all traffic) ----------
-nlbw_total() {
-    /usr/sbin/nlbw -c json -g mac 2>/dev/null | jq -r '[.data[] | .[2] + .[4]] | add // 0'
-}
+nlbw_total() { hn_sys_nlbw_total; }   # shared reader from hnlib.sh
 
 # ---------- ISP-observed drain rate from history (skips package jumps) ----------
 drain_rate() {

@@ -5,7 +5,7 @@ How the deployed system is scheduled, configured, queried, and rolled back.
 ## Cron schedule (all times Iran, after the timezone fix)
 
 ```
-*/5  * * * *  /root/hyst.sh                # proxy state-change alert (REALITY-443-parsa default, hysteria2 fallback)
+*/5  * * * *  /root/hyst.sh                # proxy state-change alert (active tcp_node label)
 */30 * * * *  /root/tg.sh --disk           # disk alert (>85%)
 */15 * * * *  /root/balance.sh --monitor   # realtime balance depletion monitor
 *    * * * *  /root/devicewatch.sh         # new-device alert
@@ -31,13 +31,44 @@ Boot (`/etc/rc.local`): reboot alert (`tg.sh --reboot`) + bot start (`botcmd-sta
 | `/etc/config/adblock` | blocklist feeds, enabled |
 | `/etc/config/sqm` | CAKE rates (download 35000, upload 10000 kbit/s) |
 | `/etc/config/system` | timezone `Asia/Tehran` |
-| `/etc/config/passwall` | proxy nodes: `REALITY-443-parsa` (VLESS+REALITY, default `tcp_node`) + `hysteria2-11609` (manual fallback) |
+| `/etc/config/passwall` | proxy nodes: `cdn_ws` (VLESS+WS via Cloudflare, default `tcp_node`) + `eFCgnGrZ` (REALITY) + `hyst_vps` (Hysteria2) |
 
 ## Proxy default
 
-PassWall's global TCP node is **REALITY-443-parsa** (VLESS+REALITY, server `85.121.124.158:443`, SNI `www.bing.com`), served by the VPS's sing-box core. There is no automatic node failover — the **hysteria2-11609** node (server `216.45.52.132:11609`) stays available to select manually. If the VLESS node dies, the **fail-open watchdog** (`passwall-failopen.sh` + `passwall-autorecover.sh`) moves the network to direct internet and restores PassWall automatically once the node is healthy again. UDP follows TCP.
+PassWall's global TCP node is **cdn-ws** (VLESS+WS over TLS, server `cdn.dmbz.ir:443`, SNI `cdn.dmbz.ir`, path `/v1/status`), fronted by Cloudflare and routed to the VPS origin. It is the reliable default because Cloudflare's anycast IPs are not subject to the same ISP interference as the direct VPS IP. **REALITY-443-parsa** (VLESS+REALITY, server `85.121.124.158:443`, SNI `www.bing.com`) is kept as the alternate node, and **hysteria2-vps-31800** (Hysteria2, server `85.121.124.158:31800/UDP`, salamander obfuscation) is available to select manually. UDP follows TCP.
 
-To switch to **hysteria2** manually: `uci set passwall.@global[0].tcp_node='skWrAzdt' && uci commit passwall && /etc/init.d/passwall restart`. To restore the full pre-change PassWall config: `tar xzf /root/passwall-vless-prechange-*.tar.gz -C / && /etc/init.d/passwall restart`.
+If the active node dies, the **fail-open watchdog** (`passwall-failopen.sh` + `passwall-autorecover.sh`, both versioned in `router/`) moves the network to direct internet and restores PassWall automatically once the node is healthy again.
+
+To switch nodes manually:
+```
+uci set passwall.@global[0].tcp_node='cdn_ws'   # or eFCgnGrZ (REALITY) / hyst_vps (Hysteria2)
+uci commit passwall && /etc/init.d/passwall restart
+```
+
+## Script source of truth
+
+Every script that runs on the router has a canonical copy in `router/` in this repo (same deal as hnlib/botlib). Edit the repo copy and deploy; never edit on the router directly. The one exception is the PassWall health trio, whose live copy may be hot-fixed over SSH during an incident — if so, pull it back into the repo afterwards.
+
+| Repo path | Router path | Notes |
+|---|---|---|
+| `router/usage.sh` | `/root/usage.sh` | per-device usage CLI (`--today --raw --month --names --name --resolve --snapshot`) |
+| `router/balance.sh` | `/root/balance.sh` | Samantel balance report/monitor |
+| `router/billing.sh` | `/root/billing.sh` | cost/bill text tables |
+| `router/botcmd.sh` | `/root/botcmd.sh` | Telegram bot (long polling) |
+| `router/botcmd-start.sh` | `/root/botcmd-start.sh` | bot keep-alive guard |
+| `router/botlib.sh` | `/root/botlib.sh` | pure rendering helpers |
+| `router/hnlib.sh` | `/root/hnlib.sh` | shared business module (balance reader, cost table, system state) |
+| `router/tg.sh` | `/root/tg.sh` | alert CLI wrapper |
+| `router/devicewatch.sh` | `/root/devicewatch.sh` | new-device + watchlist alerts |
+| `router/snap.sh` | `/root/snap.sh` | hourly telemetry snapshot |
+| `router/friday.sh` | `/root/friday.sh` | Friday-discount reminder |
+| `router/hyst.sh` | `/root/hyst.sh` | proxy state-change alert |
+| `router/monthly.sh` | `/root/monthly.sh` | previous month's bill |
+| `router/passwall-failopen.sh` | `/root/passwall-failopen.sh` | fail-open watchdog (minute cron) |
+| `router/passwall-autorecover.sh` | `/root/passwall-autorecover.sh` | auto-recovery (3-min cron) |
+| `router/passwall-bypass-ensure.sh` | `/root/passwall-bypass-ensure.sh` | direct-domain nftset re-attach (minute cron) |
+| `router/routerapi.sh` | `/www/cgi-bin/routerapi.sh` | Router API CGI dispatcher |
+| `router/routerapi_lib.sh` | `/www/cgi-bin/routerapi_lib.sh` | Router API JSON builders |
 
 ## VPS proxy server (s-ui)
 
