@@ -20,7 +20,7 @@ vp_port_ok() {
         grep -qE '^[0-9]{3}$'
 }
 
-# vp_decision <panel_ok> <sub_ok> <ssh_ok> — pure; prints OK | ALERT|down.
+# vp_decision <panel_ok> <sub_ok> — pure; prints OK | ALERT|down.
 vp_decision() {
     if [ "$1" = "1" ] && [ "$2" = "1" ]; then
         echo "OK"
@@ -38,19 +38,18 @@ vp_cooldown_ok() {
 }
 
 main() {
-    local panel sub ssh decision
+    local panel sub decision
     vp_port_ok "$VPS_PANEL_PORT" && panel=1 || panel=0
     vp_port_ok "$VPS_SUB_PORT" && sub=1 || sub=0
-    timeout 6 bash -c "echo > /dev/tcp/$VPS_HOST/$VPS_SSH_PORT" 2>/dev/null && ssh=1 || ssh=0
-    decision=$(vp_decision "$panel" "$sub" "$ssh")
+    decision=$(vp_decision "$panel" "$sub")
     if [ "$decision" = "ALERT|down" ] && vp_cooldown_ok; then
         echo "alert $(date +%s)" >> "$VP_STATE" 2>/dev/null
-        [ -x /root/tg.sh ] && /root/tg.sh --text "🔴 VPS origin unreachable (panel=$panel sub=$sub ssh=$ssh)." >/dev/null 2>&1
+        [ -x /root/tg.sh ] && /root/tg.sh --text "🔴 VPS origin unreachable (panel=$panel sub=$sub)." >/dev/null 2>&1
     fi
     echo "$decision"
 }
 
 case "${1:-}" in
-    --decision) vp_decision "$2" "$3" "$4" ;;
+    --decision) vp_decision "$2" "$3" ;;
     *) main ;;
 esac

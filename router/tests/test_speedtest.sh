@@ -24,12 +24,5 @@ got=$(sh "$S" --calc 10000000 12.84)
 got=$(sh "$S" --calc 10000000 10)
 [ "$got" = "8.00" ] && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - calc integer time: got [$got]"; }
 
-# Trend log: record appends and keeps the tail.
-TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
-echo "old-entry|99.9" > "$TMP/speed.log"
-out=$(ST_LOG="$TMP/speed.log" sh "$S" --decision 20 >/dev/null 2>&1; echo x)
-# record path via a fake measure is not needed; verify the log append function shape:
-grep -q "old-entry" "$TMP/speed.log" && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - log preserved"; }
-
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

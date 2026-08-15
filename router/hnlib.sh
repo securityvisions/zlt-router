@@ -43,6 +43,13 @@ hn_balance_field() {
     printf '%s\n' "$1" | sed -n "s/^$2=//p" | head -1
 }
 
+# hn_link_field <fields> <name> — extract one field from the X28 link-state
+# output (the key=value lines from x28link.sh). One extractor for the bot,
+# the Router API and the watchdog.
+hn_link_field() {
+    printf '%s\n' "$1" | sed -n "s/^$2=//p" | head -1
+}
+
 # hn_balance_series [days] [format] — balance history from the daily log,
 # ascending (chronological), last `days` points. format: rows (date|gb lines,
 # for the API history) or pipe (gb values joined by |, for the bot sparkline).

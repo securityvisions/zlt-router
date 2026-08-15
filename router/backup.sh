@@ -8,9 +8,10 @@
 
 BK_DIR="${BK_DIR:-/etc/backups}"
 BK_KEEP="${BK_KEEP:-14}"
-X28_BASE="${X28_BASE:-http://192.168.70.1/cgi-bin/http.cgi}"
-X28_USER="${X28_USER:-admin}"
-X28_PASS="${X28_PASS:-admin}"
+# Shared X28 API helpers (session/sha256) — the same module linkstate/reselect
+# use. Best-effort: rotation must work even where the helper is absent.
+X28_LIB="${X28_LIB:-/root/x28lib.sh}"
+[ -f "$X28_LIB" ] && . "$X28_LIB"
 
 # bk_rotate <dir> <keep> — delete oldest snapshots beyond `keep`.
 bk_rotate() {
@@ -18,20 +19,6 @@ bk_rotate() {
         rm -f "$old"
         echo "removed $old"
     done
-}
-
-bk_x28_login() {  # sets X28_SID via the vendor API; non-zero on failure
-    local token pass
-    token=$(curl -s -m 8 -H 'Content-Type: application/json' \
-        -d '{"cmd":232,"method":"GET","sessionId":""}' "$X28_BASE" 2>/dev/null |
-        sed -n 's/.*"token":"\([0-9a-f]*\)".*/\1/p' | head -1)
-    [ -n "$token" ] || return 1
-    pass=$(printf '%s' "${token}${X28_PASS}" | sha256sum | awk '{print $1}')
-    X28_SID=$(curl -s -m 8 -H 'Content-Type: application/json' \
-        -d "{\"cmd\":100,\"method\":\"POST\",\"sessionId\":\"\",\"username\":\"$X28_USER\",\"passwd\":\"$pass\",\"isAutoUpgrade\":\"0\",\"subcmd\":0,\"language\":\"en\"}" \
-        "$X28_BASE" 2>/dev/null |
-        sed -n 's/.*"sessionId":"\([0-9a-f]*\)".*/\1/p' | head -1)
-    [ -n "$X28_SID" ]
 }
 
 main() {
@@ -49,22 +36,17 @@ main() {
     done
 
     # X28 vendor config export (best-effort) + smart-edge configs.
-    if bk_x28_login; then
-        curl -s -m 20 -H 'Content-Type: application/json' \
-            -d "{\"cmd\":180,\"method\":\"POST\",\"sessionId\":\"$X28_SID\",\"language\":\"en\"}" \
-            "$X28_BASE" 2>/dev/null > "$dir/x28/config_export.json"
+    if command -v x28_session >/dev/null 2>&1; then
+        if x28_session; then
+            curl -s -m 20 -H 'Content-Type: application/json' \
+                -d "{\"cmd\":180,\"method\":\"POST\",\"sessionId\":\"$X28_SID\",\"language\":\"en\"}" \
+                "$X28_BASE" 2>/dev/null > "$dir/x28/config_export.json"
+        fi
     fi
-    # Smart-edge files are on the X28; fetch them over SSH when the deploy key
-    # is usable, else the snapshot just covers this router + vendor export.
+    # Smart-edge link state (best-effort, via the same HTTP API the watchdog uses).
     if [ -x /root/x28link.sh ]; then
         /root/x28link.sh 2>/dev/null > "$dir/x28/linkstate.txt"
     fi
-
-    # VPS s-ui config (best-effort, optional): run `sui backup` on the VPS if
-    # an SSH alias exists. Skipped silently when not configured.
-    if ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no vps \
-            'test -x /usr/local/s-ui/sui && /usr/local/s-ui/sui backup >/dev/null 2>&1; ls -t /usr/local/s-ui/db/s-ui.db.bak* 2>/dev/null | head -1' \
-            > /dev/null 2>&1; then :; fi
 
     # Assemble + rotate.
     tar -czf "$BK_DIR/backup-$stamp.tar.gz" -C "$BK_DIR" "$stamp" 2>/dev/null

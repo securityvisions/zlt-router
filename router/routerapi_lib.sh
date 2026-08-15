@@ -404,15 +404,15 @@ ra_json_link() {
     local s op tech signal rsrp rsrp5g band plmn flow_dl flow_ul
     s=$(ra_link_state)
     [ -n "$s" ] || { RA_STATUS=500; echo '{"error":"link unavailable"}'; return; }
-    op=$(printf '%s\n' "$s" | sed -n 's/^operator=//p' | head -1)
-    tech=$(printf '%s\n' "$s" | sed -n 's/^tech=//p' | head -1)
-    signal=$(printf '%s\n' "$s" | sed -n 's/^signal=//p' | head -1)
-    rsrp=$(printf '%s\n' "$s" | sed -n 's/^rsrp=//p' | head -1)
-    rsrp5g=$(printf '%s\n' "$s" | sed -n 's/^rsrp_5g=//p' | head -1)
-    band=$(printf '%s\n' "$s" | sed -n 's/^band=//p' | head -1)
-    plmn=$(printf '%s\n' "$s" | sed -n 's/^plmn=//p' | head -1)
-    flow_dl=$(printf '%s\n' "$s" | sed -n 's/^flow_dl=//p' | head -1)
-    flow_ul=$(printf '%s\n' "$s" | sed -n 's/^flow_ul=//p' | head -1)
+    op=$(hn_link_field "$s" operator)
+    tech=$(hn_link_field "$s" tech)
+    signal=$(hn_link_field "$s" signal)
+    rsrp=$(hn_link_field "$s" rsrp)
+    rsrp5g=$(hn_link_field "$s" rsrp_5g)
+    band=$(hn_link_field "$s" band)
+    plmn=$(hn_link_field "$s" plmn)
+    flow_dl=$(hn_link_field "$s" flow_dl)
+    flow_ul=$(hn_link_field "$s" flow_ul)
     num() { [ -n "$1" ] && printf '%s' "$1" | grep -qE '^-?[0-9.]+$' && echo "$1" || echo null; }
     echo "{\"operator\":\"$(ra_esc "$op")\",\"tech\":\"$(ra_esc "$tech")\",\"signal\":$(num "$signal"),\"rsrp\":$(num "$rsrp"),\"rsrp_5g\":$(num "$rsrp5g"),\"band\":\"$(ra_esc "$band")\",\"plmn\":\"$(ra_esc "$plmn")\",\"flow\":{\"dl\":$(num "$flow_dl"),\"ul\":$(num "$flow_ul")}}"
 }

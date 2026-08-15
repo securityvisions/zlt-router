@@ -194,7 +194,7 @@ cmd_link() {
         deliver "$1" "$(card "<b>📡 Link</b>" "Link reader unavailable.")" "$(back_markup)"
         return
     fi
-    fld() { printf '%s\n' "$s" | sed -n "s/^$1=//p" | head -1; }
+    fld() { hn_link_field "$s" "$1"; }
     op=$(fld operator); tech=$(fld tech); signal=$(fld signal)
     rsrp=$(fld rsrp); rsrp5g=$(fld rsrp_5g); band=$(fld band); plmn=$(fld plmn)
     body="Operator: <b>${op:-n/a}</b>
