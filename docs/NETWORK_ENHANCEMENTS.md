@@ -15,9 +15,10 @@ Three additional capabilities deployed on the router: **DNS ad-blocking**, **com
 
 - **Package**: `sqm-scripts` (already present); configured via `uci`.
 - **Config**: CAKE on the WAN, both directions:
-  - download **35 Mbps** (was unset/0 — downlink was unshaped before)
-  - upload **10 Mbps** (was 13 Mbps)
-- **Rates were measured**, not guessed: live WAN tests gave ~33–41 Mbps down / ~10 Mbps up; rates are set at ~85–90% of measured for shaping headroom.
+  - download **55 Mbps** (matches the MCI 5G link; live tests 45–65 Mbps)
+  - upload **10 Mbps** (live test ~11 Mbps)
+- **Rates were measured**, not guessed: live WAN tests gave ~45–65 Mbps down /
+  ~11 Mbps up; rates are set at ~85–90% of measured for shaping headroom.
 - **Verified**: `tc qdisc show` shows `cake` on both the WAN device (upload) and its ingress device (download).
 - **Honest limit**: the router sits behind the ISP's device (double NAT), so shaping relocates the queue to this router where CAKE can manage it — a mitigation for latency spikes under load, not a fix for upstream bufferbloat.
 

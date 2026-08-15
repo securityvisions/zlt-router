@@ -4,6 +4,6 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** open
+**Status:** resolved (backup.sh deployed + nightly cron, verified)
 
 - [ ] A backup artifact appears daily; /backup bot command returns the latest.

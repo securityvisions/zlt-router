@@ -12,9 +12,14 @@ smart edge while keeping the AX3000T as the policy/DNS/monitoring brain.
 | `x28/linkstate.sh` | AX3000T | `/root/x28link.sh` | same reader, talks to the X28 HTTP API |
 | `x28/reselect.sh` | AX3000T | `/root/x28reselect.sh` | re-selects the preferred operator |
 | `x28/harden.sh` | X28 | `/data/proxy/harden.sh` | management firewall (boot via rc.local) |
+| `x28/x28lib.sh` | both | `/data/proxy` + `/root` | shared API helpers (session, sha256, field extractor) |
 | `x28watch.sh` | AX3000T | `/root/x28watch.sh` | stickiness + degradation watchdog (cron */5) |
 | `x28/xray-proxy.json` | X28 | `/data/proxy/sing-box/xray-proxy.json` | xray-core crypto-engine config (template above) |
-| — | X28 | `/etc/init.d/x28proxy` | procd service running the crypto engine (START=98) |
+| `x28/x28proxy.init` | X28 | `/etc/init.d/x28proxy` | procd service running the crypto engine (START=98) |
+| `x28/passwall-via-x28.sh` | AX3000T | `/root/passwall-via-x28.sh` | ensure the PassWall via_x28 node exists |
+| `x28/deploy.sh` | repo | — | push the whole subsystem to both routers |
+| `x28/tproxy-enable.sh` / `tproxy-disable.sh` | X28 | `/data/proxy/` | **opt-in** transparent proxy for the backup/guest network (excludes the AX3000T) |
+| `x28/split-proxy.json`, `stage2-enable.sh` / `stage2-disable.sh` | X28 | `/data/proxy/` | **opt-in** Stage-2: X28 as primary proxy edge with domestic/international split |
 
 ## How it fits together
 

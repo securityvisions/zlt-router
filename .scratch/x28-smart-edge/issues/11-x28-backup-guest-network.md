@@ -4,6 +4,6 @@
 
 **Blocked by:** Tickets 02, 04
 
-**Status:** open
+**Status:** in-progress (tproxy-enable/disable delivered; opt-in, not enabled)
 
 - [ ] A device connected directly to the X28 gets proxied internet even with the AX3000T offline.

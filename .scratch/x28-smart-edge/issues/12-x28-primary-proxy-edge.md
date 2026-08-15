@@ -4,6 +4,6 @@
 
 **Blocked by:** Tickets 04, 05, 11
 
-**Status:** open
+**Status:** in-progress (split-proxy config + stage2 scripts delivered; opt-in, not enabled)
 
 - [ ] International traffic egresses via the VPS and domestic traffic goes direct, both verified per destination; the AX3000T fallback works with one command.

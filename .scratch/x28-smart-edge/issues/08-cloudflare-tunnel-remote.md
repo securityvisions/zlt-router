@@ -4,6 +4,6 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** open
+**Status:** in-progress (cloudflared-setup.sh + init delivered; needs user Cloudflare credentials for live tunnel)
 
 - [ ] The Xirouter app loads live data from a remote network via the tunnel URL.

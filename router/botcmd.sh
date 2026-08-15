@@ -187,6 +187,25 @@ cmd_hyst() {
     fi
 }
 
+cmd_link() {
+    local s op tech signal rsrp rsrp5g band plmn body
+    s=$(/root/x28link.sh 2>/dev/null)
+    if [ -z "$s" ]; then
+        deliver "$1" "$(card "<b>📡 Link</b>" "Link reader unavailable.")" "$(back_markup)"
+        return
+    fi
+    fld() { printf '%s\n' "$s" | sed -n "s/^$1=//p" | head -1; }
+    op=$(fld operator); tech=$(fld tech); signal=$(fld signal)
+    rsrp=$(fld rsrp); rsrp5g=$(fld rsrp_5g); band=$(fld band); plmn=$(fld plmn)
+    body="Operator: <b>${op:-n/a}</b>
+Technology: <b>${tech:-n/a}</b>
+Signal: <b>${signal:-n/a}</b>/5
+LTE RSRP: <b>${rsrp:-n/a}</b> dBm
+5G RSRP: <b>${rsrp5g:-n/a}</b> dBm
+PLMN: <b>${plmn:-n/a}</b>"
+    deliver "$1" "$(card "<b>📡 Link</b>" "$body")" "$(back_markup)"
+}
+
 cmd_test() {
     local url="$1" out
     if [ -z "$url" ]; then send "$2" "Usage: /test <url>  e.g. /test google.com"; return; fi
@@ -323,6 +342,7 @@ while :; do
         /clients) cmd_clients "$FROM" ;;
         /disk)    cmd_disk "$FROM" ;;
         /hyst)    cmd_hyst "$FROM" ;;
+        /link)    cmd_link "$FROM" ;;
         /test*)   cmd_test "$(echo "$TEXT" | cut -d' ' -f2-)" "$FROM" ;;
         /cost)    ask_friday "$FROM" cost ;;
         /bill)    ask_friday "$FROM" bill ;;

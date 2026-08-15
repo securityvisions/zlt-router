@@ -4,6 +4,6 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** open
+**Status:** resolved (vpshealth.sh deployed + cron, verified)
 
 - [ ] Stopping s-ui triggers an alert + auto-recovery; health is visible in the app.

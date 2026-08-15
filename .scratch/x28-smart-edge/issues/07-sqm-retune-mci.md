@@ -4,6 +4,6 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** open
+**Status:** resolved (verified tuned: 55/10 Mbps vs measured 45-65/11)
 
 - [ ] tc qdisc shows cake rates matched to measured MCI throughput; latency under load verified.

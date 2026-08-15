@@ -4,6 +4,6 @@
 
 **Blocked by:** Ticket 01
 
-**Status:** open
+**Status:** in-progress (Router API /link + bot /link done; app UI pending)
 
 - [ ] Opening /link in Telegram and the app's Link card both show the same live X28 link state.

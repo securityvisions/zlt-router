@@ -4,6 +4,6 @@
 
 **Blocked by:** Ticket 01
 
-**Status:** open
+**Status:** resolved (speedtest.sh deployed + cron + trend log, verified)
 
 - [ ] /speedtest runs and returns MBps; a simulated throughput drop fires the degradation alert.

@@ -4,6 +4,6 @@
 
 **Blocked by:** Ticket 04
 
-**Status:** in-progress (node live; failover chain open)
+**Status:** resolved (rotation chain live: REALITY, Hysteria2, via-X28, then direct)
 
 - [ ] Switching PassWall tcp_node to via_x28 keeps internet working (egress = VPS); a dead VPS node falls back through the chain before going direct.

@@ -390,6 +390,33 @@ ra_json_devices() {
     echo "{\"devices\":[$out]}"
 }
 
+# ra_link_state — X28 link-state source. Reads a cached file when
+# RA_LINK_STATE is set (tests), else runs the X28 link reader script.
+ra_link_state() {
+    if [ -n "${RA_LINK_STATE:-}" ]; then
+        cat "$RA_LINK_STATE" 2>/dev/null
+    else
+        "${RA_LINK_SH:-/root/x28link.sh}" 2>/dev/null
+    fi
+}
+
+ra_json_link() {
+    local s op tech signal rsrp rsrp5g band plmn flow_dl flow_ul
+    s=$(ra_link_state)
+    [ -n "$s" ] || { RA_STATUS=500; echo '{"error":"link unavailable"}'; return; }
+    op=$(printf '%s\n' "$s" | sed -n 's/^operator=//p' | head -1)
+    tech=$(printf '%s\n' "$s" | sed -n 's/^tech=//p' | head -1)
+    signal=$(printf '%s\n' "$s" | sed -n 's/^signal=//p' | head -1)
+    rsrp=$(printf '%s\n' "$s" | sed -n 's/^rsrp=//p' | head -1)
+    rsrp5g=$(printf '%s\n' "$s" | sed -n 's/^rsrp_5g=//p' | head -1)
+    band=$(printf '%s\n' "$s" | sed -n 's/^band=//p' | head -1)
+    plmn=$(printf '%s\n' "$s" | sed -n 's/^plmn=//p' | head -1)
+    flow_dl=$(printf '%s\n' "$s" | sed -n 's/^flow_dl=//p' | head -1)
+    flow_ul=$(printf '%s\n' "$s" | sed -n 's/^flow_ul=//p' | head -1)
+    num() { [ -n "$1" ] && printf '%s' "$1" | grep -qE '^-?[0-9.]+$' && echo "$1" || echo null; }
+    echo "{\"operator\":\"$(ra_esc "$op")\",\"tech\":\"$(ra_esc "$tech")\",\"signal\":$(num "$signal"),\"rsrp\":$(num "$rsrp"),\"rsrp_5g\":$(num "$rsrp5g"),\"band\":\"$(ra_esc "$band")\",\"plmn\":\"$(ra_esc "$plmn")\",\"flow\":{\"dl\":$(num "$flow_dl"),\"ul\":$(num "$flow_ul")}}"
+}
+
 # ---------- write actions ----------
 ra_rename_device() {
     local mac name bad
@@ -480,6 +507,7 @@ ra_route() {
             /cost)          ra_json_cost "$(ra_qp friday)" ;;
             /bill)          ra_json_bill "$(ra_qp friday)" "$(ra_qp month)" ;;
             /balance)       ra_json_balance ;;
+            /link)          ra_json_link ;;
             /clients)       ra_json_clients ;;
             /live)          ra_json_live ;;
             /history)       ra_json_history "$(ra_qp kind)" "$(ra_qp days)" ;;

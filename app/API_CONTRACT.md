@@ -34,6 +34,28 @@ this file is the client's copy of the contract. When one side changes, update bo
 `proxy.state` is `up`/`down`; `proxy.node` names the active PassWall node (`REALITY-443-parsa`
 default, `hysteria2` when switched).
 
+### `GET /link`
+
+The X28 cellular link state (the WAN edge):
+
+```json
+{
+  "operator": "IR - MCI Wap",
+  "tech": "5G(NSA)",
+  "signal": 4,
+  "rsrp": -77,
+  "rsrp_5g": -92,
+  "band": "",
+  "plmn": "43211",
+  "flow": { "dl": 3441.61, "ul": 243.88 }
+}
+```
+
+`operator`/`tech`/`band`/`plmn` are strings (`band` is empty on this firmware —
+not exposed); `signal` is the vendor 0–5 level; `rsrp`/`rsrp_5g`/`flow.*` are
+numbers or `null` when not reported. 500 with `{"error":"link unavailable"}`
+when the X28 link reader can't reach the device.
+
 ### `GET /usage?period=today|month`
 
 ```json
