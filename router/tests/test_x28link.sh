@@ -36,6 +36,7 @@ assert_field rsrp "-77"
 assert_field rsrp_5g "-92"
 assert_field flow_dl "3441.61"
 assert_field plmn "43211"
+assert_field band ""
 
 # Fixture: Rightel 4G, no 5G — fields must reflect the weaker link.
 cat > "$TMP/cmd401.json" <<'EOF'

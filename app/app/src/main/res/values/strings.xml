@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- UI copy lives in Ui.kt as Persian literals; this is only the launcher label. -->
+    <string name="app_name">Xirouter</string>
+</resources>

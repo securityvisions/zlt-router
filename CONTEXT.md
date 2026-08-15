@@ -28,3 +28,12 @@ Shared vocabulary for the home-network project. Use these terms exactly; don't d
   fixed `xirouter`) because uhttpd does not forward custom `X-*` headers to CGI. The app's
   token field holds it; the bot is unaffected.
 - **Telemetry log** — `/etc/telemetry/hourly.log`; the hourly `ts|total_gb|balance_gb|proxy_state` rows that feed the app's charts (the router's finer-grained history store beside the daily balance log).
+
+## X28 smart edge (the WAN appliance)
+
+- **X28** — the ZLT X28 4G/5G cellular router at `192.168.70.1`; the **only WAN path** the home network rides on. It holds the Samantel SIM (camping on MCI 5G NSA at this location; may show Rightel/Irancell/MCI depending on towers). Root access, v2rayA + xray-core, and the smart-edge scripts live here. See `router/x28/README.md`.
+- **Link** — the X28's live connection state: operator (MCI preferred), PLMN (43211), tech (5G(NSA)/4G), RSRP (LTE anchor) / RSRP_5G (NR), signal level. Read via `/root/x28link.sh` → `linkstate.sh`.
+- **Link stickiness** — keeping the X28 on the preferred operator: the `x28watch.sh` cron detects operator drift/degradation and re-selects MCI via `x28reselect.sh`.
+- **Crypto engine** — the xray-core SOCKS service on the X28 (`:1080`, `/etc/init.d/x28proxy`) that terminates VLESS+REALITY to the VPS, offloading tunnel crypto from the AX3000T.
+- **via_x28** — the PassWall node on the AX3000T pointing at the X28 crypto-engine SOCKS (`192.168.70.1:1080`); switching to it routes PassWall's proxied traffic through the X28.
+- **Smart edge** — the role this effort gives the X28: link stickiness + link telemetry + management hardening + backup proxy engine, integrated into the existing home-network control plane.

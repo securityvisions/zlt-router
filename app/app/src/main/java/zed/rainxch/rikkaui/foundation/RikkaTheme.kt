@@ -1,0 +1,244 @@
+package zed.rainxch.rikkaui.foundation
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import zed.rainxch.rikkaui.foundation.modifier.LocalMinTouchTarget
+
+/**
+ * RikkaTheme is the top-level theme composable for the RikkaUi design system.
+ *
+ * Usage:
+ * ```
+ * RikkaTheme(
+ *     colors = RikkaPalettes.ZincLight,  // or ZincDark, SlateLight, NeutralDark, etc.
+ * ) {
+ *     // Your app content — access tokens via RikkaTheme.colors, RikkaTheme.typography, etc.
+ *     Button(...)
+ * }
+ * ```
+ *
+ * All parameters have sensible defaults (Neutral light palette).
+ */
+@Composable
+public fun RikkaTheme(
+    colors: RikkaColors = RikkaPalettes.NeutralLight,
+    typography: RikkaTypography = rikkaTypography(),
+    spacing: RikkaSpacing = rikkaSpacing(),
+    shapes: RikkaShapes = rikkaShapes(),
+    motion: RikkaMotion = RikkaMotion(),
+    elevation: RikkaElevation = RikkaElevation(),
+    minTouchTarget: Dp = 48.dp,
+    content: @Composable () -> Unit,
+) {
+    CompositionLocalProvider(
+        LocalRikkaColors provides colors,
+        LocalContentColor provides colors.onBackground,
+        LocalRikkaTypography provides typography,
+        LocalRikkaSpacing provides spacing,
+        LocalRikkaShapes provides shapes,
+        LocalRikkaMotion provides motion,
+        LocalRikkaElevation provides elevation,
+        LocalMinTouchTarget provides minTouchTarget,
+        content = content,
+    )
+}
+
+/**
+ * Convenience overload that applies a [RikkaStyle] directly.
+ *
+ * Usage:
+ * ```
+ * RikkaTheme(
+ *     colors = RikkaPalettes.ZincDark,
+ *     style = RikkaStylePreset.Nova.style,
+ *     typography = rikkaTypography(myFont, scale = RikkaStylePreset.Nova.typeScale),
+ * ) { ... }
+ * ```
+ *
+ * The [style] provides shapes, spacing, and motion. You still supply
+ * colors and typography separately since they depend on font/palette choice.
+ */
+@Composable
+public fun RikkaTheme(
+    colors: RikkaColors = RikkaPalettes.NeutralLight,
+    style: RikkaStyle,
+    typography: RikkaTypography = rikkaTypography(scale = style.typeScale),
+    content: @Composable () -> Unit,
+) {
+    RikkaTheme(
+        colors = colors,
+        typography = typography,
+        spacing = style.spacing,
+        shapes = style.shapes,
+        motion = style.motion,
+        content = content,
+    )
+}
+
+/**
+ * Convenience overload that applies a [RikkaStylePreset] enum directly.
+ *
+ * The simplest way to theme your entire app:
+ * ```
+ * RikkaTheme(
+ *     colors = RikkaPalettes.ZincDark,
+ *     preset = RikkaStylePreset.Nova,
+ * ) { ... }
+ * ```
+ */
+@Composable
+public fun RikkaTheme(
+    colors: RikkaColors = RikkaPalettes.NeutralLight,
+    preset: RikkaStylePreset,
+    typography: RikkaTypography = rikkaTypography(scale = preset.typeScale),
+    content: @Composable () -> Unit,
+) {
+    RikkaTheme(
+        colors = colors,
+        typography = typography,
+        spacing = preset.spacing,
+        shapes = preset.shapes,
+        motion = preset.motion,
+        content = content,
+    )
+}
+
+/**
+ * All-in-one overload: palette + accent + dark mode in a single call.
+ *
+ * The simplest way to set up a fully themed app:
+ * ```
+ * RikkaTheme(
+ *     palette = RikkaPalette.Zinc,
+ *     accent = RikkaAccentPreset.Blue,
+ *     isDark = true,
+ *     preset = RikkaStylePreset.Vega,
+ * ) { ... }
+ * ```
+ */
+@Composable
+public fun RikkaTheme(
+    palette: RikkaPalette,
+    accent: RikkaAccentPreset = RikkaAccentPreset.Default,
+    isDark: Boolean = false,
+    preset: RikkaStylePreset = RikkaStylePreset.Default,
+    typography: RikkaTypography =
+        rikkaTypography(
+            scale = preset.typeScale,
+        ),
+    content: @Composable () -> Unit,
+) {
+    val colors = accent.applyTo(palette.resolve(isDark), isDark)
+    RikkaTheme(
+        colors = colors,
+        typography = typography,
+        spacing = preset.spacing,
+        shapes = preset.shapes,
+        motion = preset.motion,
+        content = content,
+    )
+}
+
+/**
+ * Access point for the current RikkaUi theme values.
+ *
+ * Usage:
+ * ```
+ * val primary = RikkaTheme.colors.primary
+ * val heading = RikkaTheme.typography.h1
+ * val padding = RikkaTheme.spacing.lg
+ * val rounded = RikkaTheme.shapes.md
+ * val spring = RikkaTheme.motion.springDefault
+ * ```
+ */
+public object RikkaTheme {
+    public val colors: RikkaColors
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalRikkaColors.current
+
+    public val typography: RikkaTypography
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalRikkaTypography.current
+
+    public val spacing: RikkaSpacing
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalRikkaSpacing.current
+
+    public val shapes: RikkaShapes
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalRikkaShapes.current
+
+    public val motion: RikkaMotion
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalRikkaMotion.current
+
+    public val elevation: RikkaElevation
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalRikkaElevation.current
+
+    public val minTouchTarget: Dp
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalMinTouchTarget.current
+}
+
+/**
+ * Returns the appropriate content (foreground) color for the given [backgroundColor].
+ *
+ * Matches against the current theme's color tokens to find the corresponding
+ * foreground color. Falls back to [RikkaColors.foreground] if no match is found.
+ *
+ * ### Usage
+ * ```
+ * val bg = RikkaTheme.colors.primary
+ * val fg = contentColorFor(bg) // → primaryForeground
+ * ```
+ */
+@Composable
+@ReadOnlyComposable
+public fun contentColorFor(backgroundColor: Color): Color {
+    val colors = RikkaTheme.colors
+    // Most specific first — tinted and inverse may share values
+    // with common surfaces (e.g. primaryTinted == muted in some palettes).
+    // Skip Unspecified tokens to avoid false matches on unset containers.
+    return when {
+        backgroundColor == Color.Unspecified -> colors.onBackground
+
+        colors.primaryTinted != Color.Unspecified &&
+            backgroundColor == colors.primaryTinted -> colors.onPrimaryTinted
+
+        colors.destructiveTinted != Color.Unspecified &&
+            backgroundColor == colors.destructiveTinted -> colors.onDestructiveTinted
+
+        colors.inverseSurface != Color.Unspecified &&
+            backgroundColor == colors.inverseSurface -> colors.onInverseSurface
+
+        backgroundColor == colors.primary -> colors.onPrimary
+
+        backgroundColor == colors.destructive -> colors.onDestructive
+
+        backgroundColor == colors.warning -> colors.onWarning
+
+        backgroundColor == colors.success -> colors.onSuccess
+
+        backgroundColor == colors.secondary -> colors.onSecondary
+
+        backgroundColor == colors.muted -> colors.onMuted
+
+        backgroundColor == colors.surface -> colors.onSurface
+
+        backgroundColor == colors.background -> colors.onBackground
+
+        else -> colors.onBackground
+    }
+}

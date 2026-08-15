@@ -14,6 +14,7 @@
 
 X28_PREF_OPERATOR="${X28_PREF_OPERATOR:-MCI}"
 X28_RSRP_BAD="${X28_RSRP_BAD:--95}"
+X28_RSRP5G_BAD="${X28_RSRP5G_BAD:--100}"   # 5G NR RSRP is typically ~5 dB weaker than the LTE anchor
 X28_ALERT_COOLDOWN_S="${X28_ALERT_COOLDOWN_S:-1800}"
 X28_FIX_COOLDOWN_S="${X28_FIX_COOLDOWN_S:-600}"
 STATE="${X28_STATE:-/tmp/x28watch.state}"
@@ -30,17 +31,19 @@ log() { echo "[$(date '+%F %T')] $*" >> /tmp/x28watch.log 2>/dev/null; }
 # Prints exactly one line: OK | FIX|operator | ALERT|degraded.
 # Pure — no state, no side effects; used by the tests and the live flow.
 x28w_decide() {
-    local op="$1" tech="$2" rsrp="$3" rsrp5g="$4"
+    local op="$1" rsrp="$3" rsrp5g="$4"
     # Operator drift: the single most important failure (weak operator = slow link).
     case "$op" in
         *"$X28_PREF_OPERATOR"*) : ;;
         *) echo "FIX|operator"; return 0 ;;
     esac
-    # Degradation: poor signal/RSRP on the preferred operator (informational).
-    if [ -n "$rsrp" ]; then
-        if awk -v r="$rsrp" -v b="$X28_RSRP_BAD" 'BEGIN{ exit !(r <= b) }'; then
-            echo "ALERT|degraded"; return 0
-        fi
+    # Degradation: poor LTE anchor RSRP OR poor 5G NR RSRP on the preferred
+    # operator (5G NSA can be degraded while the LTE anchor looks fine).
+    if [ -n "$rsrp" ] && awk -v r="$rsrp" -v b="$X28_RSRP_BAD" 'BEGIN{ exit !(r <= b) }'; then
+        echo "ALERT|degraded"; return 0
+    fi
+    if [ -n "$rsrp5g" ] && awk -v r="$rsrp5g" -v b="$X28_RSRP5G_BAD" 'BEGIN{ exit !(r <= b) }'; then
+        echo "ALERT|degraded"; return 0
     fi
     echo "OK"
 }
