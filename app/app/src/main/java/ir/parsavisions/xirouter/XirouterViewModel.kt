@@ -453,6 +453,7 @@ class XirouterViewModel(app: Application) : AndroidViewModel(app) {
                 automationPrevFired.clear(); automationPrevFired.putAll(fired)
                 quotaPrevLevels = V2Keepers.runQuotaCheck(db, quotaPrevLevels, System.currentTimeMillis()).toMutableMap()
                 V2Keepers.pruneActivity(db)
+                clients.value?.clients?.let { V2Keepers.enrichDevices(db, it) }
             }
         } catch (e: Exception) {
             e.rethrowIfCancellation()
@@ -547,7 +548,7 @@ class XirouterViewModel(app: Application) : AndroidViewModel(app) {
         val elapsed = java.time.LocalDate.now().dayOfMonth
         val days = java.time.YearMonth.now().lengthOfMonth()
         val projected = Forecasting.projectUsage(usageToday, elapsed, days)
-        val rate = 7700L
+        val rate = cost.value?.rate_full ?: 7700L
         return "${Format.gbValue(projected)} GB ≈ ${Format.faDigits("${Forecasting.projectCost(projected, rate)}")} تومان"
     }
 

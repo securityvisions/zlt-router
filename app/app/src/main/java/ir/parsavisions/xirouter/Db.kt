@@ -11,6 +11,7 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.Update
 import androidx.room.RoomDatabase
+import androidx.room.ColumnInfo
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
@@ -60,7 +61,7 @@ data class PersonEntity(
     val archived: Boolean = false,
     val implicit: Boolean = false,
     // v6: person credit + quota (ADR-0001/ADR-0003)
-    val creditToman: Long = 0,
+    @ColumnInfo(defaultValue = "0") val creditToman: Long = 0,
     val quotaGb: Double? = null,
 )
 
@@ -75,12 +76,13 @@ data class DeviceSettingsEntity(
     val hideFromLedger: Boolean = false,
     val watched: Boolean = false,
     val lastSeenName: String = "",
-    // v6 device enrichment (ADR-0009)
-    val ip: String = "",
-    val deviceType: String = "",
-    val tags: String = "",
-    val lastSeenUnix: Long = 0,
-    val excludeFromAnalytics: Boolean = false,
+    // v6 device enrichment (ADR-0009) — SQL defaults match the ALTER TABLE
+    // migration (SQLite requires a default when adding a NOT NULL column).
+    @ColumnInfo(defaultValue = "''") val ip: String = "",
+    @ColumnInfo(defaultValue = "''") val deviceType: String = "",
+    @ColumnInfo(defaultValue = "''") val tags: String = "",
+    @ColumnInfo(defaultValue = "0") val lastSeenUnix: Long = 0,
+    @ColumnInfo(defaultValue = "0") val excludeFromAnalytics: Boolean = false,
 )
 
 /** Ownership memory — keeps soft history (untilDay set) for the suggestion engine. */
@@ -545,22 +547,22 @@ abstract class AppDb : RoomDatabase() {
                 db.execSQL("ALTER TABLE persons ADD COLUMN creditToman INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE persons ADD COLUMN quotaGb REAL")
                 // payments (first-class; seeded from the legacy paidToman field)
-                db.execSQL("CREATE TABLE IF NOT EXISTS payments (id TEXT NOT NULL PRIMARY KEY, personId TEXT NOT NULL, monthKey TEXT NOT NULL, amountToman INTEGER NOT NULL, atMillis INTEGER NOT NULL, method TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', createdAt INTEGER NOT NULL DEFAULT 0)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS payments (id TEXT NOT NULL PRIMARY KEY, personId TEXT NOT NULL, monthKey TEXT NOT NULL, amountToman INTEGER NOT NULL, atMillis INTEGER NOT NULL, method TEXT NOT NULL, note TEXT NOT NULL, createdAt INTEGER NOT NULL)")
                 db.execSQL("INSERT OR IGNORE INTO payments (id, personId, monthKey, amountToman, atMillis, method, note, createdAt) SELECT 'migration:' || `key`, personId, monthKey, paidToman, 0, '', 'migrated', 0 FROM ledger_entries WHERE paidToman > 0")
                 // inbox
-                db.execSQL("CREATE TABLE IF NOT EXISTS inbox_events (id TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', atMillis INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'unread', muted INTEGER NOT NULL DEFAULT 0)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS inbox_events (id TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, atMillis INTEGER NOT NULL, state TEXT NOT NULL, muted INTEGER NOT NULL)")
                 // activity timeline
-                db.execSQL("CREATE TABLE IF NOT EXISTS activity_events (id TEXT NOT NULL PRIMARY KEY, category TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, atMillis INTEGER NOT NULL DEFAULT 0)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS activity_events (id TEXT NOT NULL PRIMARY KEY, category TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, atMillis INTEGER NOT NULL)")
                 // permanent audit (copies the legacy ownership audit)
-                db.execSQL("CREATE TABLE IF NOT EXISTS audit_events (id TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, actor TEXT NOT NULL DEFAULT 'local', details TEXT NOT NULL, createdAt INTEGER NOT NULL DEFAULT 0)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS audit_events (id TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, actor TEXT NOT NULL, details TEXT NOT NULL, createdAt INTEGER NOT NULL)")
                 db.execSQL("INSERT OR IGNORE INTO audit_events (id, kind, actor, details, createdAt) SELECT id, kind, actor, details, createdAt FROM ownership_audit")
                 // automation rules
-                db.execSQL("CREATE TABLE IF NOT EXISTS automation_rules (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, conditionJson TEXT NOT NULL, actionJson TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, runCount INTEGER NOT NULL DEFAULT 0, lastRunAt INTEGER NOT NULL DEFAULT 0)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS automation_rules (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, conditionJson TEXT NOT NULL, actionJson TEXT NOT NULL, enabled INTEGER NOT NULL, runCount INTEGER NOT NULL, lastRunAt INTEGER NOT NULL)")
                 // saved views
-                db.execSQL("CREATE TABLE IF NOT EXISTS saved_views (id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, scope TEXT NOT NULL, filterJson TEXT NOT NULL, createdAt INTEGER NOT NULL DEFAULT 0)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS saved_views (id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, scope TEXT NOT NULL, filterJson TEXT NOT NULL, createdAt INTEGER NOT NULL)")
                 // message templates (seeded with the default Persian bill)
-                db.execSQL("CREATE TABLE IF NOT EXISTS message_templates (id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, body TEXT NOT NULL, createdAt INTEGER NOT NULL DEFAULT 0)")
-                db.execSQL("INSERT OR IGNORE INTO message_templates (id, title, body, createdAt) VALUES ('default', 'صورتحساب ماهانه', 'سلام {name}؛ مصرف این ماه {usage} گیگابایت و مبلغ {amount} تومان است. مهلت پرداخت: {due_date}.', 0)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS message_templates (id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, body TEXT NOT NULL, createdAt INTEGER NOT NULL)")
+                db.execSQL("INSERT OR IGNORE INTO message_templates (id, title, body, createdAt) VALUES ('default', 'صورتحساب ماهانه', 'سلام {name}؛ مصرف این ماه {usage} گیگابایت و مبلغ {amount} تومان است. مانده: {remaining} گیگابایت. مهلت پرداخت: {due_date}. اعتبار: {credits}.', 0)")
             }
         }
 

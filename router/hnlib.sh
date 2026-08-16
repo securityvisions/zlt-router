@@ -204,7 +204,8 @@ hn_q_passive_mbps() {
     awk -F'|' '
         $1 ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}/ && $2 ~ /^[0-9.]+$/ {
             t = $1 " 00"; gsub(/[-:]/," ",t); ep = mktime(t)
-            if (prev_ts != "" && ep > prev_ts && ep != -1) {
+            if (ep <= 0 && prev_ts != "") ep = prev_ts + 3600   # busybox-awk fallback: hourly rows
+            if (prev_ts != "" && ep > prev_ts) {
                 dt = ep - prev_ts; dgb = $2 - prev_gb
                 if (dgb > 0 && dt > 0) {
                     mbps = dgb * 8589934592 / dt / 1000000

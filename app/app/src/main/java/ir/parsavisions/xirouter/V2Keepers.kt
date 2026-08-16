@@ -44,6 +44,22 @@ object V2Keepers {
             db.ledgerDao().upsertEntry(entry.copy(paidToman = entry.paidToman + amount, paid = true))
         }
         db.personDao().upsert(person.copy(creditToman = person.creditToman - applied.values.sum()))
+        // every money mutation writes an audit row (spec-v2, ADR-0005)
+        db.auditDao().insert(
+            AuditEventEntity(
+                id = "aud-" + UUID.randomUUID().toString().take(8),
+                kind = "credit", details = "$personId credit->bills ${applied.values.sum()}",
+            ),
+        )
+    }
+
+    /** Poll-side device enrichment (ADR-0009): refresh ip/lastSeen from /clients. */
+    suspend fun enrichDevices(db: AppDb, clients: List<ClientDto>) {
+        val now = System.currentTimeMillis()
+        clients.forEach { client ->
+            val device = db.deviceDao().byMac(client.mac) ?: return@forEach
+            db.deviceDao().upsert(Enrichment.apply(device, client.ip, online = true, nowMillis = now))
+        }
     }
 
     // ── Inbox / timeline / audit (ADR-0004/0005) ─────────────────────────────
@@ -88,8 +104,8 @@ object V2Keepers {
     suspend fun runAutomation(db: AppDb, ctx: AutomationContext, prevFired: Map<String, Boolean>): Map<String, Boolean> {
         val next = prevFired.toMutableMap()
         db.automationDao().enabled().forEach { rule ->
-            val codec = AutomationEngine.decode(json, rule.conditionJson) ?: return@forEach
-            val fires = AutomationEngine.evaluate(codec.condition, ctx)
+            val condition = runCatching { json.decodeFromString<ConditionEnvelope>(rule.conditionJson) }.getOrNull() ?: return@forEach
+            val fires = AutomationEngine.evaluate(condition, ctx)
             val shouldFire = AutomationEngine.shouldFire(prevFired[rule.id] ?: false, fires)
             next[rule.id] = fires
             if (shouldFire) {
@@ -98,7 +114,13 @@ object V2Keepers {
                     InboxEventEntity(
                         id = "inb-" + UUID.randomUUID().toString().take(8),
                         kind = "automation", title = rule.name,
-                        body = "Automation rule fired: ${codec.name}",
+                        body = "Automation rule fired: ${rule.name}",
+                    ),
+                )
+                db.auditDao().insert(
+                    AuditEventEntity(
+                        id = "aud-" + UUID.randomUUID().toString().take(8),
+                        kind = "automation", details = rule.name,
                     ),
                 )
             }
