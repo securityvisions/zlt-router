@@ -5,22 +5,48 @@
 # no trace. This init script persists two things to flash:
 #   1. boots.log  — one entry per boot: timestamp, whether the previous
 #                   shutdown was clean or a crash/power-cut (via the
-#                   clean-shutdown marker), uptime before the reset, and the
-#                   pstore/dmesg tail if the kernel saved it.
+#                   clean-shutdown marker), uptime before the reset, the Xiaomi
+#                   bootcount failover flags, and the pstore/dmesg tail if the
+#                   kernel saved it.
 #   2. runtime.log — appended by diag-snapshot.sh (cron); a rolling logread
 #                   window so the moments before a crash survive the reboot.
 #
 # clean-shutdown marker: written by stop() on graceful shutdown. A watchdog
 # reset, kernel panic or power cut never runs stop(), so the marker is absent
 # at the next boot -> the boot entry records "CRASH".
+#
+# bootcount flags: the stock S99bootcount early-exits ("rd03 model detected")
+# before resetting flag_try_sys{1,2}_failed, so the failover counters climb on
+# every boot instead of confirming success. This script records them in every
+# boot entry (so a single file shows whether they climbed) and resets them on a
+# confirmed boot (the same operation S99bootcount would perform).
 
 START=99
 STOP=01
 
 DIAG=/etc/diag
 
+# diag_bootcount_flags — the Xiaomi failover flag block (name=value lines).
+# Overridable for tests; falls back to fw_printenv.
+diag_bootcount_flags() {
+    fw_printenv flag_try_sys1_failed flag_try_sys2_failed 2>/dev/null
+}
+
+# diag_bootcount_reset — zero the failover counters. Reaching userspace is the
+# boot's success confirmation (the same contract S99bootcount has): u-boot's
+# failover only exists to catch boots that never reach userspace. No-op when
+# fw_setenv is missing or in initramfs mode (the S99bootcount guard).
+diag_bootcount_reset() {
+    command -v fw_setenv >/dev/null 2>&1 || return 0
+    [ "$(rootfs_type 2>/dev/null)" = "tmpfs" ] && return 0
+    fw_setenv flag_try_sys1_failed 0 2>/dev/null
+    fw_setenv flag_try_sys2_failed 0 2>/dev/null
+}
+
 boot() {
+    local bc
     mkdir -p "$DIAG"
+    bc=$(diag_bootcount_flags | tr '\n' ' ' | sed 's/ $//')
     {
         echo ""
         echo "=== BOOT $(date '+%F %T') ==="
@@ -30,6 +56,7 @@ boot() {
         else
             echo "previous_shutdown=CRASH_OR_POWER_LOSS"
         fi
+        echo "bootcount_before=$bc"
         rm -f "$DIAG/clean-shutdown" "$DIAG/uptime-before"
         echo "--- dmesg watchdog/panic tail ---"
         dmesg 2>/dev/null | tail -30
@@ -44,6 +71,9 @@ boot() {
         echo "--- last network events ---"
         tail -15 /etc/network-events/events.log 2>/dev/null
     } >> "$DIAG/boots.log"
+    # Confirm the boot succeeded: reset the failover counters now that we've
+    # recorded their pre-boot values, so u-boot's bootcounter never climbs.
+    diag_bootcount_reset
 }
 
 start() { boot; }
