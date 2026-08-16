@@ -1,0 +1,55 @@
+#!/bin/sh /etc/rc.common
+# diag — persistent reboot diagnostics (OpenWrt init).
+#
+# The router's RAM log (logread) is lost on reboot, which is why a crash leaves
+# no trace. This init script persists two things to flash:
+#   1. boots.log  — one entry per boot: timestamp, whether the previous
+#                   shutdown was clean or a crash/power-cut (via the
+#                   clean-shutdown marker), uptime before the reset, and the
+#                   pstore/dmesg tail if the kernel saved it.
+#   2. runtime.log — appended by diag-snapshot.sh (cron); a rolling logread
+#                   window so the moments before a crash survive the reboot.
+#
+# clean-shutdown marker: written by stop() on graceful shutdown. A watchdog
+# reset, kernel panic or power cut never runs stop(), so the marker is absent
+# at the next boot -> the boot entry records "CRASH".
+
+START=99
+STOP=01
+
+DIAG=/etc/diag
+
+boot() {
+    mkdir -p "$DIAG"
+    {
+        echo ""
+        echo "=== BOOT $(date '+%F %T') ==="
+        if [ -f "$DIAG/clean-shutdown" ]; then
+            echo "previous_shutdown=clean"
+            cat "$DIAG/uptime-before" 2>/dev/null
+        else
+            echo "previous_shutdown=CRASH_OR_POWER_LOSS"
+        fi
+        rm -f "$DIAG/clean-shutdown" "$DIAG/uptime-before"
+        echo "--- dmesg watchdog/panic tail ---"
+        dmesg 2>/dev/null | tail -30
+        echo "--- pstore (kernel panic survives reboot) ---"
+        for f in /sys/fs/pstore/*; do
+            [ -e "$f" ] || continue
+            echo "### $f"
+            cat "$f" 2>/dev/null | tail -60
+        done
+        echo "--- last runtime snapshot (pre-crash logread) ---"
+        tail -25 "$DIAG/runtime.log" 2>/dev/null
+        echo "--- last network events ---"
+        tail -15 /etc/network-events/events.log 2>/dev/null
+    } >> "$DIAG/boots.log"
+}
+
+start() { boot; }
+
+stop() {
+    mkdir -p "$DIAG"
+    touch "$DIAG/clean-shutdown"
+    uptime > "$DIAG/uptime-before"
+}

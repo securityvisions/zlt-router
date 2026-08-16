@@ -183,7 +183,7 @@ main() {
         # Quality events follow transitions, not the alert cooldown: one
         # degraded per episode (first bad sample), one recovered on the first
         # healthy check after. The Telegram alert keeps its own 1h throttle.
-        prev=$(cat "$QEV_FILE" 2>/dev/null)
+        prev=$(cat "$QEV_FILE" 2>/dev/null || true)
         case "$qd" in
             *degraded*|ROTATE)
                 if [ "$prev" != "degraded" ]; then
