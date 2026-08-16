@@ -11,7 +11,7 @@ object UiPreferences {
     val chartDetails = setOf("simple", "detailed")
     val primaryDestinations = listOf("home", "ledger", "data")
     val optionalDestinations = setOf("live")
-    val dashboardCards = listOf("collection", "ranking", "metrics", "live")
+    val dashboardCards = listOf("collection", "ranking", "metrics", "live", "link", "forecast")
     val dashboardSizes = setOf("small", "medium", "full")
 
     data class DashboardPreset(
@@ -22,19 +22,19 @@ object UiPreferences {
 
     val dashboardPresets = mapOf(
         "daily" to DashboardPreset(
-            listOf("ranking", "collection", "live", "metrics"),
+            listOf("forecast", "ranking", "collection", "live", "link", "metrics"),
             setOf("metrics"),
-            mapOf("ranking" to "full", "collection" to "medium", "live" to "medium", "metrics" to "full"),
+            mapOf("forecast" to "full", "ranking" to "full", "collection" to "medium", "live" to "medium", "link" to "medium", "metrics" to "full"),
         ),
         "billing" to DashboardPreset(
-            listOf("collection", "ranking", "metrics", "live"),
+            listOf("collection", "ranking", "forecast", "metrics", "link", "live"),
             setOf("live"),
-            mapOf("collection" to "full", "ranking" to "full", "metrics" to "medium", "live" to "small"),
+            mapOf("collection" to "full", "ranking" to "full", "forecast" to "medium", "metrics" to "medium", "link" to "medium", "live" to "small"),
         ),
         "troubleshooting" to DashboardPreset(
-            listOf("live", "metrics", "ranking", "collection"),
+            listOf("link", "live", "metrics", "forecast", "ranking", "collection"),
             setOf("collection", "ranking"),
-            mapOf("live" to "full", "metrics" to "full", "ranking" to "medium", "collection" to "small"),
+            mapOf("link" to "full", "live" to "full", "metrics" to "full", "forecast" to "medium", "ranking" to "medium", "collection" to "small"),
         ),
     )
 

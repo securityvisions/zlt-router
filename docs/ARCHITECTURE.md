@@ -56,7 +56,11 @@ edge, the app, docs, specs/tickets — describes one deployable system.
    - **international** → the active node (`cdn_ws` default; `via_x28` switchable
      → routes through the X28 crypto engine → VPS)
 2. Fail-open watchdog: on sustained node failure PassWall drops to direct and
-   auto-recovers (the planned chain: REALITY → Hysteria2 → via-X28 → direct).
+   auto-recovers. The live chain rotates by quality, not just aliveness:
+   `cdn_ws → REALITY → Hysteria2 → via_X28 → direct (fail-open)`. The quality
+   layer measures latency/throughput through the active node, rotates to a
+   healthier fallback when the active node is degraded-but-alive, escalates to
+   operator re-selection before fail-open, and auto-failbacks with hysteresis.
 
 ## Control plane
 

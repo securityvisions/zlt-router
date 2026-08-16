@@ -106,3 +106,15 @@ data class StatusDto(
     val watched: Boolean? = null, val node: String? = null,
     val url: String? = null, val result: String? = null,
 )
+
+// X28 4G/5G WAN link state (`GET /link`). Every field nullable-with-default so
+// a growing server never crashes an older app.
+@Serializable data class LinkFlow(val dl: Double = 0.0, val ul: Double = 0.0)
+@Serializable data class LinkDto(
+    val operator: String = "", val tech: String = "",
+    val signal: Int? = null, val rsrp: Int? = null, val rsrp_5g: Int? = null,
+    val band: String = "", val plmn: String = "",
+    val flow: LinkFlow? = null,
+) {
+    val signalLabel: String get() = signal?.let { "$it/5" } ?: "—"
+}

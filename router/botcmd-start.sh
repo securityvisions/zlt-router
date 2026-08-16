@@ -26,7 +26,14 @@ if [ -f "$PIDF" ]; then
     fi
     # PID dead (or just killed) — clean up
     rm -f "$PIDF"
+fi
+
+# The bot may have died without running its EXIT trap (kill -9), leaving a
+# stale lock directory behind — remove it whenever no bot is running, or the
+# new instance's `mkdir` will fail and the watchdog deadlocks.
+if ! kill -0 "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null; then
     rmdir /tmp/botcmd.lock 2>/dev/null
+    rm -f "$PIDF"
 fi
 
 rm -f "$HB"

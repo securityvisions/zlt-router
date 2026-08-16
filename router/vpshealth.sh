@@ -12,6 +12,9 @@ VPS_PANEL_PORT="${VPS_PANEL_PORT:-2095}"
 VPS_SUB_PORT="${VPS_SUB_PORT:-2096}"
 VPS_SSH_PORT="${VPS_SSH_PORT:-22}"
 VP_ALERT_COOLDOWN_S="${VP_ALERT_COOLDOWN_S:-1800}"
+# Shared alert throttle (hnlib), optional so tests run without it.
+HN_LIB="${HN_LIB:-/root/hnlib.sh}"
+[ -f "$HN_LIB" ] && . "$HN_LIB"
 VP_STATE="${VP_STATE:-/tmp/vpshealth.state}"
 
 # vp_port_ok <port> — true when the TCP port answers.
@@ -30,11 +33,7 @@ vp_decision() {
 }
 
 vp_cooldown_ok() {
-    local now last
-    now=$(date +%s)
-    last=$(sed -n 's/^alert //p' "$VP_STATE" 2>/dev/null | tail -1)
-    [ -z "$last" ] && return 0
-    [ $((now - last)) -ge "$VP_ALERT_COOLDOWN_S" ]
+    hn_cooldown_ok "$VP_STATE" "$VP_ALERT_COOLDOWN_S" alert
 }
 
 main() {
@@ -43,7 +42,7 @@ main() {
     vp_port_ok "$VPS_SUB_PORT" && sub=1 || sub=0
     decision=$(vp_decision "$panel" "$sub")
     if [ "$decision" = "ALERT|down" ] && vp_cooldown_ok; then
-        echo "alert $(date +%s)" >> "$VP_STATE" 2>/dev/null
+        hn_cooldown_note "$VP_STATE" alert
         [ -x /root/tg.sh ] && /root/tg.sh --text "🔴 VPS origin unreachable (panel=$panel sub=$sub)." >/dev/null 2>&1
     fi
     echo "$decision"

@@ -343,6 +343,27 @@ while :; do
         /disk)    cmd_disk "$FROM" ;;
         /hyst)    cmd_hyst "$FROM" ;;
         /link)    cmd_link "$FROM" ;;
+        /approve*)
+            mac=$(echo "$TEXT" | cut -d' ' -f2- | tr 'A-Z' 'a-z')
+            if [ -z "$mac" ]; then
+                body="Usage: /approve &lt;mac&gt; — approve a quarantined device."
+            elif echo "$mac" | grep -Eq '^[0-9a-f:]{17}$'; then
+                out=$(/root/quarantine.sh --approve "$mac" 2>&1)
+                body="✅ ${out:-approved}"
+            else
+                body="Invalid MAC: <code>${mac}</code>"
+            fi
+            send "$FROM" "$(card "<b>🔓 Quarantine approve</b>" "$body")"
+            ;;
+        /quarantine*)
+            act=$(echo "$TEXT" | cut -d' ' -f2-)
+            case "$act" in
+                on) touch /etc/quarantine-enabled; /root/quarantine.sh >/dev/null 2>&1; body="Quarantine <b>enabled</b> — new devices are blocked until approved." ;;
+                off) rm -f /etc/quarantine-enabled; body="Quarantine <b>disabled</b>." ;;
+                *) body="Quarantine is <b>$(/root/quarantine.sh --status)</b>." ;;
+            esac
+            send "$FROM" "$(card "<b>🚧 Quarantine</b>" "$body")"
+            ;;
         /test*)   cmd_test "$(echo "$TEXT" | cut -d' ' -f2-)" "$FROM" ;;
         /cost)    ask_friday "$FROM" cost ;;
         /bill)    ask_friday "$FROM" bill ;;

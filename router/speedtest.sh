@@ -9,6 +9,9 @@
 ST_LOG="${ST_LOG:-/etc/telemetry/speed.log}"
 ST_FLOOR="${ST_FLOOR:-10}"          # Mbps; below this -> degradation alert
 ST_ALERT_COOLDOWN_S="${ST_ALERT_COOLDOWN_S:-86400}"
+# Shared alert throttle (hnlib), optional so tests run without it.
+HN_LIB="${HN_LIB:-/root/hnlib.sh}"
+[ -f "$HN_LIB" ] && . "$HN_LIB"
 ST_STATE="${ST_STATE:-/tmp/speedtest.state}"
 ST_MB="${ST_MB:-10}"
 
@@ -47,11 +50,7 @@ st_record() {
 }
 
 st_cooldown_ok() {
-    local now last
-    now=$(date +%s)
-    last=$(sed -n 's/^alert //p' "$ST_STATE" 2>/dev/null | tail -1)
-    [ -z "$last" ] && return 0
-    [ $((now - last)) -ge "$ST_ALERT_COOLDOWN_S" ]
+    hn_cooldown_ok "$ST_STATE" "$ST_ALERT_COOLDOWN_S" alert
 }
 
 main() {
@@ -60,7 +59,7 @@ main() {
     st_record "$mbps"
     decision=$(st_decision "$mbps")
     if [ "$decision" = "ALERT|slow" ] && st_cooldown_ok; then
-        echo "alert $(date +%s)" >> "$ST_STATE" 2>/dev/null
+        hn_cooldown_note "$ST_STATE" alert
         [ -x /root/tg.sh ] && /root/tg.sh --text "⚠️ MCI link speed dropped to <b>${mbps} Mbps</b> (floor ${ST_FLOOR})." >/dev/null 2>&1
     fi
     echo "$mbps"

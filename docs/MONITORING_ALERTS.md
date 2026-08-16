@@ -39,13 +39,18 @@ The bot only responds to the authorized chat ID configured in `/etc/tg.conf`.
 | When | What |
 |---|---|
 | every 5 min | **Proxy state change** (🔴 DOWN / 🟢 UP) — alerts only on transition, not per-check |
+| every 5 min | **Link stickiness** — X28 operator drift/degradation, re-selected to MCI (`x28watch.sh`) |
+| every 10 min | **VPS origin** — panel/sub ports unreachable (`vpshealth.sh`) |
 | every 30 min | **Disk space** — alerts only when storage > 85% |
+| 03:00 daily | **Backup** — nightly snapshot written; failure reported (`backup.sh`) |
+| 06:30 daily | **Speedtest** — measured Mbps below the floor (default 10); failure to measure reported (`speedtest.sh`) |
 | 07:00 daily | **Balance report** + tiered low-data warnings (see `BALANCE.md`) |
 | 21:30 daily | **Usage + cost report** per device (Toman) |
 | every min | **New device joined** (DHCP lease diff) |
 | every 15 min | **Realtime balance monitor** — catches same-day heavy usage (see `BALANCE.md`) |
 | 1st of month 07:00 | **Monthly bill** for the previous month |
 | Friday 09:00 | **Friday-discount reminder** (toggleable) |
+| degraded window | **Degraded link** — alive but below quality floor, distinct from link-down |
 | on boot | **"Router back online"** + bot auto-start |
 
 ## Implementation notes

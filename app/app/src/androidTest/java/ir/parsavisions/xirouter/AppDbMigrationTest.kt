@@ -94,6 +94,38 @@ class AppDbMigrationTest {
         }
     }
 
+    @Test
+    fun migrationFromV5SeedsPaymentsCopiesAuditAndPreservesLedger() {
+        helper.createDatabase(databaseName, 5).apply {
+            execSQL("INSERT INTO persons (id,name,`group`,colorIndex,note,archived,implicit) VALUES ('p','Person','',0,'',0,0)")
+            execSQL("INSERT INTO ledger_months (key,jYear,jMonth,globalRate,note,imported) VALUES ('1405/05',1405,5,7700,'',0)")
+            execSQL("INSERT INTO ledger_entries (key,monthKey,personId,usageGb,rateUsed,owedToman,paid,paidToman,note,edited) VALUES ('e1','1405/05','p',10.0,7700,77000,1,50000,'',0)")
+            execSQL("INSERT INTO ownership_audit (id,kind,effectiveDay,actor,details,createdAt) VALUES ('a1','ownership',14050101,'local','p->mac',100)")
+            close()
+        }
+        helper.runMigrationsAndValidate(databaseName, 6, true, AppDb.MIGRATION_5_6).use { db ->
+            db.query("PRAGMA table_info(`persons`)").use {
+                assertTrue(it.columnNames().containsAll(setOf("creditToman", "quotaGb")))
+            }
+            db.query("PRAGMA table_info(`device_settings`)").use {
+                assertTrue(it.columnNames().containsAll(setOf("ip", "deviceType", "tags", "lastSeenUnix", "excludeFromAnalytics")))
+            }
+            db.query("SELECT personId, monthKey, amountToman FROM payments").use {
+                assertTrue(it.moveToFirst()); assertEquals("p", it.getString(0))
+                assertEquals("1405/05", it.getString(1)); assertEquals(50000L, it.getLong(2))
+            }
+            db.query("SELECT kind, details FROM audit_events").use {
+                assertTrue(it.moveToFirst()); assertEquals("ownership", it.getString(0))
+            }
+            db.query("SELECT key, paidToman FROM ledger_entries").use {
+                assertTrue(it.moveToFirst()); assertEquals("e1", it.getString(0)); assertEquals(50000L, it.getLong(1))
+            }
+            db.query("SELECT id FROM message_templates").use {
+                assertTrue(it.moveToFirst()); assertEquals("default", it.getString(0))
+            }
+        }
+    }
+
     private fun assertSchema(db: SupportSQLiteDatabase) {
         val expected = mapOf(
             "samples" to setOf("ts", "kind", "value"),

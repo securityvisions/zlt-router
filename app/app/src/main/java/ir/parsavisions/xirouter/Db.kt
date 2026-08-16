@@ -59,6 +59,9 @@ data class PersonEntity(
     val rateOverride: Long? = null,
     val archived: Boolean = false,
     val implicit: Boolean = false,
+    // v6: person credit + quota (ADR-0001/ADR-0003)
+    val creditToman: Long = 0,
+    val quotaGb: Double? = null,
 )
 
 /** Per-MAC local customization and ownership; router writes `name` via /devices. */
@@ -72,6 +75,12 @@ data class DeviceSettingsEntity(
     val hideFromLedger: Boolean = false,
     val watched: Boolean = false,
     val lastSeenName: String = "",
+    // v6 device enrichment (ADR-0009)
+    val ip: String = "",
+    val deviceType: String = "",
+    val tags: String = "",
+    val lastSeenUnix: Long = 0,
+    val excludeFromAnalytics: Boolean = false,
 )
 
 /** Ownership memory — keeps soft history (untilDay set) for the suggestion engine. */
@@ -292,14 +301,209 @@ interface LedgerDao {
     suspend fun latestDay(): Long?
 }
 
+// ── v6 domain surfaces (ADR-0001…0011) ───────────────────────────────────────
+
+/** One first-class payment against a person's bill (ADR-0001). */
+@Entity(tableName = "payments")
+data class PaymentEntity(
+    @PrimaryKey val id: String,
+    val personId: String,
+    val monthKey: String,
+    val amountToman: Long,
+    val atMillis: Long,
+    val method: String = "",
+    val note: String = "",
+    val createdAt: Long = System.currentTimeMillis(),
+)
+
+@Dao
+interface PaymentDao {
+    @Query("SELECT * FROM payments WHERE monthKey = :monthKey ORDER BY atMillis ASC")
+    fun forMonthFlow(monthKey: String): Flow<List<PaymentEntity>>
+
+    @Query("SELECT * FROM payments WHERE monthKey = :monthKey ORDER BY atMillis ASC")
+    suspend fun forMonth(monthKey: String): List<PaymentEntity>
+
+    @Query("SELECT * FROM payments WHERE personId = :personId ORDER BY atMillis ASC")
+    suspend fun forPerson(personId: String): List<PaymentEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(payment: PaymentEntity)
+
+    @Query("DELETE FROM payments WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
+/** In-app alert inbox (ADR-0004): unread/read/acknowledged, per-kind mute. */
+@Entity(tableName = "inbox_events")
+data class InboxEventEntity(
+    @PrimaryKey val id: String,
+    val kind: String,
+    val title: String,
+    val body: String = "",
+    val atMillis: Long = System.currentTimeMillis(),
+    val state: String = "unread",
+    val muted: Boolean = false,
+)
+
+@Dao
+interface InboxDao {
+    @Query("SELECT * FROM inbox_events ORDER BY atMillis DESC")
+    fun allFlow(): Flow<List<InboxEventEntity>>
+
+    @Query("SELECT * FROM inbox_events ORDER BY atMillis DESC")
+    suspend fun all(): List<InboxEventEntity>
+
+    @Query("SELECT * FROM inbox_events WHERE state = 'unread'")
+    suspend fun unread(): List<InboxEventEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(event: InboxEventEntity)
+
+    @Query("UPDATE inbox_events SET state = :state WHERE id = :id")
+    suspend fun setState(id: String, state: String)
+
+    @Query("UPDATE inbox_events SET muted = :muted WHERE kind = :kind")
+    suspend fun setKindMuted(kind: String, muted: Boolean)
+
+    @Query("DELETE FROM inbox_events WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
+/** Prunable activity timeline (ADR-0005). */
+@Entity(tableName = "activity_events")
+data class ActivityEventEntity(
+    @PrimaryKey val id: String,
+    val category: String,
+    val kind: String,
+    val title: String,
+    val atMillis: Long = System.currentTimeMillis(),
+)
+
+@Dao
+interface ActivityDao {
+    @Query("SELECT * FROM activity_events ORDER BY atMillis DESC")
+    fun allFlow(): Flow<List<ActivityEventEntity>>
+
+    @Query("SELECT * FROM activity_events WHERE category = :category ORDER BY atMillis DESC")
+    suspend fun forCategory(category: String): List<ActivityEventEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(event: ActivityEventEntity)
+
+    @Query("DELETE FROM activity_events WHERE atMillis < :cutoff")
+    suspend fun prune(cutoff: Long)
+}
+
+/** Permanent billing/mutation audit (ADR-0005); never pruned. */
+@Entity(tableName = "audit_events")
+data class AuditEventEntity(
+    @PrimaryKey val id: String,
+    val kind: String,
+    val actor: String = "local",
+    val details: String,
+    val createdAt: Long = System.currentTimeMillis(),
+)
+
+@Dao
+interface AuditDao {
+    @Query("SELECT * FROM audit_events ORDER BY createdAt DESC")
+    suspend fun all(): List<AuditEventEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(event: AuditEventEntity)
+}
+
+/** Serializable WHEN/IF/THEN automation rule (ADR-0002). */
+@Entity(tableName = "automation_rules")
+data class AutomationRuleEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val conditionJson: String,
+    val actionJson: String,
+    val enabled: Boolean = true,
+    val runCount: Int = 0,
+    val lastRunAt: Long = 0,
+)
+
+@Dao
+interface AutomationDao {
+    @Query("SELECT * FROM automation_rules ORDER BY name ASC")
+    fun allFlow(): Flow<List<AutomationRuleEntity>>
+
+    @Query("SELECT * FROM automation_rules WHERE enabled = 1")
+    suspend fun enabled(): List<AutomationRuleEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(rule: AutomationRuleEntity)
+
+    @Query("UPDATE automation_rules SET runCount = runCount + 1, lastRunAt = :at WHERE id = :id")
+    suspend fun recordRun(id: String, at: Long)
+
+    @Query("UPDATE automation_rules SET enabled = :enabled WHERE id = :id")
+    suspend fun setEnabled(id: String, enabled: Boolean)
+
+    @Query("DELETE FROM automation_rules WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
+/** Saved filter view on the Ledger or Device workspace (ADR-0007). */
+@Entity(tableName = "saved_views")
+data class SavedViewEntity(
+    @PrimaryKey val id: String,
+    val title: String,
+    val scope: String,
+    val filterJson: String,
+    val createdAt: Long = System.currentTimeMillis(),
+)
+
+@Dao
+interface SavedViewDao {
+    @Query("SELECT * FROM saved_views WHERE scope = :scope ORDER BY title ASC")
+    suspend fun forScope(scope: String): List<SavedViewEntity>
+
+    @Query("SELECT * FROM saved_views")
+    suspend fun all(): List<SavedViewEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(view: SavedViewEntity)
+
+    @Query("DELETE FROM saved_views WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
+/** Persian message template for per-person bills (ADR-0011). */
+@Entity(tableName = "message_templates")
+data class MessageTemplateEntity(
+    @PrimaryKey val id: String,
+    val title: String,
+    val body: String,
+    val createdAt: Long = System.currentTimeMillis(),
+)
+
+@Dao
+interface MessageTemplateDao {
+    @Query("SELECT * FROM message_templates ORDER BY title ASC")
+    suspend fun all(): List<MessageTemplateEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(template: MessageTemplateEntity)
+
+    @Query("DELETE FROM message_templates WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
 @Database(
     entities = [
         SampleEntity::class, PersonEntity::class, DeviceSettingsEntity::class,
         OwnershipHistoryEntity::class, LedgerMonthEntity::class, LedgerEntryEntity::class,
         DailyUsageEntity::class, PackageEntity::class, PackageSnapshotEntity::class,
         PendingPackageAlertEntity::class, OwnershipAuditEntity::class, SuggestionDismissalEntity::class,
+        PaymentEntity::class, InboxEventEntity::class, ActivityEventEntity::class,
+        AuditEventEntity::class, AutomationRuleEntity::class, SavedViewEntity::class,
+        MessageTemplateEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDb : RoomDatabase() {
@@ -310,15 +514,54 @@ abstract class AppDb : RoomDatabase() {
     abstract fun ledgerDao(): LedgerDao
     abstract fun packageDao(): PackageDao
     abstract fun ownershipAuditDao(): OwnershipAuditDao
+    abstract fun paymentDao(): PaymentDao
+    abstract fun inboxDao(): InboxDao
+    abstract fun activityDao(): ActivityDao
+    abstract fun auditDao(): AuditDao
+    abstract fun automationDao(): AutomationDao
+    abstract fun savedViewDao(): SavedViewDao
+    abstract fun messageTemplateDao(): MessageTemplateDao
 
     companion object {
         @Volatile private var instance: AppDb? = null
 
         fun get(context: Context): AppDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDb::class.java, "xirouter.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
                 .also { instance = it }
+        }
+
+        /** v5→v6 (ADR-0001…0011): new domain surfaces over the existing ledger. */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // device enrichment columns
+                db.execSQL("ALTER TABLE device_settings ADD COLUMN ip TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE device_settings ADD COLUMN deviceType TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE device_settings ADD COLUMN tags TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE device_settings ADD COLUMN lastSeenUnix INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE device_settings ADD COLUMN excludeFromAnalytics INTEGER NOT NULL DEFAULT 0")
+                // person credit + quota
+                db.execSQL("ALTER TABLE persons ADD COLUMN creditToman INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE persons ADD COLUMN quotaGb REAL")
+                // payments (first-class; seeded from the legacy paidToman field)
+                db.execSQL("CREATE TABLE IF NOT EXISTS payments (id TEXT NOT NULL PRIMARY KEY, personId TEXT NOT NULL, monthKey TEXT NOT NULL, amountToman INTEGER NOT NULL, atMillis INTEGER NOT NULL, method TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', createdAt INTEGER NOT NULL DEFAULT 0)")
+                db.execSQL("INSERT OR IGNORE INTO payments (id, personId, monthKey, amountToman, atMillis, method, note, createdAt) SELECT 'migration:' || `key`, personId, monthKey, paidToman, 0, '', 'migrated', 0 FROM ledger_entries WHERE paidToman > 0")
+                // inbox
+                db.execSQL("CREATE TABLE IF NOT EXISTS inbox_events (id TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', atMillis INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'unread', muted INTEGER NOT NULL DEFAULT 0)")
+                // activity timeline
+                db.execSQL("CREATE TABLE IF NOT EXISTS activity_events (id TEXT NOT NULL PRIMARY KEY, category TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, atMillis INTEGER NOT NULL DEFAULT 0)")
+                // permanent audit (copies the legacy ownership audit)
+                db.execSQL("CREATE TABLE IF NOT EXISTS audit_events (id TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, actor TEXT NOT NULL DEFAULT 'local', details TEXT NOT NULL, createdAt INTEGER NOT NULL DEFAULT 0)")
+                db.execSQL("INSERT OR IGNORE INTO audit_events (id, kind, actor, details, createdAt) SELECT id, kind, actor, details, createdAt FROM ownership_audit")
+                // automation rules
+                db.execSQL("CREATE TABLE IF NOT EXISTS automation_rules (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, conditionJson TEXT NOT NULL, actionJson TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, runCount INTEGER NOT NULL DEFAULT 0, lastRunAt INTEGER NOT NULL DEFAULT 0)")
+                // saved views
+                db.execSQL("CREATE TABLE IF NOT EXISTS saved_views (id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, scope TEXT NOT NULL, filterJson TEXT NOT NULL, createdAt INTEGER NOT NULL DEFAULT 0)")
+                // message templates (seeded with the default Persian bill)
+                db.execSQL("CREATE TABLE IF NOT EXISTS message_templates (id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, body TEXT NOT NULL, createdAt INTEGER NOT NULL DEFAULT 0)")
+                db.execSQL("INSERT OR IGNORE INTO message_templates (id, title, body, createdAt) VALUES ('default', 'صورتحساب ماهانه', 'سلام {name}؛ مصرف این ماه {usage} گیگابایت و مبلغ {amount} تومان است. مهلت پرداخت: {due_date}.', 0)")
+            }
         }
 
         /** The ledger and pending Notifications are permanent data — never migrate destructively. */

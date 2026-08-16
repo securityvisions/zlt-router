@@ -18,6 +18,9 @@ X28_RSRP5G_BAD="${X28_RSRP5G_BAD:--100}"   # 5G NR RSRP is typically ~5 dB weake
 X28_ALERT_COOLDOWN_S="${X28_ALERT_COOLDOWN_S:-1800}"
 X28_FIX_COOLDOWN_S="${X28_FIX_COOLDOWN_S:-600}"
 STATE="${X28_STATE:-/tmp/x28watch.state}"
+# Shared alert throttle (hnlib), optional so tests run without it.
+HN_LIB="${HN_LIB:-/root/hnlib.sh}"
+[ -f "$HN_LIB" ] && . "$HN_LIB"
 # The link-state reader and reselect helper deployed on THIS router (they talk to
 # the X28's vendor HTTP API directly — no SSH dependency).
 X28_LINK_SH="${X28_LINK_SH:-/root/x28link.sh}"
@@ -49,18 +52,13 @@ x28w_decide() {
 }
 
 # x28w_cooldown_ok <cooldown_s> <action> — true when `action` is out of cooldown.
+# Delegates to the shared hnlib throttle (the seam every degraded-* alert uses).
 x28w_cooldown_ok() {
-    local cd="$1" action="$2" now last
-    now=$(date +%s)
-    last=$(sed -n "s/^$action //p" "$STATE" 2>/dev/null | tail -1)
-    [ -z "$last" ] && return 0
-    [ $((now - last)) -ge "$cd" ]
+    hn_cooldown_ok "$STATE" "$1" "$2"
 }
 
 x28w_note() {  # x28w_note <action> — stamp the action time (now).
-    echo "$1 $(date +%s)" >> "$STATE" 2>/dev/null
-    # keep the state file small
-    tail -n 100 "$STATE" > "$STATE.tmp" 2>/dev/null && mv "$STATE.tmp" "$STATE" 2>/dev/null
+    hn_cooldown_note "$STATE" "$1"
 }
 
 # read_link — run the X28 link-state reader (talks to the X28 HTTP API).

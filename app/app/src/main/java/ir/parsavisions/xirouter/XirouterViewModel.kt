@@ -34,6 +34,7 @@ class XirouterViewModel(app: Application) : AndroidViewModel(app) {
     val clients = mutableStateOf<ClientsResponse?>(null)
     val devicesApi = mutableStateOf<DevicesResponse?>(null)
     val live = mutableStateOf<LiveResponse?>(null)
+    val link = mutableStateOf<LinkDto?>(null)
     val historyUsage = mutableStateOf<HistoryResponse?>(null)
     val historyBalance = mutableStateOf<HistoryResponse?>(null)
 
@@ -70,6 +71,17 @@ class XirouterViewModel(app: Application) : AndroidViewModel(app) {
             .map { it.groupBy { e -> e.monthKey } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    // ── v2 reactive state (inbox / activity / automations) ──────────────────
+    val inboxEvents: StateFlow<List<InboxEventEntity>> =
+        db.inboxDao().allFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val activityEvents: StateFlow<List<ActivityEventEntity>> =
+        db.activityDao().allFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val automationRules: StateFlow<List<AutomationRuleEntity>> =
+        db.automationDao().allFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private var automationPrevFired = mutableMapOf<String, Boolean>()
+    private var quotaPrevLevels = mutableMapOf<String, String>()
+
     private val base get() = store.baseUrl
     private val token get() = store.token
 
@@ -105,6 +117,8 @@ class XirouterViewModel(app: Application) : AndroidViewModel(app) {
                     r.historyBalance?.let { historyBalance.value = it }
                     lastUpdate.value = System.currentTimeMillis()
                 }
+                refreshLink()
+                runV2Poll()
                 if (result.outcome == SnapshotCycleOutcome.Retry) {
                     throw result.failure ?: IllegalStateException("Snapshot polling cycle incomplete")
                 }
@@ -140,6 +154,7 @@ class XirouterViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     fun refreshClients() = viewModelScope.launch { try { clients.value = withContext(Dispatchers.IO) { ApiClient.get<ClientsResponse>(base, token, "/clients") } } catch (e: Exception) { e.rethrowIfCancellation(); error.value = friendlyError(e) } }
+    fun refreshLink() = viewModelScope.launch { try { link.value = withContext(Dispatchers.IO) { ApiClient.get<LinkDto>(base, token, "/link") } } catch (e: Exception) { e.rethrowIfCancellation() } }
     fun refreshHistory() = viewModelScope.launch { try {
         val (u, b) = withContext(Dispatchers.IO) {
             Pair(
@@ -427,5 +442,134 @@ class XirouterViewModel(app: Application) : AndroidViewModel(app) {
         is UnreachableException -> "روتر در دسترس نیست"
         is ApiException -> "خطای HTTP ${e.status}"
         else -> e.message ?: "خطا"
+    }
+
+    // ── v2 actions (payments, automation, inbox, saved views, templates) ─────
+
+    private suspend fun runV2Poll() {
+        try {
+            withContext(Dispatchers.IO) {
+                val fired = V2Keepers.runAutomation(db, automationContext(), automationPrevFired)
+                automationPrevFired.clear(); automationPrevFired.putAll(fired)
+                quotaPrevLevels = V2Keepers.runQuotaCheck(db, quotaPrevLevels, System.currentTimeMillis()).toMutableMap()
+                V2Keepers.pruneActivity(db)
+            }
+        } catch (e: Exception) {
+            e.rethrowIfCancellation()
+        }
+    }
+
+    private suspend fun automationContext(): AutomationContext = withContext(Dispatchers.IO) {
+        val main = balance.value?.main
+        val persons = db.personDao().all()
+        val entries = db.ledgerDao().allEntries()
+        val unpaid = entries.count { PaymentMath.billTotal(it) > it.paidToman }
+        val quotaUsed = persons.maxOfOrNull { p ->
+            val used = entries.filter { it.personId == p.id }.sumOf { it.usageGb }
+            p.quotaGb?.let { used / it * 100 } ?: 0.0
+        }
+        AutomationContext(
+            packageRemainPct = main?.remain?.div(main.quota?.toDouble() ?: 1.0)?.times(100.0),
+            quotaUsedPct = quotaUsed?.takeIf { it > 0 },
+            proxyUp = status.value?.proxy?.state == "up",
+            unpaidPeople = unpaid,
+            offlineDevices = 0,
+        )
+    }
+
+    fun addPayment(personId: String, monthKey: String, amountToman: Long, atMillis: Long, method: String, note: String, onDone: () -> Unit = {}) =
+        viewModelScope.launch(Dispatchers.IO) {
+            V2Keepers.recordPayment(db, personId, monthKey, amountToman, atMillis, method, note)
+            V2Keepers.applyCreditToBills(db, personId)
+            onDone()
+        }
+
+    fun saveAutomation(name: String, conditionJson: String, actionJson: String, onDone: () -> Unit = {}) =
+        viewModelScope.launch(Dispatchers.IO) {
+            db.automationDao().upsert(
+                AutomationRuleEntity(
+                    id = "rule-" + UUID.randomUUID().toString().take(8),
+                    name = name.trim(), conditionJson = conditionJson, actionJson = actionJson,
+                ),
+            )
+            onDone()
+        }
+
+    fun toggleAutomation(id: String, enabled: Boolean) = viewModelScope.launch(Dispatchers.IO) {
+        db.automationDao().setEnabled(id, enabled)
+    }
+
+    fun deleteAutomation(id: String) = viewModelScope.launch(Dispatchers.IO) {
+        db.automationDao().delete(id)
+    }
+
+    fun saveView(title: String, scope: String, filterJson: String) = viewModelScope.launch(Dispatchers.IO) {
+        db.savedViewDao().upsert(
+            SavedViewEntity(
+                id = "view-" + UUID.randomUUID().toString().take(8),
+                title = title.trim(), scope = scope, filterJson = filterJson,
+            ),
+        )
+    }
+
+    fun deleteView(id: String) = viewModelScope.launch(Dispatchers.IO) {
+        db.savedViewDao().delete(id)
+    }
+
+    suspend fun viewsFor(scope: String) = withContext(Dispatchers.IO) { db.savedViewDao().forScope(scope) }
+
+    suspend fun templates() = withContext(Dispatchers.IO) { db.messageTemplateDao().all() }
+
+    fun saveTemplate(id: String, title: String, body: String) = viewModelScope.launch(Dispatchers.IO) {
+        db.messageTemplateDao().upsert(
+            MessageTemplateEntity(
+                id = id.ifBlank { "tpl-" + UUID.randomUUID().toString().take(8) },
+                title = title.trim(), body = body,
+            ),
+        )
+    }
+
+    fun deleteTemplate(id: String) = viewModelScope.launch(Dispatchers.IO) {
+        db.messageTemplateDao().delete(id)
+    }
+
+    suspend fun renderTemplate(template: MessageTemplateEntity, vars: Map<String, String>): String =
+        MessageCenter.render(template.body, vars)
+
+    fun markInbox(id: String, state: String) = viewModelScope.launch(Dispatchers.IO) {
+        db.inboxDao().setState(id, state)
+    }
+
+    /** Dashboard v2: the forecast + insights block, computed from live state. */
+    fun dashboardForecast(): String {
+        val main = balance.value?.main ?: return "—"
+        val usageToday = usage.value?.rows?.sumOf { it.gb } ?: 0.0
+        val elapsed = java.time.LocalDate.now().dayOfMonth
+        val days = java.time.YearMonth.now().lengthOfMonth()
+        val projected = Forecasting.projectUsage(usageToday, elapsed, days)
+        val rate = 7700L
+        return "${Format.gbValue(projected)} GB ≈ ${Format.faDigits("${Forecasting.projectCost(projected, rate)}")} تومان"
+    }
+
+    fun dashboardInsights(): List<String> {
+        val main = balance.value?.main
+        val usageToday = usage.value?.rows?.sumOf { it.gb } ?: 0.0
+        val people = persons.value
+        val entries = entriesByMonth.value.values.flatten()
+        val topPerson = people.mapNotNull { p ->
+            entries.filter { it.personId == p.id }.sumOf { it.usageGb }.takeIf { it > 0 }?.let { "${p.name} (${Format.gbValue(it)} GB)" }
+        }.maxByOrNull { it }
+        val exhaustion = main?.remain?.let { r -> Forecasting.packageExhaustionDays(r, 0.5) }
+        val base = Insights.generate(
+            usageTodayGb = usageToday,
+            prevMonthTotalGb = null,
+            topPersonGb = null,
+            packageExhaustionDays = exhaustion,
+            spendTodayToman = 0,
+            avgSpendToman = 0,
+            newDeviceCount = 0,
+        ).toMutableList()
+        topPerson?.let { base += "بیشترین مصرف امروز: $it" }
+        return base.map { if (it.isBlank()) it else "«برآورد» $it" }
     }
 }

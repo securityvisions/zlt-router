@@ -29,7 +29,7 @@ Boot (`/etc/rc.local`): reboot alert (`tg.sh --reboot`) + bot start (`botcmd-sta
 | `/etc/samantel.conf` | `SAMANTEL_PHONE`, `SAMANTEL_PASS`, balance thresholds (`BALANCE_WARN_GB`, `BALANCE_URGENT_GB`, `BALANCE_WARN_DAYS`, `BALANCE_URGENT_DAYS`, `BALANCE_RATE_ALERT_GBH`, `MONITOR_REFRESH_MIN`) |
 | `/etc/billing.conf` | `RATE_FULL_TOMAN`, `RATE_FRIDAY_TOMAN`, `ROUND`, `LAST_FRIDAY`, `FRIDAY_REMINDER` |
 | `/etc/config/adblock` | blocklist feeds, enabled |
-| `/etc/config/sqm` | CAKE rates (download 35000, upload 10000 kbit/s) |
+| `/etc/config/sqm` | CAKE rates (download 55000, upload 10000 kbit/s — tuned to MCI 5G, 55/10 Mbps) |
 | `/etc/config/system` | timezone `Asia/Tehran` |
 | `/etc/config/passwall` | proxy nodes: `cdn_ws` (VLESS+WS via Cloudflare, default `tcp_node`) + `eFCgnGrZ` (REALITY) + `hyst_vps` (Hysteria2) |
 
@@ -87,7 +87,7 @@ The VPS at `85.121.124.158` runs the **s-ui** panel with a sing-box core (replac
 - `/tmp/` — logs (`tg.log`, `botcmd.log`, `balance.log`), states (`hyst_state`, `devices_known`, `balance_tier`, `balance_anchor`, `balance_rate`, `samantel_token`), bot guard (`botcmd.lock`, `botcmd.pid`), adblock blocklist.
 - `/etc/usage-log/` — nlbw baseline (`last`) + monthly usage logs.
 - `/etc/balance-log/` — daily balance snapshots (drain-rate source).
-- `/etc/telemetry/` — `hourly.log` (hourly `ts|total_gb|balance_gb|proxy_state` rows for the Xirouter charts).
+- `/etc/telemetry/` — `hourly.log` (hourly `ts|total_gb|balance_gb|proxy_state` rows + trailing quality fields: latency, passive Mbps, active node — see the cron table) for the Xirouter charts.
 
 ## Router API (Xirouter app)
 
@@ -135,6 +135,24 @@ tc qdisc show dev ifb4wan | grep cake  # download shaping
 date                       # should show IRST
 crontab -l                 # list schedules
 ```
+
+## Cron schedule (live)
+
+| When | Job | What it does |
+|---|---|---|
+| every minute | `passwall-failopen.sh` | fail-open + quality-aware node rotation |
+| every minute | `passwall-bypass-ensure.sh` | re-attach direct-domain nftset |
+| every 3 min | `passwall-autorecover.sh` | auto-recovery |
+| every 5 min | `x28watch.sh` | link stickiness + degradation watchdog (operator re-select) |
+| every 10 min | `vpshealth.sh` | VPS origin probes (panel/sub) + alert |
+| hourly | `snap.sh` | telemetry row `ts\|total_gb\|balance_gb\|proxy_state\|latency\|passive_mbps\|node` |
+| 03:00 daily | `backup.sh` | config snapshot of AX3000T + X28 vendor export |
+| 06:30 daily | `speedtest.sh` | Cloudflare measure + degradation alert |
+| 07:00 daily | `balance.sh --daily` | balance report + tier warning |
+| 21:30 daily | usage + cost report | per-device usage (Toman) |
+| every 30 min | disk space | alert above 85% |
+| 1st of month 07:00 | `monthly.sh` | previous month's bill |
+| Friday 09:00 | `friday.sh` | Friday-discount reminder |
 
 ## Troubleshooting
 

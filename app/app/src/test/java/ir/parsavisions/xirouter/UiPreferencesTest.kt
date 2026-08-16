@@ -19,7 +19,7 @@ class UiPreferencesTest {
     }
 
     @Test fun `dashboard values reject unknown ids and invalid sizes`() {
-        assertEquals(listOf("metrics", "collection", "ranking", "live"), UiPreferences.dashboardOrder(listOf("metrics", "bad")))
+        assertEquals(listOf("metrics", "collection", "ranking", "live", "link", "forecast"), UiPreferences.dashboardOrder(listOf("metrics", "bad")))
         assertEquals(setOf("live"), UiPreferences.dashboardHidden(setOf("live", "bad")))
         val sizes = UiPreferences.dashboardSizes(mapOf("metrics" to "giant", "live" to "small"))
         assertEquals("full", sizes["metrics"])

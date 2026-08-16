@@ -37,3 +37,14 @@ Shared vocabulary for the home-network project. Use these terms exactly; don't d
 - **Crypto engine** — the xray-core SOCKS service on the X28 (`:1080`, `/etc/init.d/x28proxy`) that terminates VLESS+REALITY to the VPS, offloading tunnel crypto from the AX3000T.
 - **via_x28** — the PassWall node on the AX3000T pointing at the X28 crypto-engine SOCKS (`192.168.70.1:1080`); switching to it routes PassWall's proxied traffic through the X28.
 - **Smart edge** — the role this effort gives the X28: link stickiness + link telemetry + management hardening + backup proxy engine, integrated into the existing home-network control plane.
+
+## Resilience (the proxy path)
+
+- **Fail-open** — the deliberate terminal state of the failover chain: when every proxy node fails its probe, PassWall drops to direct internet rather than taking the network down. The last rung of the chain, never the first.
+  _Avoid_: direct mode, fallback (both used loosely elsewhere)
+
+- **Degraded link** — a link that is alive but below the accepted quality threshold (weak signal, slow throughput). The watchdog escalates it separately from link-down; the preferred node stays in place until quality returns or the chain rotates.
+  _Avoid_: slow, weak (informal)
+
+- **Link quality** — the measured throughput/latency of the proxied path — how fast the tunnel is right now — as opposed to **link state** (what the modem is camped on). Probes assert aliveness; quality asserts speed.
+  _Avoid_: health, speed (overloaded)

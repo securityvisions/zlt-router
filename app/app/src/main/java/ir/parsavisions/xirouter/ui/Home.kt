@@ -61,6 +61,16 @@ fun HomeScreen(vm: XirouterViewModel) {
             Hero(vm, today.year, today.month, usageRows.sumOf { it.gb }, onProxyClick = { proxyDialog = true })
         }
         item {
+            // Dashboard v2 quick actions: one tap to the operations people need.
+            Row(Modifier.fillMaxWidth().padding(horizontal = RikkaTheme.spacing.lg, vertical = RikkaTheme.spacing.xs)) {
+                Button(onClick = vm::refreshAll, variant = ButtonVariant.Outline, modifier = Modifier.weight(1f)) { Text("بهروزرسانی", variant = TextVariant.Small) }
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = { proxyDialog = true }, variant = ButtonVariant.Outline, modifier = Modifier.weight(1f)) { Text("پروکسی", variant = TextVariant.Small) }
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = { vm.nav.tab(XRoute.Ledger) }, variant = ButtonVariant.Outline, modifier = Modifier.weight(1f)) { Text("دفترچه", variant = TextVariant.Small) }
+            }
+        }
+        item {
             when {
                 vm.loading.value && vm.lastUpdate.value == 0L -> Alert(Modifier.fillMaxWidth().padding(horizontal = RikkaTheme.spacing.lg)) {
                     AlertTitle("در حال دریافت اطلاعات روتر…")
@@ -99,6 +109,41 @@ fun HomeScreen(vm: XirouterViewModel) {
                             StatusPill("LIVE", StatusColors.info); Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) { Text("پهنای باند زنده", variant = TextVariant.H4); Text("سرعت کل و هر دستگاه", variant = TextVariant.Muted) }
                             Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null)
+                        }
+                    }
+                }
+                "link" -> item(key = card) {
+                    val link = vm.link.value
+                    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = RikkaTheme.spacing.lg, vertical = RikkaTheme.spacing.sm)) {
+                        Column(Modifier.padding(RikkaTheme.spacing.lg)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                StatusPill(if (link == null) "—" else link.signalLabel, if ((link?.signal ?: 0) >= 3) StatusColors.up else StatusColors.warning)
+                                Spacer(Modifier.width(10.dp))
+                                Text("اتصال ۴G/۵G", variant = TextVariant.H4)
+                            }
+                            DetailRow("اپراتور", link?.operator?.takeIf { it.isNotBlank() } ?: "—")
+                            DetailRow("فنّاوری", link?.tech?.takeIf { it.isNotBlank() } ?: "—")
+                            link?.rsrp?.let { DetailRow("RSRP (LTE)", Format.faDigits("$it") + " dBm") }
+                            link?.rsrp_5g?.let { DetailRow("RSRP (5G)", Format.faDigits("$it") + " dBm") }
+                            if (link?.band?.isNotBlank() == true) DetailRow("باند", link.band)
+                            DetailRow("PLMN", link?.plmn?.takeIf { it.isNotBlank() } ?: "—")
+                            link?.flow?.let { f ->
+                                DetailRow("داده امروز", "${Format.faDigits(Format.gbValue(f.dl / (1024.0 * 1024.0)))} ↓ / ${Format.faDigits(Format.gbValue(f.ul / (1024.0 * 1024.0)))} ↑")
+                            }
+                        }
+                    }
+                }
+                "forecast" -> item(key = card) {
+                    val insights = vm.dashboardInsights()
+                    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = RikkaTheme.spacing.lg, vertical = RikkaTheme.spacing.sm)) {
+                        Column(Modifier.padding(RikkaTheme.spacing.lg)) {
+                            Text("پیشبینی پایان ماه", variant = TextVariant.H4)
+                            Text(vm.dashboardForecast(), variant = TextVariant.P, style = androidx.compose.ui.text.TextStyle(fontWeight = FontWeight.Bold))
+                            if (insights.isNotEmpty()) {
+                                Spacer(Modifier.height(8.dp))
+                                Text("«برآورد»", variant = TextVariant.Small)
+                                insights.forEach { Text(it, variant = TextVariant.Muted) }
+                            }
                         }
                     }
                 }
