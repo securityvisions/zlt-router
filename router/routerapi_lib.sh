@@ -155,6 +155,26 @@ ra_do_reboot() {
     if command -v uci >/dev/null 2>&1; then reboot 2>/dev/null; else echo "skipped (not on router)" >&2; fi
 }
 
+# ---------- health/quality state wrappers (the test seam, like ra_link_state) ----------
+ra_q_latency()   { hn_q_latency; }
+ra_q_passive()   { hn_q_passive_mbps "$RA_TELEMETRY_LOG"; }
+ra_q_decision()  { hn_q_decision "$1" "$2" "${RA_QUALITY_FLOOR:-10}"; }
+ra_svc_probe()   { hn_svc_probe; }
+ra_telemetry_age() {  # seconds since the last telemetry append (file mtime)
+    local mtime now
+    mtime=$(stat -c %Y "$RA_TELEMETRY_LOG" 2>/dev/null || echo 0)
+    now=$(date +%s)
+    echo $(( now - mtime ))
+}
+ra_dns_stats() {  # the DNS health seam — reads the dnsmasq USR1 dump
+    if [ -n "${RA_DNS_STATS:-}" ]; then
+        hn_dns_stats "$(cat "$RA_DNS_STATS" 2>/dev/null)"
+    else
+        "${RA_DNS_STATS_SH:-/root/dns-stats.sh}" 2>/dev/null
+    fi
+}
+ra_quality_series() { hn_quality_series "$RA_TELEMETRY_LOG" "$1"; }
+
 # ---------- JSON builders ----------
 ra_rows_to_json() {  # stdin: name|mac|bytes (sorted) -> rows JSON
     local out="" first=1 name mac bytes gb
@@ -417,6 +437,67 @@ ra_json_link() {
     echo "{\"operator\":\"$(ra_esc "$op")\",\"tech\":\"$(ra_esc "$tech")\",\"signal\":$(num "$signal"),\"rsrp\":$(num "$rsrp"),\"rsrp_5g\":$(num "$rsrp5g"),\"band\":\"$(ra_esc "$band")\",\"plmn\":\"$(ra_esc "$plmn")\",\"flow\":{\"dl\":$(num "$flow_dl"),\"ul\":$(num "$flow_ul")}}"
 }
 
+# ra_json_events [limit] [category] — the Network Event log feed (newest first).
+ra_json_events() {
+    local limit="${1:-50}" category="$2" out="" first=1 line
+    [ "$limit" -ge 0 ] 2>/dev/null || limit=50
+    while IFS='|' read -r epoch cat sev kind actor message; do
+        [ -z "$epoch" ] && continue
+        if [ "$first" = 1 ]; then first=0; else out="$out,"; fi
+        out="$out{\"epoch\":$epoch,\"category\":\"$(ra_esc "$cat")\",\"severity\":\"$(ra_esc "$sev")\",\"kind\":\"$(ra_esc "$kind")\",\"actor\":\"$(ra_esc "$actor")\",\"message\":\"$(ra_esc "$message")\"}"
+    done <<EOF
+$(HN_EVENT_LOG="$HN_EVENT_LOG" HN_EVENT_MAX="$HN_EVENT_MAX" hn_event_list "$limit" "$category")
+EOF
+    echo "{\"events\":[$out]}"
+}
+
+# ra_json_health — the derived Network Health Score (ADR-0005) with the
+# per-component breakdown the dashboard's gauge + status strip render.
+ra_json_health() {
+    local lat passive qd linkpen pstate proxypen probe downlist svcpen age freshpen
+    local dnsfields dns_success dns_ms dnspen score band out="" first=1
+    lat=$(ra_q_latency)
+    passive=$(ra_q_passive)
+    qd=$(ra_q_decision "$lat" "$passive")
+    linkpen=$(hn_health_link_penalty "$qd")
+    pstate=$(ra_proxy_state); pstate=${pstate%%|*}
+    proxypen=$(hn_health_proxy_penalty "$pstate")
+    probe=$(ra_svc_probe)
+    downlist=$(hn_svc_down "$probe")
+    svcpen=$(hn_svc_penalty "$(printf '%s\n' "$downlist" | grep -c . 2>/dev/null)")
+    age=$(ra_telemetry_age)
+    freshpen=$(hn_health_freshness_penalty "$age")
+    dnsfields=$(ra_dns_stats)
+    dns_success=$(hn_balance_field "$dnsfields" success_rate)
+    dns_ms=$(hn_balance_field "$dnsfields" avg_latency_ms)
+    [ -z "$dns_success" ] && dns_success=1
+    [ -z "$dns_ms" ] && dns_ms=0
+    dnspen=$(hn_dns_penalty "$dns_success" "$dns_ms")
+    score=$(hn_health_score "$linkpen" "$proxypen" "$svcpen" "$freshpen" "$dnspen")
+    # component JSON (helpers keep the pipe-joining honest)
+    comp() { [ "$first" = 1 ] && first=0 || out="$out,"; out="$out{\"name\":\"$1\",\"weight\":$2,\"penalty\":$3,\"detail\":\"$(ra_esc "$4")\"}"; }
+    comp link_quality 30 "$linkpen" "$qd"
+    comp proxy 20 "$proxypen" "$pstate"
+    comp services 20 "$svcpen" "$(printf '%s' "$downlist" | tr '\n' ',')"
+    comp freshness 15 "$freshpen" "${age}s"
+    comp dns 15 "$dnspen" "success=$dns_success latency=${dns_ms}ms"
+    echo "{\"score\":$score,\"band\":\"$(hn_health_band "$score")\",\"as_of_unix\":$(ra_ts),\"components\":[$out]}"
+}
+
+# ra_json_quality [hours] — the hourly link-quality chart feed.
+ra_json_quality() {
+    local hours="${1:-24}" out="" first=1 ts lat passive node
+    [ "$hours" -ge 1 ] 2>/dev/null || hours=24
+    while IFS='|' read -r ts lat passive node; do
+        [ -z "$ts" ] && continue
+        if [ "$first" = 1 ]; then first=0; else out="$out,"; fi
+        out="$out{\"ts\":\"$(ra_esc "$ts")\",\"latency_s\":${lat:-0},\"passive_mbps\":${passive:-0},\"node\":\"$(ra_esc "$node")\"}"
+    done <<EOF
+$(ra_quality_series "$hours")
+EOF
+    echo "{\"hours\":$hours,\"points\":[$out]}"
+}
+
 # ---------- write actions ----------
 ra_rename_device() {
     local mac name bad
@@ -477,10 +558,12 @@ ra_switch_proxy() {
         RA_STATUS=400; echo '{"error":"unknown node"}'; return
     fi
     ra_uci_switch "$node"
+    hn_event_record proxy_changed "proxy switched to $node" router-api >/dev/null 2>&1 || true
     echo "{\"ok\":true,\"node\":\"$(ra_esc "$node")\"}"
 }
 
 ra_reboot() {
+    hn_event_record router_rebooted "router reboot via API" router-api >/dev/null 2>&1 || true
     ra_do_reboot
     echo '{"ok":true}'
 }
@@ -511,6 +594,9 @@ ra_route() {
             /clients)       ra_json_clients ;;
             /live)          ra_json_live ;;
             /history)       ra_json_history "$(ra_qp kind)" "$(ra_qp days)" ;;
+            /events)        ra_json_events "$(ra_qp limit)" "$(ra_qp category)" ;;
+            /health)        ra_json_health ;;
+            /quality)       ra_json_quality "$(ra_qp hours)" ;;
             /devices)       ra_json_devices ;;
             /device/rename) ra_rename_device ;;
             /device/watch)  ra_watch_device ;;

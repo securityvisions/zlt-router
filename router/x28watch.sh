@@ -18,6 +18,7 @@ X28_RSRP5G_BAD="${X28_RSRP5G_BAD:--100}"   # 5G NR RSRP is typically ~5 dB weake
 X28_ALERT_COOLDOWN_S="${X28_ALERT_COOLDOWN_S:-1800}"
 X28_FIX_COOLDOWN_S="${X28_FIX_COOLDOWN_S:-600}"
 STATE="${X28_STATE:-/tmp/x28watch.state}"
+QEV="${X28_QEV:-/tmp/x28watch.qev}"   # quality episode tracker (degraded/recovered)
 # Shared alert throttle (hnlib), optional so tests run without it.
 HN_LIB="${HN_LIB:-/root/hnlib.sh}"
 [ -f "$HN_LIB" ] && . "$HN_LIB"
@@ -72,10 +73,11 @@ fix_operator() {
     log "re-selecting preferred operator on X28"
     timeout 110 env X28_TARGET_PLMN="$X28_TARGET_PLMN" X28_TARGET_ACT="$X28_TARGET_ACT" \
         sh "$X28_RESELECT_SH" >/dev/null 2>&1
+    hn_event_record operator_reselected "X28 drifted off $X28_PREF_OPERATOR; re-selecting" x28watch >/dev/null 2>&1 || true
 }
 
 main() {
-    local fields op tech rsrp decision
+    local fields op tech rsrp decision prev
     fields=$(read_link)
     [ -z "$fields" ] && { log "link reader returned nothing"; exit 0; }
     op=$(link_field "$fields" operator)
@@ -84,7 +86,11 @@ main() {
     decision=$(x28w_decide "$op" "$tech" "$rsrp" "$(link_field "$fields" rsrp_5g)")
     log "operator=$op tech=$tech rsrp=$rsrp -> $decision"
     if [ "$decision" = "OK" ]; then
-        :
+        # Quality episode ends: a degraded x28watch episode recovers once.
+        if [ "$(cat "$QEV" 2>/dev/null)" = "degraded" ]; then
+            echo "recovered" > "$QEV"
+            hn_event_record quality_recovered "X28 link recovered" x28watch >/dev/null 2>&1 || true
+        fi
     elif [ "${decision#FIX|}" != "$decision" ]; then
         if x28w_cooldown_ok "$X28_FIX_COOLDOWN_S" fix; then
             x28w_note fix
@@ -95,6 +101,10 @@ main() {
         if x28w_cooldown_ok "$X28_ALERT_COOLDOWN_S" alert; then
             x28w_note alert
             [ -x /root/tg.sh ] && /root/tg.sh --text "📶 X28 signal degraded (RSRP ${rsrp:-n/a}) — link is weak." >/dev/null 2>&1
+        fi
+        if [ "$(cat "$QEV" 2>/dev/null)" != "degraded" ]; then
+            echo "degraded" > "$QEV"
+            hn_event_record quality_degraded "X28 signal degraded (RSRP ${rsrp:-n/a})" x28watch >/dev/null 2>&1 || true
         fi
     fi
 }

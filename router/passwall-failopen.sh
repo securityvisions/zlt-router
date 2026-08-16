@@ -25,6 +25,7 @@ QSTATE_FILE=/tmp/passwall-quality-count
 FB_FILE=/tmp/passwall-failback-count
 ESC_FILE=/tmp/passwall-escalation
 QALERT_FILE=/tmp/passwall-quality-alert
+QEV_FILE=/tmp/passwall-quality-event
 PW_FLOOR="${PW_FLOOR:-10}"        # Mbps; below this the active node is "degraded"
 PW_LAT_BAD="${PW_LAT_BAD:-2.0}"   # s; latency at/over this is a suspicion trigger
 PW_OPERATOR_GRACE_S="${PW_OPERATOR_GRACE_S:-300}"  # wait for a re-camp before fail-open
@@ -76,6 +77,7 @@ pw_rotate() {
     /etc/init.d/passwall restart >/dev/null 2>&1 || true
     rm -f "$FB_FILE"   # rotation invalidates any failback count
     logger -t passwall-health "rotated node ${cur:-?} -> $next"
+    hn_event_record node_rotated "node ${cur:-?} -> $next" passwall-health >/dev/null 2>&1 || true
     return 0
 }
 
@@ -140,6 +142,7 @@ pw_escalate_operator() {
     fi
     hn_cooldown_note "$ESC_FILE" operator
     logger -t passwall-health "escalation: operator re-selection triggered (node rung exhausted)"
+    hn_event_record operator_reselected "operator re-selection triggered (node rung exhausted)" passwall-health >/dev/null 2>&1 || true
 }
 
 pw_failopen() {
@@ -153,6 +156,7 @@ pw_failopen() {
     date +%s > "$MARKER"
     rm -f "$COUNT_FILE"
     logger -t passwall-health "fail-open: PassWall disabled; waiting for direct internet and a healthy node"
+    hn_event_record internet_down "fail-open: PassWall disabled; direct internet" passwall-health >/dev/null 2>&1 || true
 }
 
 main() {
@@ -176,6 +180,24 @@ main() {
             sample=$(hn_q_sample_mbps)
         fi
         qd=$(pw_qrotate_decision "$qf" "$sample" "$PW_FLOOR")
+        # Quality events follow transitions, not the alert cooldown: one
+        # degraded per episode (first bad sample), one recovered on the first
+        # healthy check after. The Telegram alert keeps its own 1h throttle.
+        prev=$(cat "$QEV_FILE" 2>/dev/null)
+        case "$qd" in
+            *degraded*|ROTATE)
+                if [ "$prev" != "degraded" ]; then
+                    echo "degraded" > "$QEV_FILE"
+                    hn_event_record quality_degraded "active node at ${sample:-?} Mbps (floor ${PW_FLOOR})" passwall-health >/dev/null 2>&1 || true
+                fi
+                ;;
+            *ok*)
+                if [ "$prev" = "degraded" ]; then
+                    echo "recovered" > "$QEV_FILE"
+                    hn_event_record quality_recovered "link quality recovered (sample=${sample:-?} Mbps)" passwall-health >/dev/null 2>&1 || true
+                fi
+                ;;
+        esac
         # Degraded-mode alert — distinct from the link-down alert; fires only
         # on a measured degraded sample and throttles via the shared cooldown.
         if [ "$qd" != "STAY|ok" ] && hn_cooldown_ok "$QALERT_FILE" "$PW_ALERT_COOLDOWN_S" degraded; then

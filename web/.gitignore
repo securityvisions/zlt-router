@@ -1,0 +1,4 @@
+# Build deps + artifacts that must not be tracked. dist/ IS tracked by design
+# (settled decision R2-Q3: the prebuilt bundle is committed and deployed to /www).
+node_modules/
+*.tsbuildinfo

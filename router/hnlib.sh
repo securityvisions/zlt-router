@@ -323,3 +323,204 @@ hn_days_until_friday() {
     local dow="${1:-1}"
     echo $(( (5 - dow + 7) % 7 ))
 }
+
+# ---- Network Event log (the web dashboard's structured event feed) ----
+# One shared recorder (hn_event_record) so every script records events in the
+# same shape; the Router API /events endpoint reads through hn_event_list.
+# Format (one line per event):
+#   epoch|category|severity|kind|actor|message
+
+HN_EVENT_LOG="${HN_EVENT_LOG:-/etc/network-events/events.log}"
+HN_EVENT_MAX="${HN_EVENT_MAX:-2000}"
+
+# hn_event_catalog — the event vocabulary: "kind|category|severity" lines.
+# The catalog is the single source of event kinds; recording an event validates
+# the kind against it and derives category+severity (callers never pass them).
+hn_event_catalog() {
+    cat <<'EOF'
+internet_up|internet|info
+internet_down|internet|critical
+node_rotated|internet|warning
+operator_reselected|internet|warning
+quality_degraded|internet|warning
+quality_recovered|internet|info
+device_joined|device|info
+device_blocked|device|warning
+device_approved|device|info
+proxy_changed|proxy|info
+package_threshold|package|warning
+router_rebooted|router|critical
+dns_unhealthy|security|warning
+EOF
+}
+
+# hn_event_meta <kind> — prints "category|severity" for a known kind, else "".
+hn_event_meta() {
+    hn_event_catalog | sed -n "s/^$1|/&/p" | head -1 | cut -d'|' -f2,3
+}
+
+# hn_event_record <kind> <message> [actor] — append one event. The kind is
+# validated against the catalog; severity is derived, never passed.
+hn_event_record() {
+    local kind="$1" msg="$2" actor="${3:-system}" meta epoch
+    meta=$(hn_event_meta "$kind")
+    [ -n "$meta" ] || return 1
+    mkdir -p "$(dirname "$HN_EVENT_LOG")" 2>/dev/null
+    epoch=$(date +%s 2>/dev/null)
+    [ -z "$epoch" ] && epoch=0
+    [ -n "${HN_EVENT_TS:-}" ] && epoch=$HN_EVENT_TS   # test seam: deterministic timestamps
+    printf '%s|%s|%s|%s|%s\n' "$epoch" "$meta" "$kind" "$actor" "$msg" >> "$HN_EVENT_LOG" 2>/dev/null
+    # bound the log to HN_EVENT_MAX lines
+    tail -n "$HN_EVENT_MAX" "$HN_EVENT_LOG" > "$HN_EVENT_LOG.tmp" 2>/dev/null &&
+        mv "$HN_EVENT_LOG.tmp" "$HN_EVENT_LOG" 2>/dev/null
+    return 0
+}
+
+# hn_event_list [limit] [category] — newest-first events (raw log lines).
+hn_event_list() {
+    local limit="${1:-50}" category="$2" filter
+    if [ -n "$category" ]; then
+        filter=$(grep "|$category|" "$HN_EVENT_LOG" 2>/dev/null)
+    else
+        filter=$(cat "$HN_EVENT_LOG" 2>/dev/null)
+    fi
+    printf '%s\n' "$filter" | grep -v '^$' | tail -n "$limit" | sort -t'|' -k1,1 -nr
+}
+
+# ---- service-health probe (the score's "services" component) ----
+# Probes the router's subsystems without a new sensor: init-service state where
+# the firmware exposes it, process probes otherwise (passwall). The probe
+# function (hn_svc_running) is the test seam — tests override it with fixtures.
+HN_SVC_LIST="${HN_SVC_LIST:-dnsmasq nlbwmon uhttpd odhcpd rpcd passwall adblock sqm}"
+
+# hn_svc_running <svc> — 0 when the service is up. Overridable (tests), and
+# command-backed (not file-backed) so it can't go stale.
+hn_svc_running() {
+    local svc="$1"
+    case "$svc" in
+        passwall) pgrep -f '/TCP.*SOCKS.json' >/dev/null 2>&1 ;;
+        *) [ -x "/etc/init.d/$svc" ] && "/etc/init.d/$svc" running 2>/dev/null ;;
+    esac
+}
+
+# hn_svc_probe [services] — "name=up|down" lines, one per service.
+hn_svc_probe() {
+    local list="${1:-$HN_SVC_LIST}" svc
+    for svc in $list; do
+        if hn_svc_running "$svc"; then echo "$svc=up"; else echo "$svc=down"; fi
+    done
+}
+
+# hn_svc_down <probe> — the down-service names from hn_svc_probe output.
+hn_svc_down() {
+    printf '%s\n' "$1" | sed -n 's/=down$//p'
+}
+
+# hn_svc_penalty <down_count> — the score's service penalty: 5 per service,
+# capped at the 20-weight (4 services fully eat the component).
+hn_svc_penalty() {
+    local n="${1:-0}" p
+    p=$(( n * 5 ))
+    [ "$p" -gt 20 ] && p=20
+    echo "$p"
+}
+
+# ---- DNS health seam (the score's "dns" component) ----
+# dnsmasq exposes its counters on SIGUSR1 (queries forwarded / answered
+# locally, per-server retried-or-failed, average query time). hn_dns_stats
+# parses that text; the API endpoint reads it via ra_dns_stats (overridable).
+
+# hn_dns_success_rate <forwarded> <answered> <retried_failed> — pure.
+# answered locally counts as success; retried-or-failed as failure. No queries
+# at all -> 1 (nothing failed).
+hn_dns_success_rate() {
+    local f="${1:-0}" a="${2:-0}" r="${3:-0}" total good
+    total=$((f + a)); good=$((total - r))
+    awk -v t="$total" -v g="$good" 'BEGIN{ if (t > 0) printf "%.4f", g/t; else print 1 }'
+}
+
+# hn_dns_penalty <success_rate> <avg_latency_ms> — 0..15. Success below 98% is
+# the full 15; latency over 200ms adds 8 (both capped at the 15 weight).
+hn_dns_penalty() {
+    local p=0
+    awk -v s="${1:-1}" 'BEGIN{ if (s < 0.98) exit 1 }' && p=0 || p=15
+    awk -v l="${2:-0}" 'BEGIN{ if (l > 200) exit 1 }' && : || p=$((p + 8))
+    [ "$p" -gt 15 ] && p=15
+    echo "$p"
+}
+
+# hn_dns_stats <text> — parse a dnsmasq SIGUSR1 dump. Prints the key=value block
+# the health endpoint consumes: forwarded answered retried_failed avg_latency_ms.
+hn_dns_stats() {
+    local text="$1" f a r lat
+    f=$(printf '%s\n' "$text" | sed -n 's/.*queries forwarded \([0-9]*\).*/\1/p' | head -1)
+    a=$(printf '%s\n' "$text" | sed -n 's/.*queries answered locally \([0-9]*\).*/\1/p' | head -1)
+    r=$(printf '%s\n' "$text" | sed -n 's/.*retried or failed \([0-9]*\).*/\1/p' | awk '{s+=$1} END{print s+0}')
+    lat=$(printf '%s\n' "$text" | sed -n 's/.*avg time \([0-9]*\)ms.*/\1/p' | sort -n | tail -1)
+    [ -z "$f" ] && f=0; [ -z "$a" ] && a=0; [ -z "$r" ] && r=0; [ -z "$lat" ] && lat=0
+    echo "forwarded=$f"
+    echo "answered=$a"
+    echo "retried_failed=$r"
+    echo "avg_latency_ms=$lat"
+    echo "success_rate=$(hn_dns_success_rate "$f" "$a" "$r")"
+}
+
+# ---- Network Health Score (ADR-0005: derived, never a sensor) ----
+# 100 minus per-component penalties. Weights: link 30, proxy 20, services 20,
+# freshness 15, dns 15. The compute is pure; the /health endpoint gathers the
+# raw signals and calls it.
+
+# hn_health_link_penalty <quality_decision> — 30 when degraded (full weight).
+# hn_q_decision prints "OK" or "ALERT|degraded"; anything with "degraded" is one.
+hn_health_link_penalty() {
+    case "$1" in
+        *degraded*) echo 30 ;;
+        *) echo 0 ;;
+    esac
+}
+
+# hn_health_proxy_penalty <proxy_state> — 20 when down (full weight).
+hn_health_proxy_penalty() {
+    [ "$1" = "up" ] && echo 0 || echo 20
+}
+
+# hn_health_freshness_penalty <age_s> — stale telemetry: >10min -> 5, >60min -> 15.
+hn_health_freshness_penalty() {
+    local age="${1:-0}"
+    [ "$age" -gt 3600 ] && { echo 15; return; }
+    [ "$age" -gt 600 ] && { echo 5; return; }
+    echo 0
+}
+
+# hn_health_score <link_pen> <proxy_pen> <svc_pen> <fresh_pen> <dns_pen> — pure.
+hn_health_score() {
+    local total=0
+    total=$(( total + ${1:-0} + ${2:-0} + ${3:-0} + ${4:-0} + ${5:-0} ))
+    [ "$total" -gt 100 ] && total=100
+    [ "$total" -lt 0 ] && total=0
+    echo $((100 - total))
+}
+
+# hn_health_band <score> — Excellent >=90, Good >=75, Degraded >=50, Poor <50.
+hn_health_band() {
+    local s="${1:-0}"
+    [ "$s" -ge 90 ] && { echo Excellent; return; }
+    [ "$s" -ge 75 ] && { echo Good; return; }
+    [ "$s" -ge 50 ] && { echo Degraded; return; }
+    echo Poor
+}
+
+# ---- quality-history rollup (the hourly link-quality chart feed) ----
+# The hourly telemetry rows already carry the quality fields (latency,
+# passive_mbps, node) — this reader rolls them into the chart series the
+# dashboard's quality card consumes, without a new collector.
+
+# hn_quality_series [telemetry_log] [hours] — "ts|latency|passive_mbps|node"
+# rows, oldest first, from the last `hours` hourly samples.
+hn_quality_series() {
+    local log="${1:-${HN_TELEMETRY_LOG:-/etc/telemetry/hourly.log}}" hours="${2:-24}" n
+    n=$(( hours * 1 ))
+    [ "$n" -lt 1 ] 2>/dev/null && n=24
+    awk -F'|' '$1 ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}/ { print $1 "|" $5 "|" $6 "|" $7 }' "$log" 2>/dev/null |
+        tail -n "$n"
+}

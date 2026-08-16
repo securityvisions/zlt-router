@@ -1,6 +1,7 @@
 #!/bin/sh
 # Alert on new devices appearing in DHCP leases + watched MACs becoming active
 . /etc/tg.conf 2>/dev/null || exit 1
+HN_LIB="${HN_LIB:-/root/hnlib.sh}"; [ -f "$HN_LIB" ] && . "$HN_LIB"
 STATE=/tmp/devices_known
 WATCHLIST=/etc/usage-log/watchlist
 WSTATE=/tmp/watch_state
@@ -21,6 +22,7 @@ while read -r mac; do
         name=$(/root/usage.sh --name "$mac")
         [ -z "$name" ] && name="unknown"
         /root/tg.sh --card "📱 New device" "${name} (${ip})"
+        hn_event_record device_joined "${name} (${ip})" "$mac" >/dev/null 2>&1 || true
     fi
 done < "$TMP"
 

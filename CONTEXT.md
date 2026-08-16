@@ -48,3 +48,17 @@ Shared vocabulary for the home-network project. Use these terms exactly; don't d
 
 - **Link quality** — the measured throughput/latency of the proxied path — how fast the tunnel is right now — as opposed to **link state** (what the modem is camped on). Probes assert aliveness; quality asserts speed.
   _Avoid_: health, speed (overloaded)
+
+## Web dashboard (the Network Operations Center)
+
+- **Network Event** — one first-class event record shared by the web feed and the app's activity timeline: category (internet/device/proxy/package/router/security/billing), severity, timestamp, actor. Sources: the routers' logs (failover, internet up/down, device join, proxy change, package threshold) and the app's mutations.
+  _Avoid_: activity, log entry (each already means something narrower)
+
+- **Network Health Score** — a derived 0–100 composite of the existing concepts — link quality, proxy state, service health, telemetry freshness — never a raw sensor. A number the dashboard computes, not something the routers measure.
+  _Avoid_: uptime, health (overloaded)
+
+- **Device Trust level** — Trusted | Known | Guest | Unknown | Blocked; one first-class device attribute that unifies the devicewatch "unknown" detection, the quarantine "blocked" state, and the watched list.
+  _Avoid_: status (already means package/ledger status)
+
+- **Network Event log** — the structured, append-only store on the AX3000T that the web dashboard and app consume; the events it records come from the existing scripts (failopen, devicewatch, hyst, balance thresholds) rather than a new sensor.
+  _Avoid_: log, telemetry (telemetry is the hourly measurements)

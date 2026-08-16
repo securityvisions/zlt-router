@@ -7,6 +7,8 @@
 # back. Minute cron, idempotent.
 
 STUB="127.0.0.1#5053"   # https-dns-proxy DoH stub
+DNS_EVENT_STATE="${DNS_EVENT_STATE:-/tmp/dns-event.state}"
+DNS_EVENT_COOLDOWN_S="${DNS_EVENT_COOLDOWN_S:-3600}"
 HN_LIB="${HN_LIB:-/root/hnlib.sh}"
 [ -f "$HN_LIB" ] && . "$HN_LIB"
 
@@ -47,7 +49,11 @@ dn_apply() {
                 logger -t dns-ensure "fail-open DNS: encrypted stub ($STUB)"
             fi
             ;;
-        *) logger -t dns-ensure "no DoH stub available; DNS may leak during fail-open" ;;
+        *) logger -t dns-ensure "no DoH stub available; DNS may leak during fail-open"
+           if hn_cooldown_ok "$DNS_EVENT_STATE" "$DNS_EVENT_COOLDOWN_S" leak; then
+               hn_cooldown_note "$DNS_EVENT_STATE" leak
+               hn_event_record dns_unhealthy "no DoH stub available; DNS may leak during fail-open" dns-ensure >/dev/null 2>&1 || true
+           fi ;;
     esac
     echo "$d"
 }

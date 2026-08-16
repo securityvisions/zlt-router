@@ -213,6 +213,59 @@ known nodes are accepted (`REALITY-443-parsa`, `hysteria2`). Returns `{ "ok": tr
 Reboots the router. Guarded by token; the app additionally confirms and requires the lock.
 Returns `{ "ok": true }` before the reboot lands.
 
+### `GET /events?limit=N&category=CAT`
+
+The Network Event log feed (web dashboard): newest-first events with a limit and an optional
+category filter. Event kinds are catalog-validated (`hn_event_catalog`); category is one of
+`internet` `device` `proxy` `package` `router` `security` `billing`.
+
+```json
+{
+  "events": [
+    { "epoch": 1789000000, "category": "internet", "severity": "critical", "kind": "internet_down",
+      "actor": "passwall-health", "message": "fail-open: PassWall disabled; direct internet" }
+  ]
+}
+```
+
+`severity` is `info` | `warning` | `critical`. `actor` names the subsystem/device that caused it.
+
+### `GET /health`
+
+The derived Network Health Score (ADR-0005): `score` 0-100, `band`, and one component object per
+weight (link quality 30, proxy 20, services 20, freshness 15, DNS 15) with the raw detail each
+dashboard card renders. Score = 100 − sum of component penalties.
+
+```json
+{
+  "score": 88, "band": "Good", "as_of_unix": 1789000000,
+  "components": [
+    { "name": "link_quality", "weight": 30, "penalty": 0, "detail": "OK" },
+    { "name": "proxy", "weight": 20, "penalty": 0, "detail": "up" },
+    { "name": "services", "weight": 20, "penalty": 5, "detail": "nlbwmon" },
+    { "name": "freshness", "weight": 15, "penalty": 0, "detail": "60s" },
+    { "name": "dns", "weight": 15, "penalty": 0, "detail": "success=0.9900 latency=50ms" }
+  ]
+}
+```
+
+Bands: Excellent ≥ 90, Good ≥ 75, Degraded ≥ 50, Poor < 50. `detail` is informational text.
+
+### `GET /quality?hours=N`
+
+The hourly link-quality history (web dashboard quality card): the last N hourly samples from the
+telemetry log, oldest-first.
+
+```json
+{
+  "hours": 24,
+  "points": [ { "ts": "2026-08-16 00:00", "latency_s": 0.31, "passive_mbps": 2.55, "node": "hyst_vps" } ]
+}
+```
+
+`latency_s` is the proxied-path latency probe; `passive_mbps` is the free passive throughput
+derived from telemetry deltas; `node` is the active PassWall node.
+
 ## Error shape
 
 All errors: `{ "error": "<message>" }` with an appropriate HTTP status (`401` auth, `400` bad

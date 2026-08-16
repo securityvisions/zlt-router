@@ -59,6 +59,7 @@ main() {
     if [ "$decision" = "ALERT|budget" ] && hn_cooldown_ok "$STATE" "$COOLDOWN_S" budget; then
         hn_cooldown_note "$STATE" budget
         [ -x /root/tg.sh ] && /root/tg.sh --text "⚠️ Projected month-end cost <b>${proj_tom} Toman</b> is at/over the ${BUDGET_TOMAN} budget." >/dev/null 2>&1
+        hn_event_record package_threshold "projected ${proj_tom} Toman at/over ${BUDGET_TOMAN} budget" forecast >/dev/null 2>&1 || true
     fi
     echo "$decision"
 }

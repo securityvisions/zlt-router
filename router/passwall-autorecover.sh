@@ -71,6 +71,7 @@ while [ "$ATTEMPT" -lt 12 ]; do
        [ "$(cat "$VPN_CHECK")" != "$DIRECT_IP" ]; then
       rm -f "$MARKER" "$COUNT_FILE"
       logger -t passwall-health "auto-recovery succeeded; VPN routing restored"
+      [ -f /root/hnlib.sh ] && . /root/hnlib.sh && hn_event_record internet_up "PassWall restarted; VPN routing restored" passwall-autorecover >/dev/null 2>&1 || true
       exit 0
     fi
   fi

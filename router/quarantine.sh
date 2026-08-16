@@ -8,6 +8,11 @@
 # bot's /approve command writes it. Reversible: disable removes the flag and
 # the drop rules.
 
+# Shared home-network module (event recorder). Guarded: `.` on a missing file is
+# a fatal special-builtin error, and quarantine must survive without hnlib.
+HN_LIB="${HN_LIB:-/root/hnlib.sh}"
+[ -f "$HN_LIB" ] && . "$HN_LIB"
+
 ALLOW="${QUARANTINE_ALLOW:-/etc/quarantine-allow}"
 EXEMPT="${QUARANTINE_EXEMPT:-/etc/quarantine-exempt}"
 FLAG="${QUARANTINE_FLAG:-/etc/quarantine-enabled}"
@@ -53,11 +58,16 @@ qw_unblock() {  # qw_unblock <mac> — remove every drop rule for this MAC.
 }
 
 enforce() {  # enforce <leases> — block every unapproved device; unblock the rest.
-    local blocked mac leases="$1"
+    local blocked mac leases="$1" already
     blocked=$(qw_blocked "$leases" "$ALLOW" "$EXEMPT")
+    already=$(qw_enforced "$leases")
     printf '%s\n' "$blocked" | while read -r mac; do
         [ -z "$mac" ] && continue
         qw_block "$mac"
+        # record only the newly-blocked (qw_enforced listed it before this pass)
+        if ! printf '%s\n' "$already" | grep -qx "$mac"; then
+            hn_event_record device_blocked "quarantine: device blocked" "$mac" >/dev/null 2>&1 || true
+        fi
     done
     # unblock approved/exempt devices that may still carry a stale rule
     awk '{print $2}' "$leases" 2>/dev/null | sort -u | while read -r mac; do
@@ -73,6 +83,7 @@ qw_approve() {
     mkdir -p "$(dirname "$ALLOW")"
     grep -qx "$1" "$ALLOW" 2>/dev/null || echo "$1" >> "$ALLOW"
     qw_unblock "$1"
+    hn_event_record device_approved "quarantine: device approved" "$1" >/dev/null 2>&1 || true
     echo "approved $1"
 }
 
