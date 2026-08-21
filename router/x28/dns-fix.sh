@@ -44,7 +44,11 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
 done
 
 # tunnel_ok — does the whole proxy chain (SOCKS -> VPS -> internet) answer?
+# Uses ProbeService when deployed; falls back to inline probe.
 tunnel_ok() {
+    if [ -x /data/proxy/probe-service.sh ]; then
+        sh /data/proxy/probe-service.sh check passwall >/dev/null 2>&1 && return 0 || return 1
+    fi
     code=$(curl -s -m 8 -x socks5h://192.168.70.1:1080 -o /dev/null \
         -w '%{http_code}' https://www.instagram.com/ 2>/dev/null)
     [ "$code" = "200" ]

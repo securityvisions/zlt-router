@@ -31,12 +31,9 @@ mihomo_auto_dead() {
     [ -z "$auto" ]
 }
 
-# local_dns_alive — 127.0.0.1:5353 answers
+# local_dns_alive — mihomo DNS (127.0.0.1:5353) or dnsmasq answers
 local_dns_alive() {
-    nslookup google.com "$DNS_CHECK_HOST" >/dev/null 2>&1
-    # also check mihomo DNS directly
-    [ $? -eq 0 ] && return 0
-    # fallback: check dnsmasq
+    nslookup google.com "$DNS_CHECK_HOST" >/dev/null 2>&1 && return 0
     nslookup google.com 127.0.0.1 >/dev/null 2>&1
 }
 

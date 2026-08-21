@@ -49,6 +49,48 @@ send() {
         --data-urlencode "text=$1" >/dev/null 2>&1 || true
 }
 
+# panel_keyboard — the 4×2 Panel grid (bot-wonderful 01). callback_data
+# carries "panel:<action>" so the tap handler dispatches without parsing text.
+panel_keyboard() {
+    printf '%s' '{"inline_keyboard":[
+ [{"text":"📊 Status","callback_data":"panel:status"},{"text":"📶 Link","callback_data":"panel:link"}],
+ [{"text":"💾 Usage","callback_data":"panel:usage"},{"text":"💰 Balance","callback_data":"panel:balance"}],
+ [{"text":"📱 Devices","callback_data":"panel:devices"},{"text":"🧾 Bill","callback_data":"panel:bill"}],
+ [{"text":"🛰️ Proxy","callback_data":"panel:proxy"},{"text":"❓ Help","callback_data":"panel:help"}]]}'
+}
+
+# send_panel — post the Panel message (keyboard + welcome body); stores message_id.
+send_panel() {
+    local resp mid kb
+    kb=$(panel_keyboard)
+    resp=$(timeout 20 curl -s -m 18 -x "$PROXY" "$API/sendMessage" \
+        --data-urlencode "chat_id=$CHAT_ID" \
+        --data-urlencode "text=X28 Panel — tap a button:
+──────────────
+$(sh /data/proxy/x28-status.sh 2>/dev/null | head -5)" \
+        --data-urlencode "reply_markup=$kb" 2>/dev/null)
+    mid=$(printf '%s' "$resp" | "$JQ" -r '.result.message_id // ""' 2>/dev/null)
+    [ -n "$mid" ] && echo "$mid" > "$STATEDIR/panel_msg_id"
+}
+
+# answer_cbq <callback_query_id> [text] — acknowledge a tap (stops the spinner).
+answer_cbq() {
+    timeout 10 curl -s -m 8 -x "$PROXY" "$API/answerCallbackQuery" \
+        --data-urlencode "callback_query_id=$1" \
+        ${2:+--data-urlencode "text=$2"} >/dev/null 2>&1 || true
+}
+
+# edit_panel <message_id> <text> — edit the Panel message in place, keyboard stays.
+edit_panel() {
+    local kb
+    kb=$(panel_keyboard)
+    timeout 20 curl -s -m 18 -x "$PROXY" "$API/editMessageText" \
+        --data-urlencode "chat_id=$CHAT_ID" \
+        --data-urlencode "message_id=$1" \
+        --data-urlencode "text=$2" \
+        --data-urlencode "reply_markup=$kb" >/dev/null 2>&1 || true
+}
+
 # data_ok — same probe the watchdog uses (HTTPS by IP, no DNS).
 data_ok() {
     code=$(curl -k -s -m 8 -o /dev/null -w '%{http_code}' https://1.1.1.1 2>/dev/null)
@@ -119,9 +161,31 @@ bot() {
             cid=$(printf '%s' "$resp" | "$JQ" -r ".result[$i].message.chat.id // \"\"" 2>/dev/null)
             text=$(printf '%s' "$resp" | "$JQ" -r ".result[$i].message.text // \"\"" 2>/dev/null)
             mdate=$(printf '%s' "$resp" | "$JQ" -r ".result[$i].message.date // \"\"" 2>/dev/null)
+            # callback_query (Panel taps)
+            cbid=$(printf '%s' "$resp" | "$JQ" -r ".result[$i].callback_query.id // \"\"" 2>/dev/null)
+            cbdata=$(printf '%s' "$resp" | "$JQ" -r ".result[$i].callback_query.data // \"\"" 2>/dev/null)
+            cbcid=$(printf '%s' "$resp" | "$JQ" -r ".result[$i].callback_query.message.chat.id // \"\"" 2>/dev/null)
+            cbmid=$(printf '%s' "$resp" | "$JQ" -r ".result[$i].callback_query.message.message_id // \"\"" 2>/dev/null)
             off=$((uid + 1)); echo "$off" > "$PSTATE/offset"
             hb
-            if [ "$cid" = "$CHAT_ID" ] && [ -n "$text" ]; then
+            if [ "$cbcid" = "$CHAT_ID" ] && [ -n "$cbdata" ]; then
+                action=${cbdata#panel:}
+                log "bot: panel tap=$action"
+                case "$action" in
+                    status)  body=$(sh /data/proxy/x28-status.sh 2>/dev/null) ;;
+                    link)    body=$(timeout 20 sh /data/proxy/linkstate.sh 2>/dev/null) ;;
+                    usage)   body=$(sh /data/proxy/usage/x28-usage.sh today 2>/dev/null) ;;
+                    balance) body=$(sh /root/balance.sh --report 2>/dev/null | head -12) ;;
+                    devices) body=$(awk '{print $3, $4}' /tmp/dnsmasq.leases 2>/dev/null | head -8; echo "(leases)") ;;
+                    bill)    body=$(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null) ;;
+                    proxy)   body="auto → $(curl -s -m 5 http://127.0.0.1:9090/proxies/auto 2>/dev/null | grep -o '"now":"[^"]*"' | cut -d'"' -f4)" ;;
+                    help)    body="/status /link /usage /balance /bill
+/switch_mci /switch_rightel" ;;
+                    *)       body="unknown tap" ;;
+                esac
+                answer_cbq "$cbid"
+                [ -n "$cbmid" ] && edit_panel "$cbmid" "$(printf 'X28 Panel — %s\n──────────────\n%s' "$action" "$body")"
+            elif [ "$cid" = "$CHAT_ID" ] && [ -n "$text" ]; then
                 # staleness guard: anything older than 10 minutes is a replay
                 # (reboot lost the offset once and an old /switch re-fired)
                 if [ -n "$mdate" ] && [ $(( $(date +%s) - mdate )) -gt 600 ]; then
