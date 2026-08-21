@@ -1,0 +1,37 @@
+# Put your custom commands here that should be executed once
+# the system init finished. By default this file does nothing.
+
+# ubiattach /dev/mtd/user_data failed workaround
+if [ ! -c /dev/ubi1 ];then
+    echo "[`date '+%Y-%m-%d %H:%M:%S'`] /dev/ubi1 create failed,format it" > /dev/console
+    /usr/sbin/ubiformat /dev/mtd/user_data -y -q
+    echo "[`date '+%Y-%m-%d %H:%M:%S'`] user_data format ok" > /dev/console
+
+    # re-attach
+    /usr/sbin/ubiattach /dev/ubi_ctrl -p /dev/mtd/user_data -d 1
+    /usr/sbin/ubimkvol /dev/ubi1 -n 1 -N customer -s 100MiB
+    /usr/sbin/ubimkvol /dev/ubi1 -n 2 -N data -m
+
+    mount -a
+fi
+# workaround end
+
+# update rawdata
+if [ -f /etc/init.d/update_rawdata.sh ];then
+    /etc/init.d/update_rawdata.sh
+fi
+
+# --- ZLT proxy setup (v2raya via init.d S99) ---
+# ssh dropbear on port 22 (fallback, vendor ssh is on port 10210)
+[ -f /etc/dropbear/dropbear_rsa_host_key ] || /usr/bin/dropbearkey -t rsa -s 2048 -f /etc/dropbear/dropbear_rsa_host_key
+/usr/sbin/dropbear -p 0.0.0.0:22 &
+# telnet root fallback on port 23
+telnetd -l /bin/ash -p 23 &
+# management firewall: management ports LAN-only
+sh /data/proxy/harden.sh
+
+# --- X28 transparent proxy (xray split) persist across reboot ---
+sh /data/proxy/tproxy-fixed-enable.sh 2>/dev/null || true
+# --- clean DNS via xray forwarder (dns-fix) ---
+sh /data/proxy/dns-fix.sh 2>/dev/null || true
+exit 0

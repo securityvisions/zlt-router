@@ -1,0 +1,54 @@
+{
+  "log": { "loglevel": "warning" },
+  "inbounds": [
+    {
+      "tag": "socks-in",
+      "listen": "192.168.70.1",
+      "port": 1080,
+      "protocol": "socks",
+      "settings": { "auth": "noauth", "udp": true }
+    },
+    {
+      "tag": "tproxy-in",
+      "listen": "192.168.70.1",
+      "port": 12345,
+      "protocol": "dokodemo-door",
+      "settings": { "network": "tcp,udp" },
+      "sniffing": { "enabled": true, "destOverride": ["http", "tls"] }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "vps-reality",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "85.121.124.158",
+            "port": 443,
+            "users": [{ "id": "__VLESS_UUID__", "encryption": "none" }]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "www.bing.com",
+          "fingerprint": "chrome",
+          "publicKey": "__REALITY_PUBLIC_KEY__",
+          "shortId": "__REALITY_SHORT_ID__"
+        }
+      }
+    },
+    { "protocol": "freedom", "tag": "direct" }
+  ],
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      { "type": "field", "outboundTag": "direct", "ip": ["geoip:ir", "geoip:private"] },
+      { "type": "field", "outboundTag": "direct", "domain": ["geosite:ir"] },
+      { "type": "field", "inboundTag": ["socks-in", "tproxy-in"], "outboundTag": "vps-reality" }
+    ]
+  }
+}

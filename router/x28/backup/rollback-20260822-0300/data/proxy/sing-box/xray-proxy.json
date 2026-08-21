@@ -1,0 +1,63 @@
+{
+  "log": { "loglevel": "warning" },
+  "inbounds": [
+    {
+      "tag": "socks-in",
+      "listen": "192.168.70.1",
+      "port": 1080,
+      "protocol": "socks",
+      "settings": { "auth": "noauth", "udp": true }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "vps-reality",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "85.121.124.158",
+            "port": 443,
+            "users": [{ "id": "__VLESS_UUID__", "encryption": "none" }]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "www.bing.com",
+          "fingerprint": "chrome",
+          "publicKey": "__REALITY_PUBLIC_KEY__",
+          "shortId": "__REALITY_SHORT_ID__"
+        }
+      }
+    },
+    {
+      "tag": "cdn-ws",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "cdn.dmbz.ir",
+            "port": 443,
+            "users": [{ "id": "__VLESS_UUID__", "encryption": "none" }]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": { "serverName": "cdn.dmbz.ir" },
+        "wsSettings": { "path": "/v1/status", "headers": { "Host": "cdn.dmbz.ir" } }
+      }
+    },
+    { "protocol": "freedom", "tag": "direct" }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      { "type": "field", "inboundTag": ["socks-in"], "outboundTag": "vps-reality" }
+    ]
+  }
+}

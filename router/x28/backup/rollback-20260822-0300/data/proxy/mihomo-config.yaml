@@ -1,0 +1,95 @@
+# mihomo engine config — the WhiteVPN technique on the X28:
+# all known nodes in one url-test group, health-checked every 60s,
+# automatic failover to whichever node carries traffic. Rules mirror the
+# xray split config (domestic direct, international + filtered via tunnel).
+mixed-port: 1080
+redir-port: 12345
+allow-lan: true
+bind-address: 192.168.70.1
+mode: rule
+log-level: warning
+geodata-mode: true
+geodata-loader: standard
+geo-auto-update: false
+external-controller: 127.0.0.1:9090
+
+dns:
+  enable: true
+  listen: 127.0.0.1:5353
+  ipv6: false
+  default-nameserver:
+    - 10.201.112.252
+  nameserver:
+    - "https://8.8.8.8/dns-query#auto"
+
+proxies:
+  - name: vps-reality
+    type: vless
+    server: __CLOUDFLARE_EDGE_IP__
+    port: 443
+    uuid: __PARSA_UUID__
+    network: tcp
+    udp: true
+    tls: true
+    servername: www.bing.com
+    client-fingerprint: chrome
+    reality-opts:
+      public-key: __REALITY_PUBKEY__
+      short-id: __REALITY_SHORTID__
+
+  - name: cdn-ws
+    type: vless
+    server: __CLOUDFLARE_EDGE_IP__
+    port: 443
+    uuid: __PARSA_UUID__
+    network: ws
+    tls: true
+    servername: cdn.dmbz.ir
+    ws-opts:
+      path: /v1/status
+      headers:
+        Host: cdn.dmbz.ir
+
+  - name: babaii
+    type: vless
+    server: __BABAI_IP__
+    port: 23993
+    uuid: __BABAI_UUID__
+    network: tcp
+    udp: true
+    tls: true
+    flow: xtls-rprx-vision
+
+  - name: hy2
+    type: hysteria2
+    server: __CLOUDFLARE_EDGE_IP__
+    port: 31800
+    password: __HY2_PASSWORD__
+    obfs: salamander
+    obfs-password: __HY2_OBFS_PASSWORD__
+    skip-cert-verify: true
+
+proxy-groups:
+  - name: auto
+    type: url-test
+    url: "https://8.8.8.8/"
+    interval: 60
+    tolerance: 100
+    proxies:
+      - vps-reality
+      - cdn-ws
+      - hy2
+      - babaii
+
+rules:
+  - DOMAIN-SUFFIX,saymyname.website,DIRECT
+  - IP-CIDR,185.137.27.122/32,DIRECT,no-resolve
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+  - GEOIP,IR,DIRECT
+  - GEOSITE,youtube,auto
+  - GEOSITE,google,auto
+  - GEOSITE,instagram,auto
+  - GEOSITE,facebook,auto
+  - MATCH,auto

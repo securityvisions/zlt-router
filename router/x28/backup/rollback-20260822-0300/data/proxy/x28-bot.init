@@ -1,0 +1,25 @@
+#!/bin/sh /etc/rc.common
+# x28-bot — Telegram remote-control bot (@xirouterbot) as a procd service.
+# Runs the supervisor (start bot, cull wedges via heartbeat, restart);
+# procd respawns the supervisor itself if it dies. Two supervision layers,
+# same model the previous interactive bot used (PID liveness + hb freshness).
+#
+# Canonical copy: router/x28/x28-bot.init — deploys to /etc/init.d/x28-bot.
+
+START=96
+USE_PROCD=1
+
+start_service() {
+    procd_open_instance
+    procd_set_param command /bin/sh /data/proxy/x28-bot.sh supervise
+    procd_set_param respawn 3600 5 0
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_close_instance
+}
+
+stop_service() {
+    # stop the whole tree: supervisor + bot + any curl child
+    pkill -f 'x28-bot.sh (bot|supervise)' 2>/dev/null
+    rm -f /tmp/x28bot/bot.pid
+}
