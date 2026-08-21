@@ -2,7 +2,8 @@
 # x28-bot.sh — Telegram remote control for the X28 (@xirouterbot).
 #
 # Commands (only from the allowlisted chat in /etc/tg.conf):
-#   /status /link /switch_mci /switch_rightel /help (/start = /help)
+#   /status /link /usage /balance /bill /devices /proxy /switch_mci
+#   /switch_rightel /panel /help (/start = /help + Panel)
 #
 # Design notes:
 #   - Operator switching goes ONLY through operator-watchdog.sh's one-shot
@@ -14,6 +15,9 @@
 #     kept fresh by a keeper during long switches, so the supervisor can
 #     cull a wedged bot without false-positive mid-switch kills.
 #   - No `set -e`: Telegram/network errors must never kill the loop.
+#   - Device identity is hostname-first: phones with randomized MACs rotate
+#     addresses, so the stable name (DHCP hostname or user alias) wins and
+#     the MAC is shown as secondary info only.
 #
 # Canonical copy: router/x28/x28-bot.sh — deploys to /data/proxy/x28-bot.sh.
 # Service: /etc/init.d/x28-bot runs `x28-bot.sh supervise` under procd.
@@ -28,7 +32,7 @@ API="https://api.telegram.org/bot$TOKEN"
 PROXY="socks5h://192.168.70.1:1080"
 STATEDIR=/tmp/x28bot
 PSTATE=/data/proxy/bot-state   # persists reboots — see offset note below
-LOGF=$STATEDIR/bot.log
+LOGF=$STATEDIR/hb.log
 HB=$STATEDIR/hb
 SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
 
@@ -133,6 +137,83 @@ Use /status to check the current state."
     return 0
 }
 
+# ---- beautiful output helpers (bot-wonderful 02) ----
+
+# hr — section rule line.
+hr() { echo "──────────────────────"; }
+
+# fmt_status — the polished status card body.
+fmt_status() {
+    local out
+    out=$(sh /data/proxy/x28-status.sh 2>/dev/null)
+    [ -z "$out" ] && { echo "⚠️ status unavailable"; return; }
+    # uppercase labels → emoji-prefixed aligned rows
+    printf '%s\n' "$out" | awk '
+    {
+        lbl = $1; sub(/^[^ ]* */, "")
+        key = $1
+        val = substr($0, length(key) + 2)
+        gsub(/_/, " ", key)
+        icon = ""
+        if (key == "operator")  icon = "📡"
+        else if (key == "signal")    icon = "📶"
+        else if (key == "data")      icon = "🌐"
+        else if (key == "proxy")     icon = "🛰️"
+        else if (key == "devices")   icon = "📱"
+        else if (key == "uptime")    icon = "⏱"
+        else if (key == "ram")       icon = "🧠"
+        else if (key == "temp")      icon = "🌡"
+        else if (key == "services")  icon = "⚙️"
+        printf "%s %-9s %s\n", icon, toupper(substr(key,1,1)) substr(key,2), val
+    }'
+}
+
+# fmt_devices — devices grouped by stable identity (hostname first), MAC shown
+# only when it looks real (not locally-administered/randomized). Randomized
+# MACs have the second hex nibble in {2,6,A,E} (locally administered bit set).
+is_random_mac() {
+    local m="${1:-}"
+    case "$m" in
+        ??[26aeAE]*:*) return 0 ;;   # x2/x6/xA/xE second nibble → randomized
+        *) return 1 ;;
+    esac
+}
+
+fmt_devices() {
+    local leases="/tmp/dnsmasq.leases"
+    [ -f "$leases" ] || { echo "no leases"; return; }
+    awk '
+    {
+        mac = $2; ip = $3; host = $4
+        if (host == "*" || host == "") host = "?"
+        rnd = 0
+        c = substr(mac, 2, 1)
+        if (c ~ /[26aeAE]/) rnd = 1
+        tag = rnd ? " 🎲" : ""
+        printf "%-14s %-15s %s%s\n", host, ip, mac, tag
+    }' "$leases" | sort
+}
+
+# help_text — full command list, grouped, pointing at the Panel buttons.
+help_text() {
+    cat <<'EOF'
+🤖 X28 Bot — commands
+
+📊 Status    /status   live overview
+📶 Link      /link     modem signal detail
+💾 Usage     /usage    per-device traffic today
+💰 Balance   /balance  Samantel data left
+🧾 Bill      /bill     weekly usage + cost
+📱 Devices   /devices  who is on the network
+🛰️ Proxy     /proxy    active node + health
+
+🔄 Switch    /switch_mci · /switch_rightel
+🎛 Panel     /panel    button grid (tap to navigate)
+
+Everything also lives in the Panel buttons below ⤵️
+EOF
+}
+
 # ---- bot mode: the long-poll command loop ----
 bot() {
     oldpid=$(cat "$STATEDIR/bot.pid" 2>/dev/null)
@@ -172,15 +253,28 @@ bot() {
                 action=${cbdata#panel:}
                 log "bot: panel tap=$action"
                 case "$action" in
-                    status)  body=$(sh /data/proxy/x28-status.sh 2>/dev/null) ;;
-                    link)    body=$(timeout 20 sh /data/proxy/linkstate.sh 2>/dev/null) ;;
-                    usage)   body=$(sh /data/proxy/usage/x28-usage.sh today 2>/dev/null) ;;
-                    balance) body=$(sh /root/balance.sh --report 2>/dev/null | head -12) ;;
-                    devices) body=$(awk '{print $3, $4}' /tmp/dnsmasq.leases 2>/dev/null | head -8; echo "(leases)") ;;
-                    bill)    body=$(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null) ;;
-                    proxy)   body="auto → $(curl -s -m 5 http://127.0.0.1:9090/proxies/auto 2>/dev/null | grep -o '"now":"[^"]*"' | cut -d'"' -f4)" ;;
-                    help)    body="/status /link /usage /balance /bill
-/switch_mci /switch_rightel" ;;
+                    status)  body=$(fmt_status) ;;
+                    link)    body="📶 Link detail
+$(hr)
+$(timeout 20 sh /data/proxy/linkstate.sh 2>/dev/null)" ;;
+                    usage)   body="💾 Usage today
+$(hr)
+$(sh /data/proxy/usage/x28-usage.sh today 2>/dev/null)" ;;
+                    balance) body="💰 Samantel balance
+$(hr)
+$(sh /root/balance.sh --report 2>/dev/null | head -12)" ;;
+                    devices) body="📱 Devices on network
+$(hr)
+$(fmt_devices)" ;;
+                    bill)    body="🧾 Weekly bill
+$(hr)
+$(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null)" ;;
+                    proxy)   body="🛰️ Proxy
+$(hr)
+active : $(curl -s -m 5 http://127.0.0.1:9090/proxies/auto 2>/dev/null | grep -o '"now":"[^"]*"' | cut -d'"' -f4)
+health : $(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)" ;;
+                    help)    body="$(help_text)" ;;
+                    panel|start) body="$(help_text)" ;;
                     *)       body="unknown tap" ;;
                 esac
                 answer_cbq "$cbid"
@@ -195,35 +289,42 @@ bot() {
                 log "bot: cmd=$cmd"
                 case "$cmd" in
                     /start|/help)
-                        send "X28 bot — commands:
-/status — full status card
-/link — modem/link details
-/switch_mci — switch to MCI ($MCI)
-/switch_rightel — switch to Rightel ($RIGHTEL)
-/help — this help" ;;
+                        send "$(help_text)"
+                        send_panel ;;
+                    /panel)
+                        send_panel ;;
                     /status)
-                        send "X28 status
-──────────────
-$(sh /data/proxy/x28-status.sh 2>/dev/null)" ;;
+                        send "📊 X28 status
+$(hr)
+$(fmt_status)" ;;
                     /link)
-                        send "X28 link detail
-──────────────
+                        send "📶 Link detail
+$(hr)
 $(timeout 20 sh /data/proxy/linkstate.sh 2>/dev/null)" ;;
                     /usage)
-                        send "X28 usage
-──────────────
+                        send "💾 Usage today
+$(hr)
 $(sh /data/proxy/usage/x28-usage.sh today 2>/dev/null)" ;;
                     /bill)
-                        send "X28 weekly usage + bill
-──────────────
+                        send "🧾 Weekly bill
+$(hr)
 $(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null)" ;;
                     /balance)
-                        send "X28 balance
-──────────────
+                        send "💰 Samantel balance
+$(hr)
 $(sh /root/balance.sh --report 2>/dev/null | head -20)" ;;
+                    /devices)
+                        send "📱 Devices on network
+$(hr)
+$(fmt_devices)" ;;
+                    /proxy)
+                        send "🛰️ Proxy
+$(hr)
+active : $(curl -s -m 5 http://127.0.0.1:9090/proxies/auto 2>/dev/null | grep -o '"now":"[^"]*"' | cut -d'"' -f4)
+health : $(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)" ;;
                     /switch_mci)     do_switch "$MCI" "MCI" ;;
                     /switch_rightel) do_switch "$RIGHTEL" "Rightel" ;;
-                    *) send "Unknown command. Try /help" ;;
+                    *) send "Unknown command — try /help" ;;
                 esac
                 fi
             elif [ -n "$cid" ] && [ "$cid" != "$CHAT_ID" ]; then

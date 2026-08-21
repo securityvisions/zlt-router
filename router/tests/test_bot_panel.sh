@@ -37,3 +37,11 @@ if grep -q "answerCallbackQuery" "$BOT" 2>/dev/null; then PASS=$((PASS+1)); else
 
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
+# Test 3: help is button-based, commands updated, randomized MAC detection
+if grep -q "help_text" /home/parsavisions/home-network/router/x28/x28-bot.sh; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); echo "FAIL - help_text missing"; fi
+grep -q "/balance" /home/parsavisions/home-network/router/x28/x28-bot.sh && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - /balance missing from help"; }
+grep -q "is_random_mac\|rnd = 1" /home/parsavisions/home-network/router/x28/x28-bot.sh && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - random MAC detection"; }
+grep -q "/devices" /home/parsavisions/home-network/router/x28/x28-bot.sh && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - /devices command"; }
+
+echo "PASS=$PASS FAIL=$FAIL"
+[ "$FAIL" -eq 0 ]
