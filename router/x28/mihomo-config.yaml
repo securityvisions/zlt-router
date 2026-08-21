@@ -25,7 +25,7 @@ dns:
 proxies:
   - name: vps-reality
     type: vless
-    server: __VPS_IP__
+    server: __CLOUDFLARE_EDGE_IP__
     port: 443
     uuid: __PARSA_UUID__
     network: tcp
@@ -62,7 +62,7 @@ proxies:
 
   - name: hy2
     type: hysteria2
-    server: __VPS_IP__
+    server: __CLOUDFLARE_EDGE_IP__
     port: 31800
     password: __HY2_PASSWORD__
     obfs: salamander

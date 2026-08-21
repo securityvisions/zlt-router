@@ -4,8 +4,8 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `grep dhcp-option.*dns-server /tmp/dnsmasq.conf` shows only `192.168.70.1` after `dns-fix.sh` and after a `lan_mgr` regeneration + hotplug re-apply.
-- [ ] `nslookup youtube.com` from a `192.168.70.0/24` client returns `142.251.x.x` (clean) and `youtube 200` via `mihomo` `auto`.
-- [ ] Documented in `router/x28/README.md` and `docs/OPERATIONS.md` (no firewall hole).
+- [x] `grep dhcp-option.*dns-server /tmp/dnsmasq.conf` shows only `192.168.70.1` after `dns-fix.sh` and after a `lan_mgr` regeneration + hotplug re-apply.
+- [x] `nslookup youtube.com` from a `192.168.70.0/24` client returns `142.251.x.x` (clean) and `youtube 200` via `mihomo` `auto`.
+- [x] Documented in `router/x28/README.md` and `docs/OPERATIONS.md` (no firewall hole).
