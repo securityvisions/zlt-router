@@ -45,4 +45,6 @@ else
     echo "$row" >> "$TELEM" 2>/dev/null
     [ "$(wc -l < "$TELEM" 2>/dev/null)" -gt 5000 ] && tail -n 4000 "$TELEM" > "$TELEM.t" 2>/dev/null && mv "$TELEM.t" "$TELEM"
 fi
+# Budget guardian check (best-effort, no failure propagation)
+sh /data/proxy/x28-budget.sh --check 2>/dev/null || true
 echo "$row"

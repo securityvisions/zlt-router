@@ -2,8 +2,8 @@
 # x28-bot.sh — Telegram remote control for the X28 (@xirouterbot).
 #
 # Commands (only from the allowlisted chat in /etc/tg.conf):
-#   /status /link /usage /balance /bill /devices /proxy /switch_mci
-#   /switch_rightel /panel /help (/start = /help + Panel)
+#   /status /link /usage /balance /budget /digest /bill /devices /proxy
+#   /switch_mci /switch_rightel /panel /help (/start = /help + Panel)
 #
 # Design notes:
 #   - Operator switching goes ONLY through operator-watchdog.sh's one-shot
@@ -60,7 +60,8 @@ panel_keyboard() {
  [{"text":"📊 Status","callback_data":"panel:status"},{"text":"📶 Link","callback_data":"panel:link"}],
  [{"text":"💾 Usage","callback_data":"panel:usage"},{"text":"💰 Balance","callback_data":"panel:balance"}],
  [{"text":"📱 Devices","callback_data":"panel:devices"},{"text":"🧾 Bill","callback_data":"panel:bill"}],
- [{"text":"🛰️ Proxy","callback_data":"panel:proxy"},{"text":"❓ Help","callback_data":"panel:help"}]]}'
+ [{"text":"🛰️ Proxy","callback_data":"panel:proxy"},{"text":"❓ Help","callback_data":"panel:help"}],
+ [{"text":"💰 Budget","callback_data":"panel:budget"},{"text":"🧾 Digest","callback_data":"panel:digest"}]]}'
 }
 
 # send_panel — post the Panel message (keyboard + welcome body); stores message_id.
@@ -203,6 +204,8 @@ help_text() {
 📶 Link      /link     modem signal detail
 💾 Usage     /usage    per-device traffic today
 💰 Balance   /balance  Samantel data left
+💰 Budget    /budget   forecast + tiered alerts
+🧾 Digest    /digest   weekly story (Fri 20:00)
 🧾 Bill      /bill     weekly usage + cost
 📱 Devices   /devices  who is on the network
 🛰️ Proxy     /proxy    active node + health
@@ -273,6 +276,13 @@ $(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null)" ;;
 $(hr)
 active : $(curl -s -m 5 http://127.0.0.1:9090/proxies/auto 2>/dev/null | grep -o '"now":"[^"]*"' | cut -d'"' -f4)
 health : $(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)" ;;
+                    budget)  body="💰 Budget
+$(hr)
+$(sh /data/proxy/x28-budget.sh --card 2>/dev/null)" ;;
+                    digest)  body="🧾 Digest
+$(hr)
+$(sh /data/proxy/x28-budget.sh --card 2>/dev/null | head -1)
+$(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null | tail -n +2)" ;;
                     help)    body="$(help_text)" ;;
                     panel|start) body="$(help_text)" ;;
                     *)       body="unknown tap" ;;
@@ -322,6 +332,15 @@ $(fmt_devices)" ;;
 $(hr)
 active : $(curl -s -m 5 http://127.0.0.1:9090/proxies/auto 2>/dev/null | grep -o '"now":"[^"]*"' | cut -d'"' -f4)
 health : $(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)" ;;
+                    /budget)
+                        send "💰 Budget
+$(hr)
+$(sh /data/proxy/x28-budget.sh --card 2>/dev/null)" ;;
+                    /digest)
+                        send "🧾 Digest
+$(hr)
+$(sh /data/proxy/x28-budget.sh --card 2>/dev/null | head -1)
+$(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null | tail -n +2)" ;;
                     /switch_mci)     do_switch "$MCI" "MCI" ;;
                     /switch_rightel) do_switch "$RIGHTEL" "Rightel" ;;
                     *) send "Unknown command — try /help" ;;

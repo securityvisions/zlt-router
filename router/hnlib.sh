@@ -351,6 +351,25 @@ hn_budget_decision() {
     fi
 }
 
+# hn_budget_tier <remain_gb> <expiry_days> <projected_days> — pure tier.
+# Defaults: warn <10 GB / <7d / proj<14d; urgent <3 GB / <3d / proj<7d; exhausted <0.05 GB.
+# Empty values are treated as large (no alert). Prints one of: exhausted|urgent|warn|ok.
+hn_budget_tier() {
+    local remain="${1:-}" expiry="${2:-}" proj="${3:-}"
+    # normalize empty to large sentinel
+    [ -z "$remain" ] && remain=9999
+    [ -z "$expiry" ] && expiry=9999
+    [ -z "$proj" ] && proj=9999
+    awk -v r="$remain" -v e="$expiry" -v p="$proj" '
+    BEGIN{
+        # exhausted first
+        if (r+0 < 0.05) { print "exhausted"; exit }
+        if (r+0 < 3 || e+0 < 3 || p+0 < 7) { print "urgent"; exit }
+        if (r+0 < 10 || e+0 < 7 || p+0 < 14) { print "warn"; exit }
+        print "ok"
+    }'
+}
+
 # hn_days_until_friday <dow_1_7> — pure. Days until the Friday discount window
 # (0 = today is Friday). dow uses `date +%u` (1=Mon..7=Sun).
 hn_days_until_friday() {
