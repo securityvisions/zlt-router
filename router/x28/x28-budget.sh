@@ -58,6 +58,21 @@ budget_card() {
 
     tier=$(hn_budget_tier "$remain" "$days" "$proj_days" 2>/dev/null || echo "ok")
 
+    # projected month-end cost (Toman): extrapolate month-to-date usage at full rate
+    BUDGET_USAGE_DIR="${BUDGET_USAGE_DIR:-/data/proxy/usage}"
+    RATE_FULL="${RATE_FULL:-7700}"
+    [ -r "$BUDGET_USAGE_DIR/billing.conf" ] && . "$BUDGET_USAGE_DIR/billing.conf" 2>/dev/null || true
+    proj_cost=""
+    b_month=$($DATE_CMD +%Y-%m 2>/dev/null)
+    b_days_in=$($DATE_CMD -d "$b_month-01 +1 month -1 day" +%d 2>/dev/null)
+    b_days_elapsed=$($DATE_CMD +%d 2>/dev/null | sed 's/^0*//')
+    if [ -n "$b_days_in" ] && [ -n "$b_days_elapsed" ] && [ -d "$BUDGET_USAGE_DIR/day" ]; then
+        gb_so_far=$(awk -F'|' '!/^#/ {s+=$4+$5} END{printf "%.2f", s/1073741824}' "$BUDGET_USAGE_DIR"/day/$b_month-*.log 2>/dev/null)
+        [ -z "$gb_so_far" ] && gb_so_far=0
+        proj_gb=$(hn_forecast_gb "$gb_so_far" "$b_days_elapsed" "$b_days_in" 2>/dev/null)
+        proj_cost=$(hn_forecast_cost "$proj_gb" "$RATE_FULL" 2>/dev/null)
+    fi
+
     # Build card
     echo "💰 Budget — $tier"
     echo "──────────────"
@@ -67,6 +82,7 @@ budget_card() {
     echo ""
     [ -n "$expires" ] && echo "expires $expires${days:+ (~${days}d)}"
     [ -n "$drain_gb" ] && echo "drain ${drain_gb} GB/day → ~${proj_days}d left" || echo "drain —"
+    [ -n "$proj_cost" ] && [ "$proj_cost" != "0" ] && echo "projected ~$proj_cost Toman this month"
     if [ -n "$exhaust_greg" ]; then
         if [ -n "$exhaust_jal" ]; then
             echo "exhaustion $exhaust_greg ($exhaust_jal)"

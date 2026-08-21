@@ -52,10 +52,6 @@ if [ -d "$USAGE_DIR/day" ]; then
     done
     if [ -s "$TMP/top.tmp" ]; then
         top_devices=$(awk -F'|' '{b[$1]+=$2} END{for(n in b) print n"|"b[n]}' "$TMP/top.tmp" | sort -t'|' -k2 -nr | head -n 3 | while IFS='|' read -r name bytes; do
-            gb=$(awk -v b="$bytes" 'BEGIN{printf "%.2f", b/1073641824}'); printf '%s %s GB\n' "$name" "$gb"
-        done | head -n 3)
-        # Use correct divisor
-        top_devices=$(awk -F'|' '{b[$1]+=$2} END{for(n in b) print n"|"b[n]}' "$TMP/top.tmp" | sort -t'|' -k2 -nr | head -n 3 | while IFS='|' read -r name bytes; do
             gb=$(awk -v b="$bytes" 'BEGIN{printf "%.2f", b/1073741824}'); printf '%-12s %s GB\n' "$name" "$gb"
         done)
     fi
