@@ -119,16 +119,88 @@ roll() {
         tot_up=$(awk -F"|" '!/^#/ {s+=$4} END{print s+0}' "$dayf")
         tot_down=$(awk -F"|" '!/^#/ {s+=$5} END{print s+0}' "$dayf")
         echo "$day total_up=$tot_up total_down=$tot_down" >> "$DIR/month/$(date +%Y-%m).log"
+        # per-owner daily roll (before prune, so Jalali months stay computable)
+        OWNERS_FILE="${HN_OWNERS_FILE:-/data/proxy/owners.conf}"
+        OWNER_DIR="$DIR/owners"
+        mkdir -p "$OWNER_DIR" 2>/dev/null
+        if [ ! -f "$OWNER_DIR/.rolled-$day" ]; then
+            HN_LIB="${HN_LIB:-/data/proxy/hnlib.sh}"
+            [ -f "$HN_LIB" ] || HN_LIB="$(dirname "$0")/../hnlib.sh"
+            [ -f "$HN_LIB" ] && . "$HN_LIB" 2>/dev/null || true
+            : > "$OWNER_DIR/$day.tmp"
+            : > "$DIR/.person.tmp"
+            while IFS='|' read -r mac ip name up down; do
+                case "$mac" in "#"*|"") continue ;; esac
+                [ -z "$mac" ] && continue
+                person=""
+                if command -v hn_owner_of >/dev/null 2>&1; then
+                    person=$(hn_owner_of "$mac" "$OWNERS_FILE" 2>/dev/null)
+                else
+                    # fallback grep
+                    want=$(printf '%s' "$mac" | tr 'A-Z' 'a-z')
+                    line=$(grep -i "^$(printf '%s' "$want" | sed 's/[][\.*^$]/\\&/g')|" "$OWNERS_FILE" 2>/dev/null | head -1)
+                    person=$(printf '%s' "$line" | cut -d'|' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                fi
+                [ -z "$person" ] && person="unassigned"
+                printf '%s|%s|%s\n' "$person" "$up" "$down" >> "$DIR/.person.tmp"
+            done < "$dayf"
+            if [ -s "$DIR/.person.tmp" ]; then
+                awk -F'|' '{ up[$1]+=$2; down[$1]+=$3 } END { for(p in up) print p"|"up[p]"|"down[p] }' "$DIR/.person.tmp" > "$OWNER_DIR/$day.tmp" 2>/dev/null
+                mv "$OWNER_DIR/$day.tmp" "$OWNER_DIR/$day" 2>/dev/null
+            else
+                : > "$OWNER_DIR/$day"
+            fi
+            rm -f "$DIR/.person.tmp"
+            touch "$OWNER_DIR/.rolled-$day"
+        fi
         touch "$DIR/month/.rolled-$day"
         find "$DIR/day" -type f -mtime +35 -name "20*" -delete 2>/dev/null
+        # keep owners history forever (no prune)
     fi
     if [ "$(date +%u)" = "5" ] && [ "$(date +%H)" -ge 20 ]; then
         wk=$(now_week)
         if [ "$(cat "$DIR/week-marker" 2>/dev/null)" != "$wk" ]; then
             echo "$wk" > "$DIR/week-marker"
-            card=$(sh "${0%/*}/x28-usage.sh" week 2>/dev/null)
-            [ -n "$card" ] && sh /data/proxy/tg-notify.sh "Weekly bill" "$card"
+            # New digest (falls back to weekly bill if digest not present)
+            if [ -x /data/proxy/x28-digest.sh ]; then
+                card=$(sh /data/proxy/x28-digest.sh 2>/dev/null)
+            else
+                card=$(sh "${0%/*}/x28-usage.sh" week 2>/dev/null)
+            fi
+            [ -n "$card" ] && sh /data/proxy/tg-notify.sh "Weekly Digest" "$card"
+            # Month-end automation: first Friday after Jalali month-end, send people report
+            if [ -x /data/proxy/x28-people.sh ]; then
+                HN_LIB_TMP="${HN_LIB:-/data/proxy/hnlib.sh}"
+                [ -f "$HN_LIB_TMP" ] && . "$HN_LIB_TMP" 2>/dev/null || true
+                if command -v hn_greg_to_jalali >/dev/null 2>&1; then
+                greg_today=$(date +%F 2>/dev/null)
+                jal_today=$(hn_greg_to_jalali "$greg_today" 2>/dev/null | cut -d- -f1,2)
+                if [ -n "$jal_today" ]; then
+                    jy=$(printf '%s' "$jal_today" | cut -d- -f1)
+                    jm=$(printf '%s' "$jal_today" | cut -d- -f2 | sed 's/^0*//')
+                    # only in first 3 days of new Jalali month
+                    jd=$(hn_greg_to_jalali "$greg_today" 2>/dev/null | cut -d- -f3 | sed 's/^0*//')
+                    if [ -n "$jd" ] && [ "$jd" -le 3 ] 2>/dev/null; then
+                        if [ "$jm" -gt 1 ] 2>/dev/null; then
+                            prev_jm=$((jm - 1)); prev_jy="$jy"
+                        else
+                            prev_jm=12; prev_jy=$((jy - 1))
+                        fi
+                        prev_jmonth=$(printf '%04d-%02d' "$prev_jy" "$prev_jm")
+                        month_marker="$DIR/month-marker"
+                        last_month=$(cat "$month_marker" 2>/dev/null || echo "")
+                        if [ "$last_month" != "$prev_jmonth" ]; then
+                            if sh /data/proxy/x28-people.sh "$prev_jmonth" 2>/dev/null | grep -q "TOTAL"; then
+                                card2=$(sh /data/proxy/x28-people.sh "$prev_jmonth" 2>/dev/null)
+                                [ -n "$card2" ] && sh /data/proxy/tg-notify.sh "Monthly People — $prev_jmonth" "$card2" 2>/dev/null || true
+                                echo "$prev_jmonth" > "$month_marker" 2>/dev/null || true
+                            fi
+                        fi
+                    fi
+                fi
+            fi
         fi
+    fi
     fi
 }
 

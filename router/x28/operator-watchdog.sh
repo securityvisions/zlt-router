@@ -168,6 +168,7 @@ while :; do
     if check_data; then
         if [ "$fails" -gt 0 ]; then
             log "plmn=$p data OK (recovered after $fails fails)"
+            sh /data/proxy/x28-outage-ledger.sh add-up 2>/dev/null || true
             notify "Data recovered - $(opname "$p")" \
                    "Back online after $fails failed checks.
 $(sh /data/proxy/x28-status.sh 2>/dev/null | sed -n '1,3p')"
@@ -194,6 +195,9 @@ $(sh /data/proxy/x28-status.sh 2>/dev/null | sed -n '1,3p')"
     else
         fails=$((fails + 1))
         log "plmn=$p data DOWN (fail $fails/$FAIL_THRESHOLD)"
+        if [ "$fails" -eq "$FAIL_THRESHOLD" ]; then
+            sh /data/proxy/x28-outage-ledger.sh add-down 2>/dev/null || true
+        fi
         if [ "$fails" -ge "$FAIL_THRESHOLD" ]; then
             t=$(now); lp=$(cat "$STATEDIR/lastswitch" 2>/dev/null || echo 0)
             if [ $((t - lp)) -lt "$COOLDOWN" ]; then

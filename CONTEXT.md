@@ -62,3 +62,21 @@ Shared vocabulary for the home-network project. Use these terms exactly; don't d
 
 - **Network Event log** — the structured, append-only store on the AX3000T that the web dashboard and app consume; the events it records come from the existing scripts (failopen, devicewatch, hyst, balance thresholds) rather than a new sensor.
   _Avoid_: log, telemetry (telemetry is the hourly measurements)
+
+- **Outage Ledger** — the X28's append-only record of "no usable internet" periods (epoch|down / epoch|up) driven by the operator watchdog's direct-probe transitions, paired into durations and totaled per Jalali month for the SLA claim. A Network Event log derivative, not a new sensor (ADR-0005).
+  _Avoid_: outage log (use Outage Ledger)
+
+- **Owner** — a person to whom one or more device MACs are assigned (`/data/proxy/owners.conf`, `mac|person`), so monthly usage can be attributed per person despite multiple devices.
+  _Avoid_: user (already means API user)
+
+- **Jalali report** — a per-person monthly usage report keyed by the Iranian (Jalali) calendar, with Persian month names and Gregorian range, built from the permanent per-owner daily rollups.
+  _Avoid_: Persian report (use Jalali report)
+
+- **Budget Guardian** — the tiered forecast (warn <10 GB/<7d/<14d projected; urgent <3/<3/<7; exhausted <0.05 GB) that watches the Samantel balance and drain, alerts via the cooldown registry, and renders the `/budget` Card with a Jalali exhaustion date.
+  _Avoid_: budget alert (use Budget Guardian)
+
+- **Weekly Digest** — the Friday 20:00 Card that replaces the bare weekly bill: GB+Toman, top devices, outage minutes that week, balance+forecast, and current RSRP/operator/uptime.
+  _Avoid_: weekly bill (now superseded)
+
+- **WiFi share** — the `/wifi` QR photo that encodes the main SSID's credentials (`WIFI:S:...`) from the root-only `/data/proxy/wifi.conf`, generated on the X28 by `qrencode` and sent through the socks proxy.
+  _Avoid_: QR code (use WiFi share)

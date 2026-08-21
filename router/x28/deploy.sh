@@ -32,7 +32,7 @@ push_ax()   { sshpass -p "$AX3T_PASS" ssh $SSH_OPTS -o PubkeyAuthentication=no "
 
 echo "== X28: scripts =="
 for f in x28lib.sh linkstate.sh harden.sh reselect.sh x28-health.sh dns-fix.sh \
-         tg-notify.sh x28-status.sh x28-boot-alert.sh operator-watchdog.sh x28-bot.sh probe-service.sh telemetry-store.sh x28-budget.sh; do
+         tg-notify.sh x28-status.sh x28-boot-alert.sh operator-watchdog.sh x28-bot.sh probe-service.sh telemetry-store.sh x28-budget.sh x28-outage-ledger.sh x28-people.sh x28-owners.sh x28-digest.sh x28-wifi.sh; do
   push_x28 "$HERE/$f" "/data/proxy/$f"; ssh_x28 "chmod +x /data/proxy/$f"
 done
 # hnlib is shared (AX + X28)

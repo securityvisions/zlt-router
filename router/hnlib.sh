@@ -440,6 +440,79 @@ hn_event_list() {
     printf '%s\n' "$filter" | grep -v '^$' | tail -n "$limit" | sort -t'|' -k1,1 -nr
 }
 
+# ---- Outage Ledger (X28 SLA) ----
+# Append-only ledger for "no usable internet" periods. Ledger file is
+# env-overridable via HN_OUTAGE_LEDGER for tests; format per line:
+#   epoch|down  or  epoch|up
+# Transitions are idempotent: consecutive downs overwrite, consecutive ups
+# are ignored. Pairing is done on read; totals are per Jalali month via
+# the calendar module. No new sensor — watchdog's direct-probe state drives it.
+
+HN_OUTAGE_LEDGER="${HN_OUTAGE_LEDGER:-/data/proxy/outage-ledger.log}"
+
+# hn_outage_pair <ledger_file> — completed down|up|duration lines, oldest first.
+hn_outage_pair() {
+    local f="${1:-$HN_OUTAGE_LEDGER}"
+    [ -f "$f" ] || return 0
+    sort -t'|' -k1,1 -n "$f" 2>/dev/null | awk -F'|' '
+        $2=="down" { down=$1; next }
+        $2=="up" && down!="" { print down"|"$1"|"($1-down); down="" }
+    '
+}
+
+# hn_outage_format_duration <seconds> — human "3h40m" / "45m" / "0m".
+hn_outage_format_duration() {
+    local s="${1:-0}" h m
+    s=$(( s + 0 )) 2>/dev/null || s=0
+    [ "$s" -lt 0 ] && s=0
+    h=$(( s / 3600 )); m=$(( (s % 3600) / 60 ))
+    if [ "$h" -gt 0 ] && [ "$m" -gt 0 ]; then echo "${h}h${m}m"
+    elif [ "$h" -gt 0 ]; then echo "${h}h"
+    else echo "${m}m"
+    fi
+}
+
+# hn_outage_total <ledger_file> <jalali_month> — total outage seconds in that Jalali month.
+# Handles open down (no following up) as ongoing until now (HN_OUTAGE_NOW or date +%s).
+hn_outage_total() {
+    local f="${1:-$HN_OUTAGE_LEDGER}" jmonth="${2:-}" now start_d end_d start_e end_e_next total
+    [ -f "$f" ] || { echo 0; return 0; }
+    [ -n "$jmonth" ] || { echo 0; return 0; }
+    # month range via calendar module
+    local range
+    range=$(hn_jalali_month_range "$jmonth" 2>/dev/null)
+    [ -z "$range" ] && { echo 0; return 0; }
+    start_d=$(printf '%s' "$range" | cut -d' ' -f1)
+    end_d=$(printf '%s' "$range" | cut -d' ' -f2)
+    [ -z "$start_d" ] || [ -z "$end_d" ] && { echo 0; return 0; }
+    start_e=$(date -d "$start_d" +%s 2>/dev/null || date -d "$start_d 00:00:00" +%s 2>/dev/null || echo 0)
+    end_e=$(date -d "$end_d" +%s 2>/dev/null || echo 0)
+    end_e_next=$(( end_e + 86400 ))
+    now=${HN_OUTAGE_NOW:-$(date +%s 2>/dev/null)}
+    [ -z "$now" ] && now=0
+    sort -t'|' -k1,1 -n "$f" 2>/dev/null | awk -F'|' -v ms="$start_e" -v me="$end_e_next" -v now="$now" '
+        $2=="down" { down=$1; next }
+        $2=="up" && down!="" {
+            up=$1
+            # overlap [down,up) with [ms,me)
+            s = (down>ms?down:ms)
+            e = (up<me?up:me)
+            if(e>s) total+=e-s
+            down=""
+            next
+        }
+        END {
+            if(down!=""){
+                up=now
+                s=(down>ms?down:ms)
+                e=(up<me?up:me)
+                if(e>s) total+=e-s
+            }
+            print total+0
+        }
+    '
+}
+
 # ---- service-health probe (the score's "services" component) ----
 # Probes the router's subsystems without a new sensor: init-service state where
 # the firmware exposes it, process probes otherwise (passwall). The probe
@@ -670,6 +743,22 @@ hn_jalali_month_range() {
       if(jm==12){ e_jdn=j2d(jy+1,1,1)-1 } else { e_jdn=j2d(jy,jm+1,1)-1 }
       d2g(s_jdn); printf "%04d-%02d-%02d ", D2G_GY,D2G_GM,D2G_GD; d2g(e_jdn); printf "%04d-%02d-%02d\n", D2G_GY,D2G_GM,D2G_GD
     }' 2>/dev/null
+}
+
+# ---- Owner (device → person) ----
+# Owners file: lines "mac|person" (mac lowercased, person as-is). Env-overridable via HN_OWNERS_FILE.
+
+HN_OWNERS_FILE="${HN_OWNERS_FILE:-/data/proxy/owners.conf}"
+
+# hn_owner_of <mac> [owners_file] — person or empty. Mac lookup is case-insensitive.
+hn_owner_of() {
+    local mac="${1:-}" f="${2:-$HN_OWNERS_FILE}" want line
+    [ -n "$mac" ] || { echo ""; return 0; }
+    want=$(printf '%s' "$mac" | tr 'A-Z' 'a-z')
+    [ -f "$f" ] || { echo ""; return 0; }
+    line=$(grep -i "^$(printf '%s' "$want" | sed 's/[][\.*^$]/\\&/g')|" "$f" 2>/dev/null | head -1)
+    [ -z "$line" ] && { echo ""; return 0; }
+    printf '%s' "$line" | cut -d'|' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
 
 # ---- quality-history rollup (the hourly link-quality chart feed) ----

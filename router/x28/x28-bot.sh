@@ -2,8 +2,8 @@
 # x28-bot.sh — Telegram remote control for the X28 (@xirouterbot).
 #
 # Commands (only from the allowlisted chat in /etc/tg.conf):
-#   /status /link /usage /balance /budget /digest /bill /devices /proxy
-#   /switch_mci /switch_rightel /panel /help (/start = /help + Panel)
+#   /status /link /usage /balance /budget /outages /people /month /owner /wifi
+#   /digest /bill /devices /proxy /switch_mci /switch_rightel /panel /help (/start = /help + Panel)
 #
 # Design notes:
 #   - Operator switching goes ONLY through operator-watchdog.sh's one-shot
@@ -53,6 +53,16 @@ send() {
         --data-urlencode "text=$1" >/dev/null 2>&1 || true
 }
 
+# send_photo <path> <caption> — send a photo (best-effort, multipart).
+send_photo() {
+    local path="$1" cap="${2:-}"
+    [ -f "$path" ] || return 1
+    timeout 30 curl -s -m 25 -x "$PROXY" "$API/sendPhoto" \
+        -F "chat_id=$CHAT_ID" \
+        -F "photo=@$path" \
+        -F "caption=$cap" >/dev/null 2>&1 || true
+}
+
 # panel_keyboard — the 4×2 Panel grid (bot-wonderful 01). callback_data
 # carries "panel:<action>" so the tap handler dispatches without parsing text.
 panel_keyboard() {
@@ -61,7 +71,8 @@ panel_keyboard() {
  [{"text":"💾 Usage","callback_data":"panel:usage"},{"text":"💰 Balance","callback_data":"panel:balance"}],
  [{"text":"📱 Devices","callback_data":"panel:devices"},{"text":"🧾 Bill","callback_data":"panel:bill"}],
  [{"text":"🛰️ Proxy","callback_data":"panel:proxy"},{"text":"❓ Help","callback_data":"panel:help"}],
- [{"text":"💰 Budget","callback_data":"panel:budget"},{"text":"🧾 Digest","callback_data":"panel:digest"}]]}'
+ [{"text":"💰 Budget","callback_data":"panel:budget"},{"text":"📉 Outages","callback_data":"panel:outages"}],
+ [{"text":"👥 People","callback_data":"panel:people"},{"text":"📶 WiFi","callback_data":"panel:wifi"}]]}'
 }
 
 # send_panel — post the Panel message (keyboard + welcome body); stores message_id.
@@ -205,6 +216,11 @@ help_text() {
 💾 Usage     /usage    per-device traffic today
 💰 Balance   /balance  Samantel data left
 💰 Budget    /budget   forecast + tiered alerts
+📉 Outages   /outages  SLA ledger per Jalali month
+👥 People    /people   per-person Jalali month
+📅 Month     /month    any Jalali month (YYYY-MM)
+👤 Owner     /owner    assign device to person
+📶 WiFi      /wifi     share QR for guests
 🧾 Digest    /digest   weekly story (Fri 20:00)
 🧾 Bill      /bill     weekly usage + cost
 📱 Devices   /devices  who is on the network
@@ -279,10 +295,23 @@ health : $(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)" ;;
                     budget)  body="💰 Budget
 $(hr)
 $(sh /data/proxy/x28-budget.sh --card 2>/dev/null)" ;;
-                    digest)  body="🧾 Digest
+                    outages) body="📉 Outages
 $(hr)
-$(sh /data/proxy/x28-budget.sh --card 2>/dev/null | head -1)
-$(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null | tail -n +2)" ;;
+$(sh /data/proxy/x28-outage-ledger.sh report 2>/dev/null)" ;;
+                    digest)  body="$(sh /data/proxy/x28-digest.sh 2>/dev/null)" ;;
+                    people)  body="👥 People
+$(hr)
+$(sh /data/proxy/x28-people.sh 2>/dev/null)" ;;
+                    wifi)
+                        answer_cbq "$cbid"
+                        if path=$(sh /data/proxy/x28-wifi.sh qr 2>/dev/null); then
+                            cap=$(sh /data/proxy/x28-wifi.sh card 2>/dev/null | head -n 3)
+                            send_photo "$path" "$cap" || send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
+                        else
+                            send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
+                        fi
+                        continue
+                        ;;
                     help)    body="$(help_text)" ;;
                     panel|start) body="$(help_text)" ;;
                     *)       body="unknown tap" ;;
@@ -336,11 +365,34 @@ health : $(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)" ;;
                         send "💰 Budget
 $(hr)
 $(sh /data/proxy/x28-budget.sh --card 2>/dev/null)" ;;
-                    /digest)
-                        send "🧾 Digest
+                    /outages)
+                        arg=$(printf '%s' "$text" | awk '{print $2}')
+                        send "📉 Outages
 $(hr)
-$(sh /data/proxy/x28-budget.sh --card 2>/dev/null | head -1)
-$(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null | tail -n +2)" ;;
+$(sh /data/proxy/x28-outage-ledger.sh report $arg 2>/dev/null)" ;;
+                    /people)
+                        arg=$(printf '%s' "$text" | awk '{print $2}')
+                        send "$(sh /data/proxy/x28-people.sh $arg 2>/dev/null)" ;;
+                    /month)
+                        arg=$(printf '%s' "$text" | awk '{print $2}')
+                        send "$(sh /data/proxy/x28-people.sh $arg 2>/dev/null)" ;;
+                    /owner)
+                        args=$(printf '%s' "$text" | cut -d' ' -f2-)
+                        [ -z "$args" ] && args="list"
+                        out=$(sh /data/proxy/x28-owners.sh $args 2>&1)
+                        send "👤 Owner
+$(hr)
+$out" ;;
+                    /wifi)
+                        if path=$(sh /data/proxy/x28-wifi.sh qr 2>/dev/null); then
+                            cap=$(sh /data/proxy/x28-wifi.sh card 2>/dev/null | head -n 3)
+                            send_photo "$path" "$cap" || send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
+                        else
+                            send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
+                        fi
+                        ;;
+                    /digest)
+                        send "$(sh /data/proxy/x28-digest.sh 2>/dev/null)" ;;
                     /switch_mci)     do_switch "$MCI" "MCI" ;;
                     /switch_rightel) do_switch "$RIGHTEL" "Rightel" ;;
                     *) send "Unknown command — try /help" ;;
