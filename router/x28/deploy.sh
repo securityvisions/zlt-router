@@ -64,8 +64,8 @@ push_x28 "$HERE/x28-thermal.init" /etc/init.d/x28-thermal
 ssh_x28 "chmod +x /etc/init.d/x28-thermal && /etc/init.d/x28-thermal enable && /etc/init.d/x28-thermal restart"
 
 echo "== X28: SQM / band / telemetry / tunnel =="
-for f in x28-sqm.sh x28-band.sh x28-telemetry.sh x28-tunnel.sh; do push_x28 "$HERE/$f" "/data/proxy/$f"; ssh_x28 "chmod +x /data/proxy/$f"; done
-for f in x28-telemetry.init x28-tunnel.init; do push_x28 "$HERE/$f" "/etc/init.d/${f%.init}"; ssh_x28 "chmod +x /etc/init.d/${f%.init} && /etc/init.d/${f%.init} enable && /etc/init.d/${f%.init} start"; done
+for f in x28-sqm.sh x28-band.sh x28-telemetry.sh x28-tunnel.sh x28-vps-heal.sh; do push_x28 "$HERE/$f" "/data/proxy/$f"; ssh_x28 "chmod +x /data/proxy/$f"; done
+for f in x28-telemetry.init x28-tunnel.init x28-vps-heal.init; do push_x28 "$HERE/$f" "/etc/init.d/${f%.init}"; ssh_x28 "chmod +x /etc/init.d/${f%.init} && /etc/init.d/${f%.init} enable && /etc/init.d/${f%.init} start"; done
 
 echo "== X28: usage accounting =="
 ssh_x28 "mkdir -p /data/proxy/usage/day /data/proxy/usage/month"
