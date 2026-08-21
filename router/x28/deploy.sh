@@ -32,9 +32,12 @@ push_ax()   { sshpass -p "$AX3T_PASS" ssh $SSH_OPTS -o PubkeyAuthentication=no "
 
 echo "== X28: scripts =="
 for f in x28lib.sh linkstate.sh harden.sh reselect.sh x28-health.sh dns-fix.sh \
-         tg-notify.sh x28-status.sh x28-boot-alert.sh operator-watchdog.sh x28-bot.sh; do
+         tg-notify.sh x28-status.sh x28-boot-alert.sh operator-watchdog.sh x28-bot.sh probe-service.sh telemetry-store.sh; do
   push_x28 "$HERE/$f" "/data/proxy/$f"; ssh_x28 "chmod +x /data/proxy/$f"
 done
+# hnlib is shared (AX + X28)
+push_x28 "$HERE/../hnlib.sh" "/data/proxy/hnlib.sh"; ssh_x28 "chmod +x /data/proxy/hnlib.sh"
+push_x28 "$HERE/../hnlib.sh" "/root/hnlib.sh"; ssh_x28 "chmod +x /root/hnlib.sh"
 
 echo "== X28: mihomo engine =="
 ssh_x28 "mkdir -p /data/proxy/mihomo"

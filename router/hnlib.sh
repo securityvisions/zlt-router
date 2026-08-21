@@ -50,6 +50,40 @@ hn_link_field() {
     printf '%s\n' "$1" | sed -n "s/^$2=//p" | head -1
 }
 
+# hn_link_state [file] — deep LinkState seam: one reader for Link (operator
+# / PLMN / tech / signal / RSRP / RSRP_5G / band / flow). Reads from the
+# explicit file, or HN_LINK_STATE_FILE, or the live reader. Outputs 9
+# key=value lines (empty if missing) so callers never re-parse.
+hn_link_state() {
+    local f="${1:-${HN_LINK_STATE_FILE:-}}"
+    local fields=""
+    if [ -n "$f" ] && [ -f "$f" ]; then
+        fields=$(cat "$f" 2>/dev/null)
+    elif [ -n "${HN_LINK_STATE_CMD:-}" ]; then
+        fields=$($HN_LINK_STATE_CMD 2>/dev/null)
+    else
+        fields=$(cat /tmp/linkstate 2>/dev/null || sh /root/x28link.sh 2>/dev/null || true)
+    fi
+    local k v
+    for k in operator plmn tech signal rsrp rsrp_5g band flow_dl flow_ul; do
+        v=$(printf '%s\n' "$fields" | sed -n "s/^$k=//p" | head -1)
+        printf '%s=%s\n' "$k" "${v:-}"
+    done
+}
+
+# hn_link_decide <operator> <tech> <rsrp> <rsrp_5g> — pure LinkPolicy.
+# Delegates to the same thresholds as x28w_decide (MCI drift, RSRP bad).
+# Prints OK | FIX|operator | ALERT|degraded.
+hn_link_decide() {
+    local op="$1" rsrp="$3" rsrp5g="$4"
+    local pref="${X28_PREF_OPERATOR:-MCI}"
+    local bad="${X28_RSRP_BAD:--95}" bad5g="${X28_RSRP5G_BAD:--100}"
+    case "$op" in *"$pref"*) : ;; *) echo "FIX|operator"; return 0 ;; esac
+    if [ -n "$rsrp" ] && awk -v r="$rsrp" -v b="$bad" 'BEGIN{ exit !(r <= b) }'; then echo "ALERT|degraded"; return 0; fi
+    if [ -n "$rsrp5g" ] && awk -v r="$rsrp5g" -v b="$bad5g" 'BEGIN{ exit !(r <= b) }'; then echo "ALERT|degraded"; return 0; fi
+    echo "OK"
+}
+
 # hn_balance_series [days] [format] — balance history from the daily log,
 # ascending (chronological), last `days` points. format: rows (date|gb lines,
 # for the API history) or pipe (gb values joined by |, for the bot sparkline).

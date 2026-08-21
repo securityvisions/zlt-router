@@ -4,16 +4,18 @@
 # /data/proxy/usage/telemetry.log (the Telemetry log), procd hourly.
 # Canonical copy: router/x28/x28-telemetry.sh — deploys to /data/proxy/x28-telemetry.sh
 TELEM=/data/proxy/usage/telemetry.log
+STORE_LIB="${TELEMETRY_STORE_LIB:-/data/proxy/telemetry-store.sh}"
+[ -f "$STORE_LIB" ] && . "$STORE_LIB"
 mkdir -p "$(dirname "$TELEM")"
 
 telemetry_row() {
-    local ts total_gb op rsrp temp load proxy
+    local ts total_gb op rsrp temp load proxy fields
     ts=$(date +%FT%T 2>/dev/null)
-    # WAN totals from modem (rxBytes)
-    total_gb=$(sh /data/proxy/linkstate.sh 2>/dev/null | sed -n 's/^flow_dl=//p' | head -1)
+    fields=$(sh /data/proxy/linkstate.sh 2>/dev/null)
+    total_gb=$(printf '%s\n' "$fields" | sed -n 's/^flow_dl=//p' | head -1)
     [ -z "$total_gb" ] && total_gb="?"
-    op=$(sh /data/proxy/linkstate.sh 2>/dev/null | sed -n 's/^operator=//p' | head -1)
-    rsrp=$(sh /data/proxy/linkstate.sh 2>/dev/null | sed -n 's/^rsrp=//p' | head -1)
+    op=$(printf '%s\n' "$fields" | sed -n 's/^operator=//p' | head -1)
+    rsrp=$(printf '%s\n' "$fields" | sed -n 's/^rsrp=//p' | head -1)
     temp=$(sh /data/proxy/x28-thermal.sh read 2>/dev/null | tr -d ' \n')
     load=$(cut -d' ' -f1 /proc/loadavg 2>/dev/null)
     proxy=$(curl -s -m 5 http://127.0.0.1:9090/proxies/auto 2>/dev/null | grep -o '"now":"[^"]*"' | cut -d'"' -f4)
