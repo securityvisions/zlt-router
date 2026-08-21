@@ -79,7 +79,7 @@ budget_card() {
         fi
     fi
     if [ -n "$b_days_in" ] && [ -n "$b_days_elapsed" ] && [ -d "$BUDGET_USAGE_DIR/day" ]; then
-        gb_so_far=$(awk -F'|' '!/^#/ {s+=$4+$5} END{printf "%.2f", s/1073741824}' "$BUDGET_USAGE_DIR"/day/$b_month-*.log 2>/dev/null)
+        gb_so_far=$(awk -F'|' '!/^#/ {s+=$4+$5} END{printf "%.2f", s/1073741824}' "$BUDGET_USAGE_DIR"/day/$b_month-*.log 2>/dev/null || true)
         [ -z "$gb_so_far" ] && gb_so_far=0
         proj_gb=$(hn_forecast_gb "$gb_so_far" "$b_days_elapsed" "$b_days_in" 2>/dev/null)
         proj_cost=$(hn_forecast_cost "$proj_gb" "$RATE_FULL" 2>/dev/null)

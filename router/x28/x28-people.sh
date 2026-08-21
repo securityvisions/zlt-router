@@ -25,7 +25,7 @@ fi
 # Validate jmonth
 case "$jmonth" in ????-??) ;; *) echo "Usage: $0 [jalali-month YYYY-MM]" >&2; exit 1 ;; esac
 
-range=$(hn_jalali_month_range "$jmonth" 2>/dev/null)
+range=$(hn_jalali_month_range "$jmonth" 2>/dev/null || true)
 if [ -z "$range" ]; then
     echo "Invalid Jalali month: $jmonth" >&2
     exit 1
