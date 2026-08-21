@@ -63,9 +63,21 @@ budget_card() {
     RATE_FULL="${RATE_FULL:-7700}"
     [ -r "$BUDGET_USAGE_DIR/billing.conf" ] && . "$BUDGET_USAGE_DIR/billing.conf" 2>/dev/null || true
     proj_cost=""
-    b_month=$($DATE_CMD +%Y-%m 2>/dev/null)
-    b_days_in=$($DATE_CMD -d "$b_month-01 +1 month -1 day" +%d 2>/dev/null)
-    b_days_elapsed=$($DATE_CMD +%d 2>/dev/null | sed 's/^0*//')
+    b_month=$($DATE_CMD +%Y-%m 2>/dev/null || true)
+    b_days_in=$($DATE_CMD -d "$b_month-01 +1 month -1 day" +%d 2>/dev/null | tr -dc '0-9' || true)
+    b_days_elapsed=$($DATE_CMD +%d 2>/dev/null | sed 's/^0*//' || true)
+    # busybox date may not do "+1 month -1 day": fall back to day-diff via jalali-free math
+    if [ -z "$b_days_in" ] && [ -n "$b_month" ]; then
+        next_month=$($DATE_CMD -d "$b_month-15 +20 day" +%Y-%m 2>/dev/null | cut -c1-7 || true)
+        [ -z "$next_month" ] && next_month=$(awk -v m="$b_month" 'BEGIN{split(m,a,"-"); y=a[1]; mo=a[2]+1; if(mo>12){mo=1;y++} printf "%04d-%02d", y, mo}')
+        first_next=$("$DATE_CMD" -d "$next_month-01" +%s 2>/dev/null || true)
+        first_this=$("$DATE_CMD" -d "$b_month-01" +%s 2>/dev/null || true)
+        case "$first_next" in ""|*[!0-9]*) first_next="" ;; esac
+        case "$first_this" in ""|*[!0-9]*) first_this="" ;; esac
+        if [ -n "$first_next" ] && [ -n "$first_this" ]; then
+            b_days_in=$(( (first_next - first_this) / 86400 ))
+        fi
+    fi
     if [ -n "$b_days_in" ] && [ -n "$b_days_elapsed" ] && [ -d "$BUDGET_USAGE_DIR/day" ]; then
         gb_so_far=$(awk -F'|' '!/^#/ {s+=$4+$5} END{printf "%.2f", s/1073741824}' "$BUDGET_USAGE_DIR"/day/$b_month-*.log 2>/dev/null)
         [ -z "$gb_so_far" ] && gb_so_far=0
