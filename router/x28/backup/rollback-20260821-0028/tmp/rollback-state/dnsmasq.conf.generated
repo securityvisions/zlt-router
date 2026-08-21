@@ -1,0 +1,27 @@
+#generate by lan_mgr mtkt750_lan_mgr_dhcpsv4_setup_in_wired
+user=admin
+group=admin
+localise-queries
+dhcp-leasefile=/tmp/dnsmasq.leases
+dhcp-lease-max=250
+resolv-file=/tmp/dnsmasq_resolv.conf
+dhcp-hostsfile=/mnt/data/etc/tzcfg/dhcp_hosts
+#strict-order
+pid-file
+keep-in-foreground
+bind-interfaces 
+dhcp-authoritative
+
+interface=br0
+listen-address=192.168.70.1
+dhcp-range=br0,192.168.70.100,192.168.70.200,255.255.255.0,24h
+dhcp-option=br0,option:router,192.168.70.1
+dhcp-option=br0,option:dns-server,192.168.70.1,114.114.114.114
+dhcp-option=br0,option:mtu,1500
+dhcp-option=15,home
+address=/m.home/192.168.70.1
+address=/rtm.home/192.168.70.1
+dhcp-option-force=125,00:98:A9:42:22:00:07:5A:4C:54:20:58:32:38:01:06:49:6E:76:69:67:6F:02:0F:38:36:34:35:34:32:30:36:32:34:33:35:33:30:36
+
+server=127.0.0.1#5353
+no-resolv

@@ -1,16 +1,19 @@
 #!/bin/sh /etc/rc.common
-# x28proxy — X28 crypto-engine service (xray-core SOCKS inbound -> VPS tunnel).
-# Template: deploy to the X28 as /etc/init.d/x28proxy with the real
-# /data/proxy/sing-box/xray-proxy.json in place (secrets filled on device).
-USE_PROCD=1
+# x28proxy — the X28 proxy engine service (procd).
+# Runs mihomo (the WhiteVPN engine): SOCKS/HTTP :1080, redir :12345,
+# DNS :5353, with the url-test "auto" group doing automatic node failover.
+# Replaces xray on the same ports; the old xray config is kept beside it
+# (xray-split.json) for rollback: point this init back at /data/proxy/xray.
 START=98
 STOP=12
+USE_PROCD=1
 
 start_service() {
     procd_open_instance
-    procd_set_param command /data/proxy/xray
-    procd_append_param command run
-    procd_append_param command -config /data/proxy/sing-box/xray-proxy.json
+    procd_set_param command /data/proxy/mihomo/mihomo
+    procd_append_param command -d /data/proxy/mihomo
     procd_set_param respawn 3600 5 5
+    procd_set_param stdout 1
+    procd_set_param stderr 1
     procd_close_instance
 }

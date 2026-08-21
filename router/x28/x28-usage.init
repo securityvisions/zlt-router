@@ -1,0 +1,13 @@
+#!/bin/sh /etc/rc.common
+# x28-usage — per-device traffic accounting collector (procd).
+# 5s conntrack sampling → per-device daily/monthly usage + Toman billing
+# (see /data/proxy/usage/usage-collect.sh). Friday 20:00 weekly bill card.
+START=95
+USE_PROCD=1
+
+start_service() {
+    procd_open_instance
+    procd_set_param command /bin/sh /data/proxy/usage/usage-collect.sh loop
+    procd_set_param respawn 3600 5 0
+    procd_close_instance
+}

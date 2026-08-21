@@ -1,0 +1,8 @@
+Fri Aug 21 00:28:59 UTC 2026
+ 00:28:59 up  9:13,  load average: 3.51, 3.44, 3.48
+Filesystem                          Size      Used Available Use% Mounted on
+/dev/ubi1_2                       287.6M    125.2M    157.7M  44% /data
+/dev/ubi0_1                        22.8M    816.0K     20.8M   4% /overlay
+              total        used        free      shared  buff/cache   available
+Mem:         643564      401868      110676        1268      131020      208252
+Swap:        207868           0      207868

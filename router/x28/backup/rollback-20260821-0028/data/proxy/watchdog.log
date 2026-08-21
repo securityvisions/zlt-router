@@ -1,0 +1,11 @@
+2026-08-20 23:50:48 once: plmn=43211 data=OK
+2026-08-20 23:50:48 DRYRUN: would switch to 43220
+2026-08-20 23:50:57 switching operator -> 43220
+2026-08-20 23:51:00 reselect: reselect: {"success":true,"cmd":228,"message":"0"}
+2026-08-20 23:51:18 switch to 43220 OK: data confirmed
+2026-08-20 23:58:07 once: plmn=43220 data=OK
+2026-08-20 23:58:18 switching operator -> 43211
+2026-08-20 23:58:20 reselect: reselect: {"success":true,"cmd":228,"message":"0"}
+2026-08-20 23:58:38 switch to 43211 OK: data confirmed
+2026-08-21 00:08:36 watchdog started (preferred=43211 fallback=43220 interval=120s threshold=3 dryrun=0)
+2026-08-21 00:13:15 once: plmn=43211 data=OK

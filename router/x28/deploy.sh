@@ -31,18 +31,50 @@ push_x28()  { sshpass -p "$X28_PASS"  ssh $SSH_OPTS -o PubkeyAuthentication=no "
 push_ax()   { sshpass -p "$AX3T_PASS" ssh $SSH_OPTS -o PubkeyAuthentication=no "root@$AX_HOST" "cat > $2" < "$1"; }
 
 echo "== X28: scripts =="
-for f in x28lib.sh linkstate.sh harden.sh reselect.sh; do
+for f in x28lib.sh linkstate.sh harden.sh reselect.sh x28-health.sh dns-fix.sh \
+         tg-notify.sh x28-status.sh x28-boot-alert.sh operator-watchdog.sh x28-bot.sh; do
   push_x28 "$HERE/$f" "/data/proxy/$f"; ssh_x28 "chmod +x /data/proxy/$f"
 done
 
-echo "== X28: crypto engine =="
-if [ -n "$X28_PROXY_CONFIG" ] && [ -f "$X28_PROXY_CONFIG" ]; then
-  ssh_x28 "mkdir -p /data/proxy/sing-box"
-  push_x28 "$X28_PROXY_CONFIG" /data/proxy/sing-box/xray-proxy.json
-  ssh_x28 "chmod 600 /data/proxy/sing-box/xray-proxy.json"
-fi
+echo "== X28: mihomo engine =="
+ssh_x28 "mkdir -p /data/proxy/mihomo"
+# config: the repo copy is a PLACEHOLDER template — only seed it when the
+# device has no real config (the live one carries real credentials and is
+# maintained on the device / via targeted edits, never via this deploy).
+ssh_x28 "[ -f /data/proxy/mihomo/config.yaml ] || cat > /data/proxy/mihomo/config.yaml" < "$HERE/mihomo-config.yaml"
+ssh_x28 "chmod 600 /data/proxy/mihomo/config.yaml 2>/dev/null; true"
+ssh_x28 "[ -f /data/proxy/mihomo/geoip.dat ] || cp /data/proxy/geoip.dat /data/proxy/mihomo/geoip.dat"
+ssh_x28 "[ -f /data/proxy/mihomo/geosite.dat ] || cp /data/proxy/geosite.dat /data/proxy/mihomo/geosite.dat"
 push_x28 "$HERE/x28proxy.init" /etc/init.d/x28proxy
-ssh_x28 "chmod +x /etc/init.d/x28proxy && /etc/init.d/x28proxy enable && /etc/init.d/x28proxy restart"
+ssh_x28 "chmod +x /etc/init.d/x28proxy && /etc/init.d/x28proxy restart"
+
+echo "== X28: ad-blocking =="
+ssh_x28 "mkdir -p /data/proxy/adblock"
+for f in adblock-update.sh adblock-loop.sh; do
+  push_x28 "$HERE/$f" "/data/proxy/adblock/$f"; ssh_x28 "chmod +x /data/proxy/adblock/$f"
+done
+push_x28 "$HERE/x28-adblock.init" /etc/init.d/x28-adblock
+ssh_x28 "chmod +x /etc/init.d/x28-adblock && /etc/init.d/x28-adblock enable"
+push_x28 "$HERE/x28-bot.init" /etc/init.d/x28-bot
+ssh_x28 "chmod +x /etc/init.d/x28-bot && /etc/init.d/x28-bot enable && /etc/init.d/x28-bot restart"
+
+echo "== X28: thermal guard =="
+for f in x28-thermal.sh x28-thermal-loop.sh; do push_x28 "$HERE/$f" "/data/proxy/$f"; ssh_x28 "chmod +x /data/proxy/$f"; done
+push_x28 "$HERE/x28-thermal.init" /etc/init.d/x28-thermal
+ssh_x28 "chmod +x /etc/init.d/x28-thermal && /etc/init.d/x28-thermal enable && /etc/init.d/x28-thermal restart"
+
+echo "== X28: SQM / band / telemetry / tunnel =="
+for f in x28-sqm.sh x28-band.sh x28-telemetry.sh x28-tunnel.sh; do push_x28 "$HERE/$f" "/data/proxy/$f"; ssh_x28 "chmod +x /data/proxy/$f"; done
+for f in x28-telemetry.init x28-tunnel.init; do push_x28 "$HERE/$f" "/etc/init.d/${f%.init}"; ssh_x28 "chmod +x /etc/init.d/${f%.init} && /etc/init.d/${f%.init} enable && /etc/init.d/${f%.init} start"; done
+
+echo "== X28: usage accounting =="
+ssh_x28 "mkdir -p /data/proxy/usage/day /data/proxy/usage/month"
+push_x28 "$HERE/usage-collect.sh" /data/proxy/usage/usage-collect.sh
+push_x28 "$HERE/x28-usage.sh" /data/proxy/usage/x28-usage.sh
+ssh_x28 "chmod +x /data/proxy/usage/usage-collect.sh /data/proxy/usage/x28-usage.sh"
+ssh_x28 "[ -f /data/proxy/usage/billing.conf ] || printf 'RATE_FULL=7700\nRATE_FRIDAY=4620\n' > /data/proxy/usage/billing.conf"
+push_x28 "$HERE/x28-usage.init" /etc/init.d/x28-usage
+ssh_x28 "chmod +x /etc/init.d/x28-usage && /etc/init.d/x28-usage enable && /etc/init.d/x28-usage restart"
 
 echo "== X28: harden at boot =="
 ssh_x28 "grep -q '/data/proxy/harden.sh' /etc/rc.local || sed -i 's|^exit 0$|sh /data/proxy/harden.sh\nexit 0|' /etc/rc.local"

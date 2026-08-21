@@ -1,0 +1,257 @@
+  PID USER       VSZ STAT COMMAND
+    1 root      1764 S    /sbin/procd
+    2 root         0 SW   [kthreadd]
+    3 root         0 IW<  [rcu_gp]
+    4 root         0 IW<  [rcu_par_gp]
+    6 root         0 IW<  [kworker/0:0H-kb]
+    8 root         0 IW<  [mm_percpu_wq]
+    9 root         0 SW   [ksoftirqd/0]
+   10 root         0 IW   [rcu_sched]
+   11 root         0 IW   [rcu_bh]
+   12 root         0 SW   [migration/0]
+   14 root         0 SW   [cpuhp/0]
+   15 root         0 SW   [cpuhp/1]
+   16 root         0 SW   [migration/1]
+   17 root         0 SW   [ksoftirqd/1]
+   19 root         0 IW<  [kworker/1:0H-kb]
+   20 root         0 SW   [cpuhp/2]
+   21 root         0 SW   [migration/2]
+   22 root         0 SW   [ksoftirqd/2]
+   24 root         0 IW<  [kworker/2:0H-kb]
+   25 root         0 SW   [cpuhp/3]
+   26 root         0 SW   [migration/3]
+   27 root         0 SW   [ksoftirqd/3]
+   29 root         0 IW<  [kworker/3:0H-kb]
+   36 root         0 IW   [kworker/1:1-mm_]
+   44 root         0 SW   [kauditd]
+   83 root         0 IW<  [SSPM_WQ]
+  405 root         0 SW   [irq/16-event_0]
+  406 root         0 SW   [irq/16-event_1]
+  407 root         0 SW   [irq/16-event_2]
+  408 root         0 SW   [irq/16-event_3]
+  409 root         0 SW   [irq/16-event_4]
+  410 root         0 SW   [irq/343-rcs_irq]
+  416 root         0 SW   [irq/17-event_0]
+  417 root         0 SW   [irq/17-event_1]
+  418 root         0 SW   [irq/17-event_2]
+  419 root         0 SW   [irq/17-event_3]
+  420 root         0 SW   [irq/17-event_4]
+  425 root         0 IW<  [cmdq_buf_dump]
+  426 root         0 IW<  [cmdq_timeout_ha]
+  798 root         0 SW   [khungtaskd]
+  802 root         0 SW   [oom_reaper]
+  809 root         0 IW<  [writeback]
+  821 root         0 SW   [kcompactd0]
+  826 root         0 SWN  [ksmd]
+  827 root         0 SWN  [khugepaged]
+  828 root         0 IW<  [crypto]
+  829 root         0 IW<  [kintegrityd]
+  831 root         0 IW<  [kblockd]
+  858 root         0 SW   [hf_manager]
+  865 root         0 IW<  [pool_reload_wor]
+  874 root         0 IW<  [SCP_WQ]
+  876 root         0 IW<  [SCP_LOG_WQ]
+  877 root         0 IW<  [SCP_RESET_WQ]
+  878 root         0 IW<  [SCP_DELAY_RESET]
+  879 root         0 SW   [conn-md-thread]
+  881 root         0 SW   [pd_dbg_info]
+  885 root         0 IW<  [ata_sff]
+  911 root         0 IW<  [edac-poller]
+  918 root         0 IW<  [devfreq_wq]
+  933 root         0 SW   [watchdogd]
+ 1060 root         0 SW   [kswapd0]
+ 1316 root         0 SW   [hwrng]
+ 1323 root         0 IW<  [ged_notify_sw_v]
+ 1326 root         0 SW   [mali-simple-pow]
+ 1328 root         0 IW<  [kbase_event]
+ 1331 root         0 IW<  [kbase_job_fault]
+ 1332 root         0 IW<  [mali_aeewp]
+ 1420 root         0 IW<  [mcupm_ts_wq]
+ 1423 root         0 SW   [ccci_fsm1]
+ 1424 root         0 DW   [ccci_poll1]
+ 1440 root         0 SW   [ccci_sys]
+ 1442 root         0 SW   [ccci_ctrl]
+ 1489 root         0 SW   [ccci_rpc_k]
+ 1603 root         0 IW<  [cmdq_flushq]
+ 1604 root         0 IW<  [cmdq_flushq]
+ 1612 root         0 SW   [irq/113-amms_ir]
+ 1617 root         0 IW<  [sspm_ts_wq]
+ 1626 root         0 SW   [iommu_pgtable_d]
+ 1641 root         0 IW<  [cpu_freq_wq]
+ 1642 root         0 IW<  [cpu_core_wq]
+ 1643 root         0 IW<  [dram_vcore_wq]
+ 1654 root         0 SW   [irq/129-1002600]
+ 1726 root         0 IW<  [nvme-wq]
+ 1728 root         0 IW<  [nvme-reset-wq]
+ 1730 root         0 IW<  [nvme-delete-wq]
+ 1950 root         0 SW   [spi0]
+ 1955 root         0 SW   [spi1]
+ 1957 root         0 SW   [spi2]
+ 1960 root         0 SW   [spi3]
+ 2016 root         0 IW<  [vfio-irqfd-clea]
+ 2019 root         0 DW   [isr_count_polli]
+ 2030 root         0 IW<  [uether]
+ 2031 root         0 IW<  [uether_rx1]
+ 2032 root         0 IW<  [uether_rps]
+ 2113 root         0 SW   [sspm_to_thermal]
+ 2115 root         0 SW   [sspm_to_thermal]
+ 2123 root         0 SW   [sugov:0]
+ 2135 root         0 SW   [irq/141-1124000]
+ 2143 root         0 SW   [irq/77-10320000]
+ 2144 root         0 IW<  [wq_ring0]
+ 2145 root         0 SW   [irq/78-10320000]
+ 2146 root         0 IW<  [wq_ring1]
+ 2147 root         0 SW   [irq/79-10320000]
+ 2148 root         0 IW<  [wq_ring2]
+ 2149 root         0 SW   [irq/80-10320000]
+ 2150 root         0 IW<  [wq_ring3]
+ 2179 root         0 SW   [ion_system_heap]
+ 2266 root         0 IW<  [ipv6_addrconf]
+ 2361 root         0 IW<  [extcon_usb]
+ 2370 root         0 SW   [ubi_bgt0d]
+ 2385 root         0 IW<  [kworker/2:1H-kb]
+ 2387 root         0 IW<  [kworker/0:1H-kb]
+ 2388 root         0 IW<  [kworker/3:1H-kb]
+ 2394 root         0 SW   [conninfra_cored]
+ 2395 root         0 SW   [conninfra_cb]
+ 2396 root         0 SW   [sub_bt_thrd]
+ 2397 root         0 SW   [sub_fm_thrd]
+ 2398 root         0 SW   [sub_gps_thrd]
+ 2399 root         0 SW   [sub_wifi_thrd]
+ 2400 root         0 SW   [sub_conninfra_t]
+ 2409 root         0 SW   [gps_kctrld]
+ 2410 root         0 SW   [irq/119-gps_da0]
+ 2411 root         0 SW   [irq/120-gps_nd0]
+ 2412 root         0 SW   [irq/121-gps_mb0]
+ 2413 root         0 SW   [irq/122-gps_da1]
+ 2414 root         0 SW   [irq/123-gps_nd1]
+ 2415 root         0 SW   [irq/124-gps_mb1]
+ 2416 root         0 SW   [irq/125-gps_dma]
+ 2430 root         0 SW   [ubifs_bgt0_1]
+ 3193 ubus      1260 S    /sbin/ubusd
+ 3433 root         0 SW   [yaffs-bg-1]
+ 3435 root         0 SW   [yaffs-bg-1]
+ 3437 root         0 SW   [yaffs-bg-1]
+ 3439 root         0 SW   [yaffs-bg-1]
+ 3441 root         0 SW   [irq/190-mdio-bu]
+ 3442 root         0 SW   [yaffs-bg-1]
+ 3444 root         0 SW   [yaffs-bg-1]
+ 3446 root         0 SW   [yaffs-bg-1]
+ 3451 root         0 SW   [ubi_bgt1d]
+ 3456 root         0 SW   [ubifs_bgt1_1]
+ 3458 root         0 SW   [ubifs_bgt1_2]
+ 3459 root         0 SWN  [jffs2_gcd_mtd10]
+ 3460 root         0 SWN  [jffs2_gcd_mtd11]
+ 3492 root      1864 S    /usr/bin/ccci_fsd 0 2 0
+ 3516 root      1312 S    /usr/bin/ccci_mdinit 0
+ 3541 root      1032 S    /sbin/urngd
+ 3637 root         0 IW<  [ccci_dpmaif_rx0]
+ 3639 root         0 SW   [dpmaif_rx_push]
+ 3640 root         0 IW<  [md1_tx0_worker]
+ 3641 root         0 IW<  [md1_tx1_worker]
+ 3643 root         0 IW<  [md1_tx2_worker]
+ 3650 root         0 IW<  [md1_tx3_worker]
+ 3651 root         0 IW<  [cryptodev_queue]
+ 3673 root         0 IW<  [rx0_worker]
+ 3674 root         0 IW<  [rx1_worker]
+ 3675 root         0 IW<  [rx2_worker]
+ 3676 root         0 IW<  [rx3_worker]
+ 3677 root         0 IW<  [rx4_worker]
+ 3678 root         0 IW<  [rx5_worker]
+ 3679 root         0 IW<  [rx6_worker]
+ 3680 root         0 IW<  [rx7_worker]
+ 3681 root         0 IW<  [rx8_worker]
+ 3682 root         0 IW<  [rx9_worker]
+ 3683 root         0 IW<  [rx10_worker]
+ 3684 root         0 IW<  [rx11_worker]
+ 3685 root         0 IW<  [rx12_worker]
+ 3686 root         0 IW<  [rx13_worker]
+ 3687 root         0 IW<  [rx14_worker]
+ 3688 root         0 IW<  [rx15_worker]
+ 3738 root         0 SW   [fw2apccci_ctrl_]
+ 3739 root         0 SW   [apccci2fw_task]
+ 3946 root         0 IW<  [kworker/1:1H-kb]
+ 4372 root         0 SW   [wf_reset_task]
+ 4438 root     11444 S    /sbin/logd -S 10240
+ 4471 root      2148 S    /sbin/rpcd -s /var/run/ubus/ubus.sock -t 30
+ 4522 root      1664 S    /usr/bin/switch_otg_daemon
+ 4621 root      4036 S    /usr/bin/mtk_netagent
+ 5096 root      3544 S    /usr/bin/lppe_service
+ 5126 root     14532 S    /usr/bin/mnld
+ 5151 root      1644 S    /usr/bin/scd 1 1 1
+ 5173 root         0 IW   [kworker/3:1-mm_]
+ 5177 root     21984 S    /usr/bin/mtk_agpsd
+ 5203 root      8824 S    /usr/bin/speech_daemon
+ 5221 root      2908 S    /usr/bin/libmodem-afe-ctrl-server-bin
+ 5240 root      6400 S    /usr/bin/audio-ctrl-service
+ 5272 root      1396 SN   /usr/sbin/collectd -C /tmp/collectd.conf -f
+ 5393 root      3524 S    /usr/bin/ql_netd
+ 5425 root      2292 S    /usr/bin/ql_ril_service
+ 5555 root      3800 S    /sbin/aee_aed
+ 5599 root      1444 S    telnetd -l /bin/ash -p 23
+ 5619 root      1072 S    /usr/sbin/dropbear -p 0.0.0.0:22
+ 6146 root         0 SW   [kworker/0:2+eve]
+ 6618 root      1468 S    /bin/sh /data/proxy/operator-watchdog.sh
+ 6662 root      1280 S    /usr/bin/atci_service
+ 6687 root      4472 S    /usr/bin/atcid
+ 6698 root         0 IW   [kworker/1:0]
+ 6753 root     1329m S    /data/proxy/xray run -config /data/proxy/sing-box/xray-split.json
+ 6783 root      1648 S    /usr/bin/log_controld
+ 6811 root      4208 S    /usr/bin/mipc_submonitor
+ 6906 root     10216 S    /usr/bin/mdlcfgd
+ 6926 root      9940 S    /usr/bin/flagd
+ 7025 root      9888 S    /usr/bin/log_backup_daemon
+ 7069 root     10184 S    /usr/bin/firewalltools
+ 7090 root     10356 S    /usr/bin/gpiod
+ 7093 root      1444 S    /bin/sh /etc/tzscript/arp_polling.sh
+ 7099 root      2004 S    ip -4 monitor neigh
+ 7100 root      1532 S    /bin/sh /etc/tzscript/arp_polling.sh
+ 7135 root     10700 S    /usr/bin/lan_mgr
+ 7201 root     10240 S    /usr/bin/vpn_mgr
+ 7227 root     10056 S    /usr/bin/flow_control
+ 7293 root     12208 S    /usr/bin/net_monitor_v2
+ 7392 root     10056 S    /usr/bin/cron_controller
+ 7447 root     10180 S    /usr/bin/tzphonebook
+ 7478 root      2312 S    /usr/bin/atcmd_daemon
+ 8800 root     10092 S    /usr/bin/wan_mgr
+ 8818 root     14008 S    /usr/bin/dialer
+ 8847 root     10540 S    /usr/bin/sms_mgr
+ 8878 root     10444 S    /usr/bin/lanrecord
+ 9071 root      9968 S    /usr/bin/mini_httpd -C /tmp/mini_httpd.conf
+ 9124 root     10164 S    /usr/bin/mini_httpd -C /tmp/mini_httpd_s.conf
+ 9125 root      6076 S    /usr/bin/tz_phone
+ 9678 root         0 IW   [kworker/0:0-eve]
+ 9981 root      6964 S    /usr/bin/fota
+ 9999 root     12812 S    /usr/bin/uspad
+10132 root     1331m S    /data/proxy/v2raya --config /etc/v2raya --v2ray-bin /data/proxy/xray --core-type xray --v2ray-assetsdir /
+10224 root      1048 S    /usr/sbin/vnstatd --nodaemon
+12148 root         0 IW   [kworker/u8:3-ev]
+13095 root         0 IW   [kworker/2:2-eve]
+15742 root         0 IW   [kworker/3:0-mm_]
+16105 root         0 IW   [kworker/2:0-eve]
+16188 root         0 IW   [kworker/0:1-eve]
+18750 root         0 Z    [ping]
+18769 root         0 IW   [kworker/3:2-eve]
+18949 root         0 IW   [kworker/2:1-eve]
+19025 root         0 IW   [kworker/0:3-eve]
+19395 root      1444 S    sleep 120
+19466 root     11912 S    /usr/bin/netcwmpd
+19551 root         0 IW<  [kworker/u9:1-rx]
+19553 root      1180 S    /usr/sbin/dropbear -p 0.0.0.0:22
+19554 root      1444 S    ash -c  set -e TS=$(date +%Y%m%d-%H%M) B=/data/proxy/backup mkdir -p /tmp/rollback-state iptables-save > 
+19558 root      1444 R    ps w
+21977 root         0 IW   [kworker/u8:1-md]
+25582 root         0 IW<  [kworker/u9:2-rx]
+29395 root         0 IW   [kworker/u8:2-md]
+31004 root         0 SW   [warp]
+31005 root         0 DW   [wed_task0]
+31008 root         0 SW   [RtmpCmdQTask]
+31009 root         0 SW   [RtmpWscTask]
+31010 root         0 SW   [HwCtrlTask]
+31011 root         0 SW   [ser_task]
+31020 root         0 SW   [RtmpMlmeTask]
+31473 root      2960 S    wapp -d4 -v2 -ebr0 -wbr0 -cra0 -cra1 -cra2 -cra3 -crai0 -crai1 -crai2 -crai3
+31474 root      2960 S    wapp -d4 -v2 -ebr0 -wbr0 -cra0 -cra1 -cra2 -cra3 -crai0 -crai1 -crai2 -crai3
+31677 root       948 S    cron
+31768 root      1444 S<   /usr/sbin/ntpd -n -N -S /usr/sbin/ntpd-hotplug -p cn.pool.ntp.org -p 0.openwrt.pool.ntp.org -p 1.openwrt.
+32127 admin     1408 S    dnsmasq -C /tmp/dnsmasq.conf -x /tmp/dnsmasq.pid
