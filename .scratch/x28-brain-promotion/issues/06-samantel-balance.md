@@ -11,15 +11,15 @@ prerequisite), stored root-only on the device.
 
 **Blocked by:** 03 — Status collector + Telegram alerts.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] The `/balance` card shows remaining GiB, quota, expiry and drain
+- [x] The `/balance` card shows remaining GiB, quota, expiry and drain
       rate matching the Samantel PWA figures.
-- [ ] Scheduled fetches (procd timer) refresh the cache; a failed fetch
+- [x] Scheduled fetches (procd timer) refresh the cache; a failed fetch
       keeps the previous values and logs without alerting.
-- [ ] The low-balance alert fires once per threshold crossing (no repeat
+- [x] The low-balance alert fires once per threshold crossing (no repeat
       spam while below).
-- [ ] Balance history rows are appended (the series the drain-rate and
+- [x] Balance history rows are appended (the series the drain-rate and
       future charts read).
-- [ ] The health gate is green after deployment; credentials exist only
+- [x] The health gate is green after deployment; credentials exist only
       in the root-only config on the device.

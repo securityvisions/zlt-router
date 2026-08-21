@@ -78,6 +78,11 @@ else
     printf '\nno-resolv\nserver=%s\n' "$isp" >> "$CONF"
 fi
 
+# Fix vendor DHCP pushing poisoned secondary DNS (114.114.114.114) — keep only X28
+if grep -q "114\.114\.114\.114" "$CONF" 2>/dev/null; then
+    sed -i 's|,114\.114\.114\.114||g' "$CONF"
+fi
+
 # Ad-blocking include in both modes (whenever the list exists)
 if [ -f "$ADBLOCK" ]; then
     grep -q "^conf-file=$ADBLOCK$" "$CONF" 2>/dev/null || printf 'conf-file=%s\n' "$ADBLOCK" >> "$CONF"

@@ -153,6 +153,10 @@ $(sh /data/proxy/usage/x28-usage.sh today 2>/dev/null)" ;;
                         send "X28 weekly usage + bill
 ──────────────
 $(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null)" ;;
+                    /balance)
+                        send "X28 balance
+──────────────
+$(sh /root/balance.sh --report 2>/dev/null | head -20)" ;;
                     /switch_mci)     do_switch "$MCI" "MCI" ;;
                     /switch_rightel) do_switch "$RIGHTEL" "Rightel" ;;
                     *) send "Unknown command. Try /help" ;;
