@@ -4,10 +4,14 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Watchdog probe interval default 60 s (env override still honored); log line reflects new interval
 - [ ] Core-heal dead-threshold default 4 min (env override honored); action card sent when a restart is triggered
 - [ ] Storm guard / cooldown / backoff numbers untouched (no flap risk added)
 - [ ] Deployed via the standard push pattern with health gate GREEN before/after; watchdog + heal services restarted and running
 - [ ] Live verification: force one failed-probe cycle in dry-run mode and confirm timing matches the new cadence
+
+## Comments
+
+Shipped as defaults (env overrides intact): watchdog interval=60s (startup log verified live), core-heal DEAD_THRESHOLD=4 with Telegram cards on heal/skip/fail. Storm guard untouched. test_alwaysup_defaults.sh pins the constants.
