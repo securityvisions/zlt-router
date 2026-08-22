@@ -80,3 +80,15 @@ Shared vocabulary for the home-network project. Use these terms exactly; don't d
 
 - **WiFi share** — the `/wifi` QR photo that encodes the main SSID's credentials (`WIFI:S:...`) from the root-only `/data/proxy/wifi.conf`, generated on the X28 by `qrencode` and sent through the socks proxy.
   _Avoid_: QR code (use WiFi share)
+
+- **Boot doctor** — the one-shot post-boot verifier: ~90 s after boot it runs the health gate and auto-repairs known boot races (transparent-proxy rules, DNS mode, proxy engine, watchdog), then sends a single verdict Card. Makes reboots self-verifying.
+  _Avoid_: boot check (use Boot doctor)
+
+- **Maintenance window** — Sunday 05:00 device-local: if uptime ≥14 days or free RAM <60 MB, warning card then automatic reboot; ISO-week marker prevents double-fire; skipped with an alert when the clock fails its HTTP-Date sanity check.
+  _Avoid_: auto-reboot (unqualified)
+
+- **Drift alert** — nightly hash-diff of the critical config set against last-known-good; unexpected change sends one Card naming files; last-good advances only via explicit `ack`, so drift cannot be silently swallowed. Secrets tracked as hashes only.
+  _Avoid_: config backup (the alert is the feature)
+
+- **Bearer bounce** — the watchdog's escalation rung after failed switch rounds: forced re-registration on the current PLMN via the proven cmd 228 path to unstick a wedged data bearer; ledgered, notified, storm-guarded, dry-run capable.
+  _Avoid_: wan bounce, ifup (not what runs)

@@ -16,6 +16,11 @@ COOKIE_JAR=/tmp/sui-heal.jar
 STATE_FILE=/tmp/vps-heal-deadcount
 DNS_CHECK_HOST="${DNS_CHECK_HOST:-127.0.0.1}"
 
+# creds: source the device conf when env didn't provide them (one-shot mode)
+if [ -z "$PANEL_PASS" ] && [ -f /etc/sui-heal.conf ]; then
+    . /etc/sui-heal.conf 2>/dev/null
+fi
+
 # notify — best-effort Telegram card (never blocks the loop)
 notify() {
     sh /data/proxy/tg-notify.sh "$1" "$2" >/dev/null 2>&1 || true

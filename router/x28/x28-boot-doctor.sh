@@ -37,12 +37,12 @@ boot_doctor() {
     plan=$(hn_boot_repair_plan "$health")
 
     if [ -z "$plan" ]; then
-        [ "$BOOT_DRYRUN" = "1" ] && { echo "plan: none (GREEN)"; return 0; }
+        [ "${BOOT_DRYRUN:-0}" = "1" ] && { echo "plan: none (GREEN)"; return 0; }
         bd_card "✅ Boot verified" "health gate GREEN ${BOOT_DELAY}s after boot — no repairs needed"
         return 0
     fi
 
-    if [ "$BOOT_DRYRUN" = "1" ]; then
+    if [ "${BOOT_DRYRUN:-0}" = "1" ]; then
         echo "plan: $(printf '%s' "$plan" | tr '\n' ',')"
         return 0
     fi
