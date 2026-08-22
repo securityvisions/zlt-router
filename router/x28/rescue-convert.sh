@@ -177,7 +177,7 @@ function p_ss(userinfo,host,port,q,name,   du,mp,meth,pwd,plg,o){
 BEGIN{ initb64(); nodes=0; lines=0 }
 {
     lines++
-    if(lines>maxlines) nextfile
+    if(lines>maxlines) exit 0
     sub(/\r$/,"")
     if(length($0)==0 || $0 ~ /^#/) next
     if(length($0)>linemax) next
@@ -215,7 +215,9 @@ BEGIN{ initb64(); nodes=0; lines=0 }
     if(port !~ /^[0-9]{1,5}$/ || port+0<1 || port+0>65535) next
     nodes++
     if(nodes>maxnodes) exit 0
-    nm="rc-" nodes ((name!="")?" " clean(name):"")
+    pfx=""
+    if(name!="") pfx=" " clean(name)
+    nm="rc-" nodes pfx
     if(scheme=="vless"||scheme=="reality")      p_vless(user,host,port,q,nm)
     else if(scheme=="trojan")                   p_trojan(user,host,port,q,nm)
     else if(scheme=="hy2"||scheme=="hysteria2") p_hy2(user,host,port,q,nm)
