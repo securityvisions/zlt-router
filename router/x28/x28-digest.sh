@@ -136,5 +136,10 @@ if [ -n "$outage_week" ]; then
     hr
 fi
 printf '%s\n' "$link_card"
+# Rescue pool state (collected-node failover readiness)
+if [ -x "$(dirname "$0")/x28-rescue.sh" ] || [ -x /data/proxy/x28-rescue.sh ]; then
+    rl=$(sh /data/proxy/x28-rescue.sh status 2>/dev/null | tr '\n' ' ')
+    [ -n "$rl" ] && echo "rescue: $rl"
+fi
 # Footer with week range
 echo "week $week_start to $week_end"

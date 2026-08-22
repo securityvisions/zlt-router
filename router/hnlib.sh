@@ -899,6 +899,29 @@ hn_bounce_decide() {
     echo "no"
 }
 
+# ---- Rescue supervisor decision (collected-node failover) ----
+# hn_rescue_decide <dead_streak> <alive_streak> <world> <enabled> <rescue_alive> [promote_after] [demote_after]
+# Pure. Prints "promote" | "demote" | "hold".
+#   world=auto  & enabled & dead_streak>=4min-worth & rescue_alive>=1 -> promote
+#   world=rescue & enabled & alive_streak>=10min-worth            -> demote
+#   everything else -> hold. disabled flag forces eventual demotion via caller.
+
+# hn_rescue_decide <dead> <alive> <world> <enabled> <ralive> [pa] [da]
+hn_rescue_decide() {
+    local d="${1:-0}" a="${2:-0}" w="${3:-auto}" en="${4:-1}" ra="${5:-0}"
+    local pa="${6:-4}" da="${7:-10}"
+    case "$d" in *[!0-9]*) d=0 ;; esac
+    case "$a" in *[!0-9]*) a=0 ;; esac
+    case "$ra" in *[!0-9]*) ra=0 ;; esac
+    [ "$en" = "1" ] || { [ "$w" = "rescue" ] && { echo "demote"; return; }; echo "hold"; return; }
+    if [ "$w" = "auto" ]; then
+        [ "$d" -ge "$pa" ] && [ "$ra" -ge 1 ] && { echo "promote"; return; }
+    elif [ "$w" = "rescue" ]; then
+        [ "$a" -ge "$da" ] && { echo "demote"; return; }
+    fi
+    echo "hold"
+}
+
 # ---- quality-history rollup (the hourly link-quality chart feed) ----
 # The hourly telemetry rows already carry the quality fields (latency,
 # passive_mbps, node) — this reader rolls them into the chart series the
