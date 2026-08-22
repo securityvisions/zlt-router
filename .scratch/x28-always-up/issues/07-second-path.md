@@ -4,7 +4,7 @@
 
 **Blocked by:** None technically — **blocked externally** (see findings).
 
-**Status:** needs-info
+**Status:** resolved (with caveat)
 
 ## Findings (2026-08-22, live)
 
@@ -24,3 +24,7 @@ Config was exercised both ways during testing (flow removed → re-added); live 
 3. **cdn-ws**: origin server at dmbz.ir must come back up (external).
 
 Until one lands, single-path ceiling stands — mitigated by tickets 01/05/06 (faster switch, bearer bounce, dual-vantage core heal).
+
+## Comments (update 2026-08-22 late)
+
+Live per-node delay tests now show **three working paths**: vps-reality 777 ms, cdn-ws 1463 ms, hy2 1570 ms — the acceptance ("≥2 genuinely alive nodes verified through the controller") is met at this timestamp. Caveat: cdn-ws/hy2 have flapped historically (origin outages / MCI UDP throttling), and babaii still needs its provider panel checked. Watchdog + dual-vantage heal cover the flaps either way.
