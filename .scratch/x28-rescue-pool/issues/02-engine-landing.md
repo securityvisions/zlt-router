@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (placeholder comes from converter output conventions).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Controller shows groups world (selector) and rescue; MATCH targets world
 - [ ] With world=auto, traffic behavior identical to before (verified by probes)
