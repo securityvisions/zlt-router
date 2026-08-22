@@ -54,3 +54,7 @@ if grep -qE '^[[:space:]]*continue[[:space:]]*$' /home/parsavisions/home-network
 
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
+
+# Test 5: /rescue command wired (collected-node failover switch)
+grep -q "rescue)" /home/parsavisions/home-network/router/x28/x28-bot.sh && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - /rescue handler missing"; }
+grep -q "/rescue" /home/parsavisions/home-network/router/x28/x28-bot.sh && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - /rescue help missing"; }

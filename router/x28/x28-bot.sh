@@ -243,6 +243,7 @@ help_text() {
 📅 Month     /month    any Jalali month (YYYY-MM)
 👤 Owner     /owner    assign device to person
 📶 WiFi      /wifi     share QR for guests
+🛟 Rescue    /rescue   collected-node failover status
 🧾 Digest    /digest   weekly story (Fri 20:00)
 🧾 Bill      /bill     weekly usage + cost
 📱 Devices   /devices  who is on the network
@@ -416,6 +417,15 @@ $out" ;;
                             send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
                         fi
                         ;;
+                    /rescue)
+                        rarg=$(printf '%s' "$text" | awk '{print $2}')
+                        case "$rarg" in
+                            on|off) sh /data/proxy/x28-rescue.sh switch "$rarg" >/dev/null 2>&1 ;;
+                        esac
+                        send "🛟 Rescue
+$(hr)
+$(sh /data/proxy/x28-rescue.sh status 2>/dev/null)
+$( [ "$rarg" = "on" ] || [ "$rarg" = "off" ] && echo "switched: $rarg" )" ;;
                     /digest)
                         send "$(sh /data/proxy/x28-digest.sh 2>/dev/null)" ;;
                     /switch_mci)     do_switch "$MCI" "MCI" ;;
