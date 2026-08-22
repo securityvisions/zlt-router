@@ -25,7 +25,7 @@
 PREFERRED="${WATCHDOG_PREFERRED:-43211}"     # MCI (5G, fast)
 FALLBACK="${WATCHDOG_FALLBACK:-43220}"       # Rightel (4G, reliable)
 ACT="${WATCHDOG_ACT:-13}"
-CHECK_INTERVAL="${WATCHDOG_INTERVAL:-120}"   # seconds between checks
+CHECK_INTERVAL="${WATCHDOG_INTERVAL:-60}"    # seconds between checks (60s: outage-to-switch ~3min)
 FAIL_THRESHOLD="${WATCHDOG_FAILS:-3}"        # consecutive fails before switch
 PROBE_MIN="${WATCHDOG_PROBE_MIN:-2700}"      # min secs between preferred probes (45m)
 PROBE_MAX="${WATCHDOG_PROBE_MAX:-10800}"     # probe backoff cap (3h)
