@@ -1,0 +1,312 @@
+# AS-BUILT SPECIFICATION — Home Network Control Plane (X28 era)
+
+**Snapshot date:** 2026-08-22 · **Method:** live inspection of running systems (read-only SSH, controller APIs, packet/filter dumps) cross-checked against the canonical repo (`~/home-network`). Statements are **CONFIRMED** unless tagged INFERRED / UNVERIFIED.
+**Scope:** exactly what exists and runs today. No proposals, no redesigns.
+
+---
+
+## 1. System Identity and Purpose
+
+One cellular CPE acts as the entire home network's WAN edge, LAN gateway, WiFi AP, transparent-proxy engine, DNS/DHCP server, monitoring plane, and Telegram control plane:
+
+- **ZLT X28** (`192.168.70.1`) — MediaTek MT6890 5G CPE running vendor-built **OpenWrt 19.07-SNAPSHOT** (`r0-aefbe500`, target `mt6890/evb6890v1_64_cpe_nand`, arch `aarch64_cortex-a55_neon-vfpv4`, kernel `4.19.205`, BusyBox 1.30.1). Holds the **Samantel SIM**, camps on **MCI 5G NSA (PLMN 43211)**, falls back to **Rightel (43220)**. Boot slot `a` of an A/B layout (`bootslot=a` on kernel cmdline).
+- A second router, **Xiaomi AX3000T** (`192.168.1.1`), is **bricked / offline** (ping from workstation: unreachable). All former AX3000T duties (WiFi, PassWall, nlbwmon, cron watchers, Router API) are dormant; the X28 absorbed them.
+- A **VPS** (`85.121.124.158`) terminates the censorship-bypass tunnel: sing-box core behind the **s-ui** panel (`:2095`), inbound **VLESS+Reality :443** and **Hysteria2 :31800**.
+
+Everything custom lives under `/data/proxy` on the X28 and mirrors to `~/home-network/router/x28/` in git (branch `main`, HEAD `66690e4` at inspection).
+
+## 2. Topology (observed)
+
+```
+                    [Samantel SIM]   PLMN 43211 MCI 5G NSA (fallback 43220 Rightel)
+                           │ LTE/NR data bearers (ql_mipc)
+        ┌──────────────────┼───────────────────────┐
+        ▼                  ▼                       ▼
+    ccmni1 (UP)        ccmni2 (UP)            ccmni3 (UP, /8 oddity)
+ 22.75.228.183/28   22.113.7.146/29         22.104.25.152/8
+        │ MASQ ▲            │ MASQ                (no route use)
+        │      └── default route: "default dev ccmni1 scope link" (main + table 17000)
+        ▼
+╔═══════════════════════ ZLT X28 — 192.168.70.1 ═════════════════════╗
+║  nat  PREROUTING(br0) → X28_SPLIT:                                 ║
+║        RETURN dst 185.137.27.122 | RETURN dst 192.168.70.0/24 |    ║
+║        REDIRECT tcp → :12345                                       ║
+║  mangle PREROUTING(br0) → X28_NOQUIC: DROP udp dport 443           ║
+║                                                                    ║
+║  dnsmasq :53 ──server=127.0.0.1#5353──► mihomo DNS (DoH 8.8.8.8    ║
+║    │ adblock.conf (address= denies)      via auto group)           ║
+║    ▼                                                               ║
+║  br0 192.168.70.1/24 ─┬─ eth0.1 eth0.2 eth0.3 eth1   (LAN ports)   ║
+║                       ├─ ra0 (2.4G SSID)  rai0 (5G SSID)  ← active ║
+║                       └─ ra1-3, rai1-3              (spare, down)  ║
+║  mihomo :12345 ─ rules ─┬─ DIRECT (IR/academic/private) → ccmni1    ║
+║  mixed :1080            └─ "auto" url-test → vps-reality           ║
+║  ctrl :9090 (localhost)               85.121.124.158:443 Reality   ║
+╚═══════════════════════════════│════════════════════════════════════╝
+                                │ VLESS+Reality over MCI
+                                ▼
+                 [VPS 85.121.124.158]
+                  sing-box core :443 (Reality, sni www.bing.com)
+                  Hysteria2 :31800 (salamander) · s-ui panel :2095
+```
+
+**LAN clients (DHCP leases, `/tmp/dnsmasq.leases`):**
+
+| Hostname | MAC | IP | Notes |
+|---|---|---|---|
+| Samsung | `c8:12:0b:32:7c:f2` | 192.168.70.155 | |
+| Nothing-Phone-2 | `3a:7e:c0:54:29:d9` | 192.168.70.106 | locally-administered MAC (🎲) |
+| parsavisions | `f4:28:9d:60:61:cb` | 192.168.70.141 | Windows laptop; runs a WSL2-class Linux env (eth0 `172.22.226.175/20` gw `172.22.224.1`) that reaches the X28 through it |
+
+**Offline:** AX3000T `192.168.1.1` (bricked). **Legacy on-box:** `v2raya` still runs and listens `:2017` (unused by any current traffic path).
+
+## 3. Component Inventory
+
+| Component | Role | Platform / version | Mgmt addr | Key interfaces | Persistent state |
+|---|---|---|---|---|---|
+| ZLT X28 | WAN edge, gateway, AP, proxy, DNS/DHCP, monitor, bot | OpenWrt 19.07-SNAPSHOT vendor / kernel 4.19.205 / MT6890 | ssh/telnet/web 192.168.70.1 | br0, ra0/rai0, ccmni1-3 | `/data` (ubi, 287 MB), `/overlay` |
+| VPS `85.121.124.158` | Tunnel exit (Reality/Hy2), s-ui panel | Debian-class, sing-box + s-ui (versions UNVERIFIED from here) | `:2095` panel (form login) | eth0 | s-ui DB on VPS |
+| AX3000T | *none today* (bricked) | OpenWrt 25.12.5 (pre-brick) | unreachable | — | — |
+| Laptop `parsavisions` | admin workstation, agent host | Windows + WSL2 Linux | WiFi DHCP .141 | wlan→X28 | repo `~/home-network` |
+| Telegram bot `@xirouterbot` | remote control / alerts | POSIX-sh script | via Bot API through tunnel | — | `/data/proxy/bot-state/offset` |
+
+## 4. Configuration Source-of-Truth Map
+
+| Subsystem | Persistent source | Generated / runtime | Consumer | Precedence notes |
+|---|---|---|---|---|
+| LAN IP / bridge members | **vendor NVRAM via `lan_mgr`** (not uci) | `ip`/brctl live state | kernel | uci `network.lan.ipaddr='192.168.1.1'` is IGNORED at runtime — actual br0 is `192.168.70.1` |
+| DHCP server | **generated `/tmp/dnsmasq.conf`** (lan_mgr) + `dns-fix.sh` appends | same file; leases `/tmp/dnsmasq.leases` | dnsmasq (pid file `/tmp/dnsmasq.pid`, user `admin`) | uci dhcp values (start 100/limit 150/12 h) differ from generated (`.100–.200`, 24 h); generated wins |
+| DNS upstream | `dns-fix.sh` decision (tunnel↔ISP) | appended lines in `/tmp/dnsmasq.conf`: `server=127.0.0.1#5353` + `no-resolv` (current) or ISP `server=` lines | dnsmasq → mihomo :5353 | vendor `/tmp/resolv.conf` (10.201.112.252, 217.218.127.127) is the ISP-mode source |
+| Ad-block | `/data/proxy/adblock/adblock-update.sh` output | `/data/proxy/adblock/adblock.conf` (`address=/…/` ×~93 k, 2.8 MB) | dnsmasq `conf-file=` | weekly age-based refresh |
+| Transparent-proxy firewall | **device-only** `/data/proxy/tproxy-fixed-enable.sh` (runs at boot + net-hotplug) | live iptables nat/mangle | kernel | repo copies `tproxy-enable/stage2-*` exist but are NOT what rc.local runs |
+| Proxy engine config | **device-only** `/data/proxy/mihomo/config.yaml` (0600; real creds) | in-process | mihomo | repo copy is a redacted template; deploy seeds only if absent |
+| Management firewall | `harden.sh` (repo canonical) | live `X28_MGMT` chain + INPUT jump | kernel | rebuilt at every boot (idempotent) |
+| Bot identity/state | `/etc/tg.conf` (TOKEN, CHAT_ID — 0600) + `/data/proxy/bot-state/offset` | `/tmp/x28bot/{bot.pid,hb,hb.log}` | x28-bot.sh | offset persists across reboot by design |
+| Operator policy | constants inside `operator-watchdog.sh` (43211 pref / 43220 fb) | `/tmp/x28-watchdog/*`, `/data/proxy/watchdog.log` | watchdog daemon | |
+| VPS heal targets | `/etc/sui-heal.conf` (PANEL_HOST/PORT/USER/PASS — 0600) | cookie jar in /tmp | x28-vps-heal.sh | |
+| Balance creds/thresholds | `/etc/samantel.conf` (PHONE/PASS/WARN/URGENT_GB/DAYS/RATE_ALERT_GBH/MONITOR_REFRESH_MIN — 0600) | `/tmp/samantel_token` (28 d), `/tmp/samantel_packages.json`, guarded cache `/tmp/balance_report(.ts)` | balance.sh, bot, budget | cache write guarded: only text matching `"GB left across"` persists |
+| Owners (person map) | `/data/proxy/owners.conf` (0600, `mac|person`) — EXISTS, both entries → `parsa` | read at daily-roll | usage-collect, x28-people | |
+| Outage ledger | created on first incident | `/data/proxy/outage-ledger.log` (`epoch|down/up`) — **absent today** (no outage recorded yet) | ledger script/bot | |
+| WiFi share creds | `/data/proxy/wifi.conf` — **ABSENT** (feature dormant, graceful card) | — | x28-wifi.sh | |
+| Cloudflare tunnel | `/etc/tunnel.conf` + `/data/proxy/cloudflared` — **ABSENT** (stub loop waits) | — | x28-tunnel.sh | |
+| Telemetry history | append-only `/data/proxy/usage/telemetry.log` (prune ≤5000) | same | digest, charts, hn_quality_series | **two writers, two schemas** (see §13) |
+
+## 5. X28 Deep-Dive
+
+### 5.1 Platform & storage layout
+
+Kernel cmdline (abridged): `console=ttyS0,921600n1 root=/dev/ubiblock0_0 rootfstype=squashfs ubi.mtd=29 … bootslot=a androidboot.hardware=mt6890`.
+
+| Mount | Device | Size / use | Survives reboot | Purpose |
+|---|---|---|---|---|
+| `/` (squashfs+`/overlay` ubi0_1) | mtd29/… | 22.8 M, 4 % used | yes | rootfs; `/root/*.sh` helpers live here |
+| `/data` (ubi1_2, ubifs) | mtd50 user_data | 287.6 M, **58 % used** | yes | ALL custom stack: `/data/proxy/**` |
+| `/mnt/data` (yaffs2) | user_config | 10 M | yes | vendor config incl. `tzcfg/dhcp_hosts` |
+| `/customer` (ubi1_1) | — | 90 M, ~empty | read-only-ish | unused by us |
+| `/mnt/vendor/{nvcfg,nvdata,nvram,…}` | yaffs2 | 8–32 M each | yes | vendor radio/config (SSID lives here; no nvram CLI exposed) |
+| `/tmp` (tmpfs) | RAM | 312 M | **no** | dnsmasq conf/leases, tokens, bot runtime, watchdog state, balance cache |
+
+`rc.local` also contains a self-heal block: if `/dev/ubi1` is missing it reformats `mtd/user_data`, re-attaches, recreates volumes `customer`(100 MiB)+`data`(rest), then `mount -a`.
+
+### 5.2 Boot sequence (actual)
+
+1. Vendor modem bring-up chain (`S002ccci_fsd → S003ccci_mdinit → S15firmware.sh → S20network → S22mtk_netagent → S85ql_netd/ql_ril_service → S99mipc_wan.init`) creates `ccmni*`, applies NVRAM LAN config (br0 192.168.70.1), starts `lan_mgr` (regenerates `/tmp/dnsmasq.conf`, `/tmp/resolv.conf`).
+2. `S50qos` installs vendor mangle QoS chains.
+3. Custom services in rc.d order:
+   - `S95done` → runs **`/etc/rc.local`**: dropbear keygen + `dropbear :22`; `telnetd :23`; `harden.sh` (builds `X28_MGMT`); **`tproxy-fixed-enable.sh`** (builds `X28_SPLIT` + `X28_NOQUIC`); **`dns-fix.sh`** (picks tunnel/ISP DNS mode); background `x28-boot-alert.sh`.
+   - `S95x28-thermal` (guard + 60 s telemetry writer) · `S95x28-usage` (conntrack collector).
+   - `S96atci/atcid/led` (vendor) · **`S96x28-bot`** (supervise) · **`S96x28-telemetry`** (hourly loop) · **`S96x28-vps-heal`**.
+   - `S97x28-adblock` (weekly-refresh loop) · `S97x28-tunnel` (stub wait-loop).
+   - **`S98x28proxy`** → procd starts **mihomo** (`respawn 3600 5 5`).
+   - `S99v2raya` (legacy UI), `S99vnstat`, **`S99x28-watchdog`** (operator watchdog), `S99zmtk_boot_done`.
+4. Hotplug `net/30-x28-proxy.sh` (`ACTION=add`): sleep 3 → re-run `tproxy-fixed-enable.sh` + `dns-fix.sh` (self-heals interface churn).
+5. No crontab exists (`/etc/crontabs/root` empty); all periodic work is procd/shell loops.
+
+### 5.3 Interfaces
+
+| Iface | State | Addr / role |
+|---|---|---|
+| br0 | UP, `98:a9:42:6b:67:b8`, 192.168.70.1/24 | LAN bridge: eth0.1-3, eth1, ra0, rai0 (ra1-3/rai1-3 down spares) |
+| eth0 / eth0.1-3 / eth1 | eth0 UP (parent of VLAN subs); eth0.4 DOWN | wired ports |
+| ra0 / rai0 | UP, master br0 | 2.4 G / 5 G BSSIDs (vendor-managed, no uci wireless, no iw/iwinfo/nvram CLI) |
+| ccmni1 | UP, 22.75.228.183/28 | **default egress** (`default dev ccmni1 scope link`), MASQ |
+| ccmni2 | UP, 22.113.7.146/29 | secondary bearer, MASQ rule exists |
+| ccmni3 | UP, 22.104.25.152/**8** | connected-route only; unused (vendor artifact) |
+| apcli0/apclii0, tunl/gre/vti/ifb… | DOWN | unused |
+
+Policy routing: `ip rule` 17000 for `from/to 192.168.70.0/24 → table 17000` (default → ccmni1, LAN → br0). `net.ipv4.ip_forward=1`.
+
+### 5.4 Firewall / packet pipeline (live `iptables-save`)
+
+Built-in policies are **ACCEPT everywhere** (uci `firewall` defaults say forward REJECT, but no fw3 zone chains exist in the live ruleset — vendor `*_mdl_chain`s plus our custom chains own it).
+
+- **nat**
+  - `PREROUTING`: `prerouting_mdl_chain` (empty) → `-i br0 -j X28_SPLIT`
+  - `X28_SPLIT`: `RETURN` dst `185.137.27.122/32` (VPS panel) → `RETURN` dst `192.168.70.0/24` → `REDIRECT tcp --to-ports 12345`
+  - `POSTROUTING`: `postrouting_mdl_chain` → `MASQUERADE -o ccmni1`, `MASQUERADE -o ccmni2`
+- **filter INPUT** (all ACCEPT policy): `parental_input_mdl_chain`(empty) → `input_mdl_chain` (**from ccmni1 only:** DROP tcp 22/80/443, DROP icmp-echo) → tcp dports 22/23/2017 → **`X28_MGMT`** (`RETURN` lo/LAN else DROP — built by `harden.sh`) → ddos syn/ack chains.
+- **filter FORWARD**: `parental_forward_mdl_chain`(empty) → `forward_mdl_chain` (`-i br0` INVALID-drop; global `TCPMSS clamp-to-PMTU`) → `flow`(empty).
+- **mangle PREROUTING**: `-i br0 -j X28_NOQUIC` → **DROP udp dport 443** (forces QUIC→TCP so it can be intercepted); then vendor `qos_Default/qos_Default_ct` CONNMARK classes.
+- **ebtables**: installed, all tables empty.
+
+### 5.5 DNS / DHCP end-to-end (current, tunnel mode)
+
+1. Client → DHCP from dnsmasq: range **192.168.70.100–.200 /24 h**, option router=`192.168.70.1`, DNS=`192.168.70.1`, MTU 1500, domain `home` (opt 15), vendor opt-125 tag; static hosts `/mnt/data/etc/tzcfg/dhcp_hosts`; `address=/m.home/` and `/rtm.home/` → 192.168.70.1.
+2. Client DNS query → dnsmasq (192.168.70.1:53; also 127.0.0.1:53) → **`server=127.0.0.1#5353` + `no-resolv`** (appended by dns-fix; verified live: `mode=tunnel`) → **mihomo DNS** resolves via DoH `https://8.8.8.8/dns-query#auto` **through the auto proxy group**; ad-block denies answered from `adblock.conf` first.
+3. ISP-fallback mode (when tunnel dead): dns-fix strips those two lines and appends `no-resolv` + ISP `server=10.201.112.252` / `217.218.127.127` (values sourced from vendor `/tmp/resolv.conf`), AND inserts a top `-I X28_SPLIT 1 -j RETURN` so **all** LAN TCP bypasses the redirect (true fail-open). Healthy mode deletes that RETURN. Both edits are change-checked (no needless dnsmasq restarts).
+
+### 5.6 Proxy engine — mihomo
+
+Process: `/data/proxy/mihomo/mihomo -d /data/proxy/mihomo` (Mihomo Meta **v1.19.30** arm64, go1.26.6), procd `x28proxy` START=98 respawn 3600 5 5. VSZ ≈ 1.6 GB virtual (Go runtime; RSS modest).
+
+Listeners (confirmed via `netstat`): `192.168.70.1:1080` (mixed SOCKS/HTTP), `192.168.70.1:12345` (redir), `127.0.0.1:5353` (DNS), `127.0.0.1:9090` (REST controller).
+
+Outbound nodes (config 0600; secrets redacted):
+
+| Node | Target | Notes |
+|---|---|---|
+| vps-reality | `85.121.124.158:443` vless+reality, sni `www.bing.com`, fp chrome, uuid `<redacted>` | primary; udp ok |
+| cdn-ws | `188.114.98.0:443` vless+ws+tls, host `cdn.dmbz.ir`, path `/v1/status` | opportunistic |
+| hy2 | `85.121.124.158:31800` hysteria2 salamander | UDP-path dependent |
+| babaii | `216.45.52.132:23993` vision | **dead** (host down) |
+
+Group `auto`: url-test `https://8.8.8.8/`, interval 60 s, tolerance 100, members [vps-reality, cdn-ws, hy2, babaii].
+
+Rules (exact current order):
+```
+DOMAIN-SUFFIX,iau.ir,DIRECT          ← SRBIAU/IAU family (stdn2.*, amoozesh*)
+DOMAIN-SUFFIX,srbiau.ac.ir,DIRECT
+DOMAIN-KEYWORD,amoozesh,DIRECT
+DOMAIN-SUFFIX,saymyname.website,DIRECT
+IP-CIDR,185.137.27.122/32,DIRECT,no-resolve
+IP-CIDR,192.168.0.0/16|10/8|172.16/12,DIRECT,no-resolve
+GEOIP,IR,DIRECT
+GEOSITE,youtube|google|instagram|facebook,auto
+MATCH,auto
+```
+
+Domain rules work because clients' DNS traverses mihomo (:5353), giving it the mapping; verified live: fetching `stdn2.iau.ir` from a LAN client shows `chain=DIRECT` in the controller connection table.
+
+Legacy stacks still on disk but **not** in the traffic path: `sing-box/` (53 M), `xray/` (33 M), `xray.stock/` (33 M), `v2raya` (running, `:2017`, 27 M).
+
+### 5.7 Custom services & automation (complete list)
+
+| Service (init) | Body | Trigger/cadence | Actions & state | Failure behavior |
+|---|---|---|---|---|
+| `x28proxy` (S98) | mihomo | procd daemon | §5.6 | respawn 3600 5 5 |
+| `x28-bot` (S96) | `x28-bot.sh supervise` | long-poll `getUpdates?timeout=50`; offset persisted | dispatch commands/Panel taps; `bal_card` cache-fallback; `send_photo` via socks multipart; switches via watchdog one-shot with heartbeat keeper | supervisor kills child if heartbeat (`/tmp/x28bot/hb`, atomic write) age >180 s and respawns; updates older than 600 s skipped (anti-replay) |
+| `x28-telemetry` (S96) | hourly `while` loop → `x28-telemetry.sh` | 1 h | appends schema-v1/v2 row via TelemetryStore (prune 5000); then runs budget check | best-effort, errors swallowed |
+| `x28-thermal` (S95) | `x28-thermal-loop.sh` | **60 s** | appends `ts\|temp=\|load=\|rsrp=` to the SAME telemetry.log; alerts >75 °C | best-effort |
+| `x28-usage` (S95) | `usage-collect.sh loop` | 5 s conntrack deltas (boot-aware) | `day/YYYY-MM-DD` (`mac|ip|name|up|down`); at date-change `roll()`: month totals, **owners roll before 35-day prune**, Friday ≥20:00 Weekly-Digest (ISO-week marker gate), month-end People report (first Fri with Jalali day-of-month ≤3; month-marker gate) | malformed cycles dropped; `.rolled-*` markers prevent doubles |
+| `x28-watchdog` (S99) | `operator-watchdog.sh` daemon | every 120 s: direct-IP HTTPS probe (1.1.1.1, 216.239.38.120) | 3 strikes → operator switch (cmd 228 via reselect.sh; storm guard ≤3/h, cooldown 600 s); on fallback probes preferred with backoff 2700→10800 s; calls `dns-fix.sh` each cycle; writes Outage Ledger `add-down` (on threshold) / `add-up` (on recovery); Telegram notifies | switch failure logged, retried next cycle |
+| `x28-vps-heal` (S96) | loop | poll controller `auto` alive | if all nodes dead ≥10 min while local DNS :5353 answers → s-ui login (cookie jar) → `POST /app/api/restartSb` | best-effort; never blocks boot |
+| `x28-adblock` (S97) | `adblock-loop.sh` | hourly age-check (>7 d) | `adblock-update.sh`: fetch StevenBlack via socks→direct fallback, convert to `address=` lines, atomic swap, re-run dns-fix | last-known-good list kept on any failure |
+| `x28-tunnel` (S97) | stub loop | waits for `/etc/tunnel.conf` + cloudflared binary | no-op today (both absent) | exits silently |
+| `harden.sh` | rc.local + rerunnable | boot | builds `X28_MGMT`, hooks INPUT jump (dedup) | idempotent |
+| `tproxy-fixed-enable.sh` (device-only) | rc.local + net-hotplug | boot/ifadd | builds `X28_SPLIT`, `X28_NOQUIC`, inserts VPS-panel RETURN | disable twin provided (`tproxy-fixed-disable.sh`) |
+| `dns-fix.sh` | rc.local, net-hotplug, watchdog cycle, post-switch, adblock-update | event | probe tunnel (SOCKS→egress generate_204, ×2 with sleep 2) → set dnsmasq upstream tunnel/ISP **and** insert/remove top `X28_SPLIT RETURN` (fail-open) | prints `mode=tunnel/isp`; no-op if unchanged |
+| `balance.sh` (`/root`) | CLI `--report/--cache/--daily/--check/--monitor` | bot taps, budget tick, monitor | NextAuth login to `pwa.samantel.ir` (CSRF→credentials→Bearer, token cached 28 d), packages JSON caches, tier/rate alerts via `/root/tg.sh`, **guarded cache** (only `"GB left across"` text persists) | failed query never poisons cache; bot falls back with age note |
+| Budget Guardian (`x28-budget.sh`) | hourly telemetry tick + on-demand | tiers exhausted<0.05 GB / urgent<3 GB,<3 d,<7 d proj / warn<10 GB,<7 d,<14 d proj | cooldown-gated TG alerts (exhausted bypasses); `/budget` Card incl. drain, projected Toman (busybox-date-hardened), Jalali exhaustion date | missing data → honest "no data" card |
+| Outage Ledger (`x28-outage-ledger.sh`) | watchdog hooks + `/outages` | on transitions | append-only `epoch|kind`, idempotent; pairing/monthly-Jalali totals in hnlib | file created lazily (absent today) |
+| People/Owners/Digest/WiFi scripts | bot + roll integration | as above | see §4 map | graceful cards when inputs missing |
+
+Shared libraries: `/data/proxy/hnlib.sh` **and** `/root/hnlib.sh` (identical pushes) — pure functions (Jalali, tiers, outage pairing, health score, cooldown, owner lookup, quality module); `/data/proxy/jq` static binary; `tg-notify.sh` (best-effort sendMessage via `socks5h://192.168.70.1:1080`); `/root/tg.sh` (AX-era card sender used by balance.sh).
+
+### 5.8 Management surfaces
+
+| Surface | Addr | Auth | Reachable from | Can change |
+|---|---|---|---|---|
+| SSH (dropbear) | `:22` all-ifaces | root password (host-key alg must include ssh-rsa) | LAN + WAN(WAN-side dropped by input_mdl/X28_MGMT for ccmni ingress) | everything |
+| Telnet | `:23` | root shell, no password | LAN only (X28_MGMT) | everything (deliberate break-glass, rc.local) |
+| Vendor web UI | `:80` / `:443` (mini_httpd, cgipat `cgi-bin/*`) | vendor login | LAN (WAN-side 80/443 dropped) | radio/SSID, operator, config export (cmd 180) |
+| Vendor JSON API | `http://192.168.70.1/cgi-bin/http.cgi` | cmd 232 session token → cmd 100 login (`sha256(token+pass)`) → `sessionId` | LAN (scripts use it) | operator select cmd 228; traffic counters cmd 18; **cmd 219 (PLMN lock) is forbidden by house policy** |
+| v2rayA UI | `:2017` | its own | LAN only (X28_MGMT) | legacy, unused |
+| mihomo REST | `127.0.0.1:9090` | none (localhost bind) | device-local (SSH) | proxies/rules/conns read; node select |
+| Telegram bot | api.telegram.org via `socks5h://192.168.70.1:1080` | allowlisted CHAT_ID in `/etc/tg.conf` | anywhere the phone has Telegram | status read-outs; operator switch; owner assign; wifi share; digests |
+| Serial console | ttyS0 921600 8N1 | physical | board pads | U-Boot/recovery (AX3000T-style UART path applies here too) |
+
+## 6. End-to-End Traffic Flows (verified)
+
+1. **LAN client → blocked-site HTTPS (YouTube)**: DNS via §5.5 returns real IP; SYN enters br0 → nat PREROUTING `X28_SPLIT` (dst ≠ LAN, ≠ VPS-IP) → **REDIRECT :12345** → mihomo matches `GEOSITE,youtube` → `auto` → **vps-reality** → egress ccmni1 (MASQ) → VPS → internet. Controller shows chain `DIRECT`/node accordingly. (Observed.)
+2. **LAN client → `stdn2.iau.ir`**: same intercept, but rule #1 pins **DIRECT** — mihomo itself dials out ccmni1. Verified `chain=DIRECT` in `/connections`. Same for `*.srbiau.ac.ir`, any `*amoozesh*`.
+3. **Any UDP :443 (QUIC)** from br0: dropped in mangle `X28_NOQUIC` → client falls back to TCP → captured by flow 1/2. (Rule present; fallback INFERRED from standard browser behavior.)
+4. **Router-local traffic** (curl, bot, ntpd): OUTPUT is not redirected → egress ccmni1 directly; bot explicitly dials `socks5h://192.168.70.1:1080` to force the tunnel for Telegram/Samantel.
+5. **LAN → VPS panel `185.137.27.122`**: `RETURN`ed by `X28_SPLIT`, forwarded plain (also a DIRECT rule inside mihomo as belt-and-braces).
+6. **Tunnel death**: probe fails ×2 → dns-fix flips dnsmasq to ISP servers **and** inserts top `RETURN` in `X28_SPLIT` (whole LAN goes direct = fail-open; IR sites fine, filtered sites dark) → auto-reverts when the probe passes again. Watchdog independently handles carrier-level outages (operator switch) and vps-heal restarts the hung sing-box core after 10 min.
+7. **Operator loss**: 3 consecutive direct-probe failures → watchdog selects fallback PLMN (cmd 228), confirms data, re-applies dns-fix, notifies Telegram, records ledger pair; later probes preferred with exponential backoff and auto-returns.
+
+## 7. External Dependencies
+
+| Dependency | Use | Endpoint | Auth material (location) | When unavailable |
+|---|---|---|---|---|
+| MCI 5G (Samantel SIM) | all WAN | APN `du`, PLMN 424/03 | SIM | watchdog → Rightel; fail-open DNS |
+| VPS sing-box/s-ui | tunnel exit + self-heal target | `85.121.124.158` :443/:2095/:31800 | Reality uuid/pk/sid in mihomo conf; `PANEL_*` in `/etc/sui-heal.conf` | fail-open mode; vps-heal tries restartSb |
+| Telegram Bot API | control/alerts | api.telegram.org via :1080 | `TOKEN`/`CHAT_ID` in `/etc/tg.conf` | alerts/control silently lost (best-effort design) |
+| Samantel PWA | balance/quota | `pwa.samantel.ir` | phone/pass in `/etc/samantel.conf`; cached Bearer 28 d | guarded cache serves last-good; budget shows honest no-data |
+| Cloudflare DoH 8.8.8.8 | mihomo upstream (via `auto`) | DoH | none | DNS falls to ISP mode with the rest |
+| StevenBlack hosts | ad-block source | raw URL (socks→direct) | none | previous list retained |
+| NTP pools | clock (`ntpd -p cn.pool.ntp.org -p *.openwrt.pool…`) | udp/123 | none | **clock skew observed** (see §13) |
+
+## 8. Persistence & Storage Map
+
+- **Survives reboot:** everything under `/data` (proxy stack, configs, ledgers, telemetry, backups, `bot-state/offset`, `owners.conf`, `adblock/`), `/overlay` files (`/root/*.sh`, `/etc/*.conf` secrets), vendor NVRAM (SSID/LAN), rc.d symlinks, rc.local edits, iptables are **rebuilt** at boot by scripts.
+- **Lost at reboot (by design):** `/tmp` — dnsmasq conf (regenerated by lan_mgr then fixed by dns-fix), leases, samantel token/packages cache, balance cache, bot pid/heartbeat, watchdog switch-stamps, budget cooldown stamps, mini_httpd confs.
+- **Retention:** telemetry ≤5000 lines; watchdog.log ≤400; usage day-files 35 days (owners rollups kept forever); adblock weekly; two rollback snapshots in repo `router/x28/backup/rollback-{20260820-2359,20260821-0028,20260822-0300}` + device tarballs `/data/proxy/backup/*.tar.gz` (0600, contain real secrets).
+- Growth watch: `/data` at 58 % (largest consumers: mihomo 70 M incl. geo data, legacy engines ~120 M combined, backups 25 M).
+
+## 9. Current-State Inconsistencies
+
+1. **Dual writers / mixed schemas in one telemetry file** — `x28-thermal-loop.sh` appends minute-grain `ts|temp=|load=|rsrp=` rows while `x28-telemetry.sh` appends hourly `ts|total_gb|balance_gb|proxy|op|rsrp|temp|load` rows to the same `/data/proxy/usage/telemetry.log` (both formats observed interleaved). Any single-schema parser sees drift.
+2. **Device clock/timezone confusion** — uci timezone is `<+0330>-3:30` but `/etc/TZ` contains `UTC-4`; `date` prints a UTC-labelled wall clock that disagrees with the workstation clock by many hours (telemetry rows stamped “Aug 22 20:46” during an early-morning-UTC session). ntpd targets `cn.pool.ntp.org`/openwrt pools which may be unreachable without the tunnel. Impact: Jalali day boundaries, Friday-digest window, TLS validation. Magnitude UNVERIFIED precisely.
+3. **uci vs runtime divergence** — `network.lan.ipaddr='192.168.1.1'` while live br0 is `192.168.70.1` (lan_mgr/NVRAM wins); uci dhcp `start=100 limit=150 leasetime=12h` vs generated `.100–.200, 24h`; uci firewall `forward=REJECT` vs live ACCEPT-with-custom-chains. Consequence: any tooling that trusts uci (or a future fw3 reload) will fight reality.
+4. **Repo/device script split** — rc.local and hotplug run the **device-only** `tproxy-fixed-enable.sh`; the repo’s `tproxy-enable.sh`/`stage2-*.sh` build different (older) chains and are not referenced at boot.
+5. **Legacy engine remnants** — xray/xray.stock/sing-box trees (~120 MB) and a running v2raya (`:2017`) serve no traffic purpose today; they consume `/data` and add surface area.
+6. **Balance history empty** — `/etc/balance-log/` does not exist because nothing schedules `balance.sh --daily`; consequently reports show “Drain: collecting data” and Budget’s days-axis relies on projections only.
+7. **Dormant features awaiting inputs** — `wifi.conf` absent (so `/wifi` always sends the explanatory card; `qrencode` also not installed), `/etc/tunnel.conf` + cloudflared absent (stub service spins forever), `owners.conf` maps both known devices to a single person.
+8. **Outage Ledger not yet created** — expected: no qualifying outage has occurred since deployment; file appears on first incident.
+9. **Month log zero-row** — `month/2026-08.log`’s first line totals zeros because `roll()` fired right after the midnight boundary before traffic accumulated (marker prevents a second write for that day).
+
+## 10. Verification Reference
+
+```bash
+# --- from the workstation (WSL) ---
+ssh -oHostKeyAlgorithms=+ssh-rsa -oPubkeyAuthentication=no root@192.168.70.1   # pw prompt
+
+# --- on the X28 ---
+ip addr; ip route; ip rule; ip route show table 17000; brctl show
+iptables-save -t nat; iptables-save -t mangle | grep X28_NOQUIC -A2; iptables-save -t filter
+netstat -lntup                     # expect mihomo 1080/12345/5353/9090, dnsmasq :53,
+                                   # dropbear :22, telnetd :23, mini_httpd :80/:443, v2raya :2017
+grep -E 'server=|no-resolv|conf-file' /tmp/dnsmasq.conf     # tunnel mode => 127.0.0.1#5353 + no-resolv
+sh /data/proxy/dns-fix.sh                                   # prints: dns-fix: mode=tunnel|isp (dnsmasq restarted|no change)
+/data/proxy/mihomo/mihomo -v
+curl -s 127.0.0.1:9090/rules | /data/proxy/jq -r '.rules[:6][].type+" "+.payload+" -> "+.proxy'
+curl -s http://127.0.0.1:9090/connections | /data/proxy/jq -r '.connections[]|.metadata.host+" "+(.chains|join(","))'
+sh /data/proxy/x28-health.sh                                # expect final line: HEALTH: GREEN
+pgrep -f 'x28-bot.sh supervise|mihomo|operator-watchdog|usage-collect|adblock-loop|x28-vps-heal|x28-thermal-loop'
+ls /etc/rc.d/ | grep x28                                    # boot order sanity
+tail -3 /data/proxy/watchdog.log; tail -2 /data/proxy/usage/telemetry.log
+cat /tmp/dnsmasq.leases
+
+# --- from a LAN client ---
+curl -skI https://stdn2.iau.ir                              # should answer via DIRECT path
+# then on X28: connections table must show host stdn2.iau.ir chain=DIRECT
+```
+
+Expected deviations: `mode=isp` + top `RETURN` in `X28_SPLIT` ⇒ tunnel currently down/fail-open; missing mihomo listeners ⇒ engine crashed (check `logread`/procd); extra `server=` lines in dnsmasq conf ⇒ dns-fix hasn’t run after a lan_mgr regeneration (run it manually).
+
+## 11. As-Built Configuration Reference (secrets redacted)
+
+| File (device) | Mode | Contents (shape only) |
+|---|---|---|
+| `/data/proxy/mihomo/config.yaml` | 600 | full engine config; secrets: vless uuid/pk/short-id, hy2 passwords — **redacted**; backup `config.yaml.bak-20260822-0425` beside it |
+| `/etc/tg.conf` | 600 | `TOKEN=<redacted>` `CHAT_ID=<redacted>` |
+| `/etc/samantel.conf` | 600 | `SAMANTEL_PHONE/PASS`, `BALANCE_WARN_GB/URGENT_GB/WARN_DAYS/URGENT_DAYS`, `BALANCE_RATE_ALERT_GBH`, `MONITOR_REFRESH_MIN` |
+| `/etc/sui-heal.conf` | 600 | `PANEL_HOST=85.121.124.158 PANEL_PORT=2095 PANEL_USER=<redacted> PANEL_PASS=<redacted>` |
+| `/data/proxy/owners.conf` | 600 | `mac|parsa` ×2 |
+| `/tmp/dnsmasq.conf` | generated | see §5.5; regenerated by lan_mgr, repaired by dns-fix |
+| `/data/proxy/adblock/adblock.conf` | 644 | ~93 k `address=/domain/` denies |
+| `/data/proxy/bot-state/offset` | — | last processed Telegram update_id +1 |
+| repo mirror | — | `~/home-network/router/x28/**` (canonical copies; deploy via `deploy.sh`, needs env `X28_PASS`, `AX3T_PASS`, optional `X28_PROXY_CONFIG`; uses `ssh 'cat > path'` — dropbear has no sftp) |
+
+*End of as-built specification.*
