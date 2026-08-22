@@ -4,7 +4,7 @@
 
 **Blocked by:** 02.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Vendored channel list committed; fetch goes through SOCKS; ISP-mode ⇒ logged skip
 - [ ] Raw cache grows monotonically, dedupes, capped at 300 lines
