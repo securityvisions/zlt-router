@@ -786,6 +786,64 @@ hn_boot_repair_plan() {
         }'
 }
 
+# ---- Maintenance window (auto-reboot decision) ----
+# hn_maint_should_reboot <dow1_7> <hour> <uptime_days> <free_mb> [marker_cur] [marker_state]
+# Pure. Reboot only inside the Sunday 05:00 window (dow=7, hour=5), once per
+# window (marker_cur == marker_state blocks), and only when the box qualifies:
+# uptime >= 14 days OR free RAM < 60 MB. Thresholds fixed by design; the
+# caller derives dow/hour from device-local time and free_mb as KB-available.
+
+# hn_maint_should_reboot <dow> <hour> <uptime_days> <free_mb> [mkcur] [mkstate]
+hn_maint_should_reboot() {
+    local dow="${1:-}" hr="${2:-}" up="${3:-0}" mb="${4:-999999}"
+    local mkcur="${5:-}" mkstate="${6:-x}"
+    [ "$dow" = "7" ] || { echo "wait"; return; }
+    [ "$hr" = "5" ]  || { echo "wait"; return; }
+    if [ -n "$mkcur" ] && [ "$mkcur" = "$mkstate" ]; then echo "wait"; return; fi
+    case "$up" in *[!0-9]*) up=0 ;; esac
+    case "$mb" in *[!0-9]*) mb=999999 ;; esac
+    [ "$up" -ge 14 ] && { echo "reboot"; return; }
+    [ "$mb" -lt 60 ] && { echo "reboot"; return; }
+    echo "wait"
+}
+
+# hn_clock_skew_ok <local_epoch> <http_date_epoch> [max_skew_s] — pure.
+# "ok" when |local - http| <= max (default 1800 s); empty input or unparsable
+# values → "unknown" (caller decides fallback; maint treats unknown as ok but
+# logs it).
+hn_clock_skew_ok() {
+    local loc="${1:-}" rem="${2:-}" maxs="${3:-1800}" d
+    case "$loc" in ""|*[!0-9-]*) echo "unknown"; return ;; esac
+    case "$rem" in ""|*[!0-9-]*) echo "unknown"; return ;; esac
+    d=$(( loc - rem )); [ "$d" -lt 0 ] && d=$(( -d ))
+    [ "$d" -le "$maxs" ] && { echo "ok"; return; }
+    echo "skewed"
+}
+
+# hn_http_date_epoch "<Sun, 22 Aug 2026 20:48:19 GMT>" — pure. RFC1123 date
+# header → unix epoch. Portable civil-date→epoch math in awk (no busybox -d);
+# empty/unparsable input prints nothing.
+
+# hn_http_date_epoch <header_value>
+hn_http_date_epoch() {
+    printf '%s\n' "${1:-}" | awk '
+        function tdiv(a,b){ return int(a/b) }
+        function jmod(a,b){ return a - tdiv(a,b)*b }
+        {
+            # expect: Wdy, DD Mon YYYY HH:MM:SS GMT
+            dday=$2; mon=$3; yy=$4; t=$5
+            if (dday !~ /^[0-9]+$/ || t !~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/) next
+            m = (mon=="Jan")?1:(mon=="Feb")?2:(mon=="Mar")?3:(mon=="Apr")?4:(mon=="May")?5:(mon=="Jun")?6:(mon=="Jul")?7:(mon=="Aug")?8:(mon=="Sep")?9:(mon=="Oct")?10:(mon=="Nov")?11:(mon=="Dec")?12:0
+            if (m == 0) next
+            split(t, T, ":")
+            # proven Gregorian day-number math (same body as the Jalali g2d)
+            dn = tdiv((yy + tdiv(m-8,6) + 100100)*1461, 4) + tdiv(153*jmod(m+9,12)+2, 5) + dday - 34840408
+            dn = dn - tdiv(tdiv(yy + 100100 + tdiv(m-8,6), 100)*3, 4) + 752
+            print (dn - 2440588) * 86400 + T[1]*3600 + T[2]*60 + T[3]
+            exit
+        }'
+}
+
 # ---- quality-history rollup (the hourly link-quality chart feed) ----
 # The hourly telemetry rows already carry the quality fields (latency,
 # passive_mbps, node) — this reader rolls them into the chart series the
