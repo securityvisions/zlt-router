@@ -844,6 +844,45 @@ hn_http_date_epoch() {
         }'
 }
 
+# ---- Config-drift classifier (nightly backup guard) ----
+# hn_drift_classify <current.sha> <lastgood.sha> [pending.sha] — pure.
+# Inputs are "sha256  path" lists. Prints one change line per difference —
+# "M|path" (modified), "A|path" (added), "D|path" (deleted) — followed by a
+# verdict line "V|CLEAN" | "V|SAME-AS-PENDING" (identical to the already-
+# alerted set) | "V|ALERT". Last-good is NEVER advanced here; callers own
+# acknowledge semantics so drift cannot be silently swallowed.
+
+# hn_drift_classify <cur> <lastgood> [pending]
+hn_drift_classify() {
+    local _pend="${3:-/dev/null}"
+    [ -f "$_pend" ] || _pend=/dev/null
+    awk -v pend="$_pend" '
+        FNR == 1 { idx++ }
+        idx == 1 { cur[$2] = $1 }
+        idx == 2 { lg[$2]  = $1 }
+        idx == 3 { pd[$2]  = $1 }
+        END {
+            diff = 0
+            for (p in cur) {
+                if (!(p in lg))      { print "A|" p; diff = 1 }
+                else if (cur[p] != lg[p]) { print "M|" p; diff = 1 }
+            }
+            for (p in lg) {
+                if (!(p in cur))     { print "D|" p; diff = 1 }
+            }
+            if (!diff) { print "V|CLEAN"; exit }
+
+            if (pend != "") {
+                same = 1
+                for (p in cur) if (pd[p] != cur[p]) same = 0
+                for (p in pd)  if (!(p in cur))     same = 0
+                if (same) { print "V|SAME-AS-PENDING"; exit }
+            }
+            print "V|ALERT"
+        }
+    ' "$1" "$2" "$_pend"
+}
+
 # ---- quality-history rollup (the hourly link-quality chart feed) ----
 # The hourly telemetry rows already carry the quality fields (latency,
 # passive_mbps, node) — this reader rolls them into the chart series the
