@@ -4,7 +4,7 @@
 
 **Blocked by:** 04.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] hn_rescue_decide boundary tests (streaks, enabled flag, rescue-empty, world state)
 - [ ] Live hysteresis exercised in dry-run (forced dead-endpoint run shows would-promote)

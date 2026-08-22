@@ -4,7 +4,7 @@
 
 **Blocked by:** 02, 03.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Provider hot-reload reflected in controller (node list matches file)
 - [ ] Resident cap enforced; converter drops beyond cap deterministically
