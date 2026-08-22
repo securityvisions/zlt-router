@@ -27,11 +27,8 @@ case "$cmd" in
         ;;
     assign)
         mac="${2:-}"; person="${3:-}"
-        # support: assign "aa:bb:cc:dd:ee:ff Ali" where person may contain spaces -> join remaining args
-        if [ -z "$person" ] && [ -n "$mac" ]; then
-            # try to split second arg as "mac person" with space? Actually caller may pass "aa:bb:cc:dd:ee:ff Ali Reza"
-            # We already have $2 as mac, $3 as first word of person; need to capture rest
-            # Reconstruct from original args
+        # join ALL remaining words as the person name ("/owner assign <mac> Ali Reza")
+        if [ -n "$mac" ] && [ $# -ge 3 ]; then
             shift 2
             person="$*"
         fi
