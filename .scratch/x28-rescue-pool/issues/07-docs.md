@@ -4,6 +4,6 @@
 
 **Blocked by:** 05 (docs describe shipped behavior; 06 optional inclusion).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Glossary + ADR + AS_BUILT updated in house style
