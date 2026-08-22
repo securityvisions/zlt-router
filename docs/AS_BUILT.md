@@ -360,3 +360,44 @@ sh /data/proxy/rescue-convert.sh            # converts raw cache
 sh /data/proxy/x28-rescue.sh status         # enabled/world/pool/raw line
 WATCHDOG_WAN_BOUNCE_DRYRUN=1 sh /data/proxy/operator-watchdog.sh bounce   # unrelated sanity
 ```
+
+### Rev 3 addendum — implementation findings & complete state (2026-08-23)
+
+**Boot-order integration:** `S97x28-rescue` sits with the other S97 loops; shutdown K-link present. Full custom chain is now: S95 thermal/usage → S96 bot/telemetry/vps-heal → S97 adblock/tunnel/**maint**/**drift**/**rescue** → S98 proxy → S99 v2raya/vnstat/watchdog/**boot-doctor**.
+
+**Rescue subsystem storage (all persistent under /data unless noted):**
+
+| Path | Purpose | Retention |
+|---|---|---|
+| `/data/proxy/rescue/channels.txt` | vendored Telegram channel list (147) | static, owner-editable |
+| `/data/proxy/rescue/raw/collected.txt` | merged URI cache (deduped, cap 300) | rolling union |
+| `/data/proxy/rescue/{last-fetch,last-run?}` | age-gate stamps (epoch) | overwritten per run |
+| `/data/proxy/rescue/enabled` | persisted master switch (`1`/`0`) | survives reboot |
+| `/data/proxy/rescue/state` | supervisor streaks (`dead_streak alive_streak`) | overwritten each tick |
+| `/data/proxy/rescue/{collect.log,rescue.log}` | sweep summaries / transitions+reloads | append-only |
+| `/data/proxy/mihomo/rescue-pool.yaml` | **live provider payload** (single-line JSON `{"proxies":[…]}`) | swapped atomically on change |
+| `/data/proxy/mihomo/config.yaml.bak-rescue-*` | pre-landing config backup | one-off |
+
+Scripts: `rescue-collect.sh`, `rescue-convert.sh` + `rescue-vmess.jq`, `x28-rescue.sh` (+ init S97). Bot gains `/rescue [on|off]`; Weekly Digest gains a `rescue:` line.
+
+**Implementation findings (device/busybox/engine facts worth remembering):**
+
+1. **BusyBox awk (1.30) gaps hit in practice:** no `nextfile` ("call to undefined function"), no `switch`, no `strtonum`, cannot assign an array to a scalar, and a ternary branch containing a user-function call misparses as "call to undefined function" at that line. All worked around in `rescue-convert.sh` (pure-awk base64 decoder with padding normalization, flattened ternary, hex lookup table).
+2. **Base64 padding bug class:** skipping byte-emission on `=` via `continue` silently drops the final 1–2 plaintext bytes — found by fixtures (`test1234` → `test12`), fixed by falling through with zero-valued sextet.
+3. **mihomo SAFE_PATHS:** provider `path:` must live under the engine home dir — `/data/proxy/rescue/nodes.yaml` was rejected; payload moved to `/data/proxy/mihomo/rescue-pool.yaml`.
+4. **Provider payload as JSON works:** mihomo's YAML reader accepts the single-line `{"proxies":[…]}` document; kept because jq emits it safely from untrusted strings.
+5. **Hot reload seam:** `PUT /providers/proxies/rescue-pool` re-reads the file immediately; atomic swap + change-detection avoids needless reloads.
+6. **Controller `alive` staleness:** right after restart, group member flags read optimistic — per-node `/proxies/<n>/delay` is ground truth (bit twice during landing).
+7. **Panel `restartSb` vantage quirk:** device-origin POST answers JSON; workstation-origin POST closes rc=52 regardless of headers/HTTP version/raw sockets — hence the SSH-relay fallback in `sb-selfheal.sh`.
+8. **Sweep yield variability:** a full 147-channel sweep can return 0 URIs when channels are between config drops (first 5-channel probe yielded nothing while the later full sweep hit the 300 cap). Sweep deadline (300 s) + unconditional summary log keep runs bounded and observable.
+9. **First admission:** 300 raw URIs → **46 candidates** admitted into the engine (rest failed allowlist/dedupe); all 46 dead at first health round → supervisor correctly HOLDS (promote requires ≥1 alive rescue node). Pool refreshes every 6 h; promotion arms automatically when any candidate breathes.
+10. **Converter default-input bug class:** early version ignored its `RESCUE_RAW` fallback when invoked without args (tests caught wholesale empties).
+
+**Extra verification commands:**
+
+```sh
+sh /data/proxy/x28-rescue.sh decide                 # current decision inputs
+DRYRUN=1 HEALTH_AUTO_CMD='echo 0' sh /data/proxy/x28-rescue.sh tick   # would-promote drill
+/data/proxy/jq -r '.proxies[0:5][]|.type+" "+.server' /data/proxy/mihomo/rescue-pool.yaml
+curl -s http://127.0.0.1:9090/providers/proxies/rescue-pool | jq -r '.proxies|length'
+```
