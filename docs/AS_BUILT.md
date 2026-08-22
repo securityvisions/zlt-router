@@ -340,3 +340,23 @@ Expected deviations: `mode=isp` + top `RETURN` in `X28_SPLIT` ⇒ tunnel current
 | repo mirror | — | `~/home-network/router/x28/**` (canonical copies; deploy via `deploy.sh`, needs env `X28_PASS`, `AX3T_PASS`, optional `X28_PROXY_CONFIG`; uses `ssh 'cat > path'` — dropbear has no sftp) |
 
 *End of as-built specification.*
+
+---
+
+## Addendum (rev 3): Rescue pool subsystem (x28-rescue-pool)
+
+New components since rev 2:
+- `/data/proxy/rescue/{channels.txt,raw/collected.txt,rescue.log,last-fetch,enabled,state}` — collector cache + supervisor state.
+- `/data/proxy/rescue-collect.sh` — tunnel-gated 6-hourly Telegram scraper (147 vendored channels), sweep deadline 300 s, merge/dedupe/cap 300.
+- `/data/proxy/rescue-convert.sh` + `rescue-vmess.jq` — all-8 protocol URI→provider converter (allowlist grammars, caps, pure-awk base64).
+- `/data/proxy/x28-rescue.sh` (+ init S97) — admission loop (convert → atomic swap → PUT hot-reload of `rescue-pool`) and world supervisor (hysteresis promote 4 / demote 10, cards, `/rescue` switch persisted at `enabled`).
+- Engine config now carries `proxy-providers.rescue-pool` (path must be under engine home per SAFE_PATHS), groups `rescue` + `world [auto,rescue]`, and `MATCH,world`. World pinned to `auto`; supervisor flips via `PUT /proxies/world`.
+- Live evidence: first real sweep collected 300 URIs; converter admitted 46 candidates; supervisor correctly holds while all candidates dead.
+
+Verification:
+```sh
+sh /data/proxy/rescue-collect.sh status
+sh /data/proxy/rescue-convert.sh            # converts raw cache
+sh /data/proxy/x28-rescue.sh status         # enabled/world/pool/raw line
+WATCHDOG_WAN_BOUNCE_DRYRUN=1 sh /data/proxy/operator-watchdog.sh bounce   # unrelated sanity
+```

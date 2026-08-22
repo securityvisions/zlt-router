@@ -92,3 +92,15 @@ Shared vocabulary for the home-network project. Use these terms exactly; don't d
 
 - **Bearer bounce** — the watchdog's escalation rung after failed switch rounds: forced re-registration on the current PLMN via the proven cmd 228 path to unstick a wedged data bearer; ledgered, notified, storm-guarded, dry-run capable.
   _Avoid_: wan bounce, ifup (not what runs)
+
+## Rescue pool (collected-node failover)
+
+- **Node Source** — where a proxy node came from: `owned` (your VPS/infra) or `collected` (scraped from public Telegram channels). Provenance is the first thing any routing decision about a node asks.
+  _Avoid_: public node (use collected)
+- **Rescue pool** — the file-backed mihomo provider holding admitted collected nodes, engine-health-checked with real handshakes every 60 s. A broken pool degrades to empty, never to a dead router.
+  _Avoid_: backup group (ambiguous with owned failover)
+- **World selector** — the top-level select group `[auto, rescue]` that `MATCH` points at; the supervisor flips it via controller API. One API call promotes or reverts; owned nodes are physically untouched.
+- **Candidate** — a converted collected node sitting in the provider awaiting an engine health verdict. Candidates never route traffic until alive.
+- **Admission** — candidate + alive verdict + residency within the churn budget (10 residents). Converter output beyond the budget never reaches the engine.
+- **Promotion / Demotion** — flipping `world` rescue-ward after ~4 min of fully-dead owned nodes, and back after ~10 min of stable owned health. Hysteresis prevents flap during VPS restarts.
+- **Churn budget** — max 10 collected nodes resident in the engine at once.
