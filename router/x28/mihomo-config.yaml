@@ -22,6 +22,14 @@ dns:
   nameserver:
     - "https://8.8.8.8/dns-query#auto"
 
+proxy-providers:
+  rescue-pool:
+    type: file
+    path: /data/proxy/mihomo/rescue-pool.yaml   # must live under engine home (SAFE_PATHS)
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 60
 proxies:
   - name: vps-reality
     type: vless
@@ -81,6 +89,18 @@ proxy-groups:
       - hy2
       - babaii
 
+  - name: rescue
+    type: url-test
+    url: https://www.gstatic.com/generate_204
+    interval: 60
+    tolerance: 100
+    use:
+      - rescue-pool
+  - name: world
+    type: select
+    proxies:
+      - auto        # owned nodes — default, pinned by supervisor
+      - rescue      # admitted collected nodes (rescue-pool)
 rules:
   # Iranian academic portals (SRBIAU/IAU family) — pinned DIRECT by domain:
   # foreign CDN fronting defeats GEOIP,IR, and university SSO rejects
@@ -99,4 +119,4 @@ rules:
   - GEOSITE,google,auto
   - GEOSITE,instagram,auto
   - GEOSITE,facebook,auto
-  - MATCH,auto
+  - MATCH,world
