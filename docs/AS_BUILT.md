@@ -1,6 +1,6 @@
 # AS-BUILT SPECIFICATION — Home Network Control Plane (X28 era)
 
-**Snapshot date:** 2026-08-22 · **Method:** live inspection of running systems (read-only SSH, controller APIs, packet/filter dumps) cross-checked against the canonical repo (`~/home-network`). Statements are **CONFIRMED** unless tagged INFERRED / UNVERIFIED.
+**Snapshot date:** 2026-08-22 · **Rev 2** (post `x28-always-up` reliability batch; rev 1 facts superseded where noted) · **Method:** live inspection of running systems (read-only SSH, controller APIs, packet/filter dumps) cross-checked against the canonical repo (`~/home-network`). Statements are **CONFIRMED** unless tagged INFERRED / UNVERIFIED.
 **Scope:** exactly what exists and runs today. No proposals, no redesigns.
 
 ---
@@ -67,7 +67,8 @@ Everything custom lives under `/data/proxy` on the X28 and mirrors to `~/home-ne
 | ZLT X28 | WAN edge, gateway, AP, proxy, DNS/DHCP, monitor, bot | OpenWrt 19.07-SNAPSHOT vendor / kernel 4.19.205 / MT6890 | ssh/telnet/web 192.168.70.1 | br0, ra0/rai0, ccmni1-3 | `/data` (ubi, 287 MB), `/overlay` |
 | VPS `85.121.124.158` | Tunnel exit (Reality/Hy2), s-ui panel | Debian-class, sing-box + s-ui (versions UNVERIFIED from here) | `:2095` panel (form login) | eth0 | s-ui DB on VPS |
 | AX3000T | *none today* (bricked) | OpenWrt 25.12.5 (pre-brick) | unreachable | — | — |
-| Laptop `parsavisions` | admin workstation, agent host | Windows + WSL2 Linux | WiFi DHCP .141 | wlan→X28 | repo `~/home-network` |
+| Laptop `parsavisions` | admin workstation, agent host, **independent tunnel watchdog vantage** | Windows + WSL2 Linux (systemd user session) | WiFi DHCP .141 | wlan→X28 | repo `~/home-network`; watcher state in `~/.cache` |
+| Workstation watcher (`sb-selfheal`) | second-vantage core self-heal: probes full tunnel every 60 s; after 2 dead minutes fires panel `restartSb` directly, falling back to SSH-relaying the X28 one-shot heal | POSIX-sh + systemd user timer `x28-sb-selfheal.timer` | — | — | `~/.cache/x28-sb-selfheal{.log,/}`, creds `~/home-network/.secrets/sui-heal.conf` (0600, git-ignored) |
 | Telegram bot `@xirouterbot` | remote control / alerts | POSIX-sh script | via Bot API through tunnel | — | `/data/proxy/bot-state/offset` |
 
 ## 4. Configuration Source-of-Truth Map
@@ -82,7 +83,11 @@ Everything custom lives under `/data/proxy` on the X28 and mirrors to `~/home-ne
 | Proxy engine config | **device-only** `/data/proxy/mihomo/config.yaml` (0600; real creds) | in-process | mihomo | repo copy is a redacted template; deploy seeds only if absent |
 | Management firewall | `harden.sh` (repo canonical) | live `X28_MGMT` chain + INPUT jump | kernel | rebuilt at every boot (idempotent) |
 | Bot identity/state | `/etc/tg.conf` (TOKEN, CHAT_ID — 0600) + `/data/proxy/bot-state/offset` | `/tmp/x28bot/{bot.pid,hb,hb.log}` | x28-bot.sh | offset persists across reboot by design |
-| Operator policy | constants inside `operator-watchdog.sh` (43211 pref / 43220 fb) | `/tmp/x28-watchdog/*`, `/data/proxy/watchdog.log` | watchdog daemon | |
+| Operator policy | constants inside `operator-watchdog.sh` (43211 pref / 43220 fb; **interval 60 s**, bounce-after 2 rounds) | `/tmp/x28-watchdog/*`, `/data/proxy/watchdog.log` | watchdog daemon | |
+| VPS heal targets | `/etc/sui-heal.conf` (PANEL_HOST/PORT/USER/PASS — 0600) | cookie jar in /tmp | x28-vps-heal.sh | one-shot mode sources the conf itself (fixed in always-up 06) |
+| Maintenance window | decision constants inside hnlib (`hn_maint_should_reboot`: Sunday, hour 5, ≥14 d uptime or <60 MB free) | `/data/proxy/maint/{window-marker,skew-alert-stamp}` | x28-maint.sh loop | clock-skew guard uses HTTP Date over the direct path |
+| Config-drift guard | tracked-set constant + whitelist inside `x28-drift.sh` | `/data/proxy/drift/{last-good.sha,pending.sha,last-run,snapshots/}` | x28-drift.sh loop | last-good advances only via `ack` |
+| Boot repair policy | `hn_boot_repair_plan` mapping in hnlib (health FAIL names → ordered actions) | computed per boot | x28-boot-doctor.sh | upstream-only failures produce no local repair |
 | VPS heal targets | `/etc/sui-heal.conf` (PANEL_HOST/PORT/USER/PASS — 0600) | cookie jar in /tmp | x28-vps-heal.sh | |
 | Balance creds/thresholds | `/etc/samantel.conf` (PHONE/PASS/WARN/URGENT_GB/DAYS/RATE_ALERT_GBH/MONITOR_REFRESH_MIN — 0600) | `/tmp/samantel_token` (28 d), `/tmp/samantel_packages.json`, guarded cache `/tmp/balance_report(.ts)` | balance.sh, bot, budget | cache write guarded: only text matching `"GB left across"` persists |
 | Owners (person map) | `/data/proxy/owners.conf` (0600, `mac|person`) — EXISTS, both entries → `parsa` | read at daily-roll | usage-collect, x28-people | |
@@ -116,9 +121,9 @@ Kernel cmdline (abridged): `console=ttyS0,921600n1 root=/dev/ubiblock0_0 rootfst
    - `S95done` → runs **`/etc/rc.local`**: dropbear keygen + `dropbear :22`; `telnetd :23`; `harden.sh` (builds `X28_MGMT`); **`tproxy-fixed-enable.sh`** (builds `X28_SPLIT` + `X28_NOQUIC`); **`dns-fix.sh`** (picks tunnel/ISP DNS mode); background `x28-boot-alert.sh`.
    - `S95x28-thermal` (guard + 60 s telemetry writer) · `S95x28-usage` (conntrack collector).
    - `S96atci/atcid/led` (vendor) · **`S96x28-bot`** (supervise) · **`S96x28-telemetry`** (hourly loop) · **`S96x28-vps-heal`**.
-   - `S97x28-adblock` (weekly-refresh loop) · `S97x28-tunnel` (stub wait-loop).
+   - **`S97x28-adblock`** (weekly-refresh loop) · `S97x28-tunnel` (stub wait-loop) · **`S97x28-maint`** (maintenance-window loop) · **`S97x28-drift`** (nightly backup/drift loop).
    - **`S98x28proxy`** → procd starts **mihomo** (`respawn 3600 5 5`).
-   - `S99v2raya` (legacy UI), `S99vnstat`, **`S99x28-watchdog`** (operator watchdog), `S99zmtk_boot_done`.
+   - `S99v2raya` (legacy UI), `S99vnstat`, **`S99x28-watchdog`** (operator watchdog), **`S99x28-boot-doctor`** (one-shot verifier, fires ~90 s after start), `S99zmtk_boot_done`.
 4. Hotplug `net/30-x28-proxy.sh` (`ACTION=add`): sleep 3 → re-run `tproxy-fixed-enable.sh` + `dns-fix.sh` (self-heals interface churn).
 5. No crontab exists (`/etc/crontabs/root` empty); all periodic work is procd/shell loops.
 
@@ -165,12 +170,12 @@ Outbound nodes (config 0600; secrets redacted):
 
 | Node | Target | Notes |
 |---|---|---|
-| vps-reality | `85.121.124.158:443` vless+reality, sni `www.bing.com`, fp chrome, uuid `<redacted>` | primary; udp ok |
-| cdn-ws | `188.114.98.0:443` vless+ws+tls, host `cdn.dmbz.ir`, path `/v1/status` | opportunistic |
-| hy2 | `85.121.124.158:31800` hysteria2 salamander | UDP-path dependent |
-| babaii | `216.45.52.132:23993` vision | **dead** (host down) |
+| vps-reality | `85.121.124.158:443` vless+reality, sni `www.bing.com`, fp chrome, uuid `<redacted>` | primary; udp ok; delay ~770–980 ms |
+| cdn-ws | `188.114.98.0:443` vless+ws+tls, host `cdn.dmbz.ir`, path `/v1/status` | alive-flag flaps; explicit delay 1400–1600 ms when origin up |
+| hy2 | `85.121.124.158:31800` hysteria2 salamander | UDP-path dependent; observed working 1570 ms after MCI re-register |
+| babaii | `216.45.52.132:23993` vless+vision | TCP open since provider host reboot, but handshake fails **with and without** flow — provider rotated something; ticket `needs-info` |
 
-Group `auto`: url-test `https://8.8.8.8/`, interval 60 s, tolerance 100, members [vps-reality, cdn-ws, hy2, babaii].
+Group `auto`: url-test `https://8.8.8.8/`, interval 60 s, tolerance 100, members [vps-reality, cdn-ws, hy2, babaii]. Verification nuance learned live: right after an engine restart the controller's `alive` flags can read optimistic before first url-test completes — trust the per-node `/delay` endpoint for ground truth.
 
 Rules (exact current order):
 ```
@@ -198,16 +203,19 @@ Legacy stacks still on disk but **not** in the traffic path: `sing-box/` (53 M),
 | `x28-telemetry` (S96) | hourly `while` loop → `x28-telemetry.sh` | 1 h | appends schema-v1/v2 row via TelemetryStore (prune 5000); then runs budget check | best-effort, errors swallowed |
 | `x28-thermal` (S95) | `x28-thermal-loop.sh` | **60 s** | appends `ts\|temp=\|load=\|rsrp=` to the SAME telemetry.log; alerts >75 °C | best-effort |
 | `x28-usage` (S95) | `usage-collect.sh loop` | 5 s conntrack deltas (boot-aware) | `day/YYYY-MM-DD` (`mac|ip|name|up|down`); at date-change `roll()`: month totals, **owners roll before 35-day prune**, Friday ≥20:00 Weekly-Digest (ISO-week marker gate), month-end People report (first Fri with Jalali day-of-month ≤3; month-marker gate) | malformed cycles dropped; `.rolled-*` markers prevent doubles |
-| `x28-watchdog` (S99) | `operator-watchdog.sh` daemon | every 120 s: direct-IP HTTPS probe (1.1.1.1, 216.239.38.120) | 3 strikes → operator switch (cmd 228 via reselect.sh; storm guard ≤3/h, cooldown 600 s); on fallback probes preferred with backoff 2700→10800 s; calls `dns-fix.sh` each cycle; writes Outage Ledger `add-down` (on threshold) / `add-up` (on recovery); Telegram notifies | switch failure logged, retried next cycle |
-| `x28-vps-heal` (S96) | loop | poll controller `auto` alive | if all nodes dead ≥10 min while local DNS :5353 answers → s-ui login (cookie jar) → `POST /app/api/restartSb` | best-effort; never blocks boot |
+| `x28-watchdog` (S99) | `operator-watchdog.sh` daemon | **every 60 s**: direct-IP HTTPS probe (endpoints env-overridable via `WATCHDOG_ENDPOINTS`) | 3 strikes → operator switch (cmd 228 via reselect.sh; storm guard ≤3/h, cooldown 600 s); on fallback probes preferred with backoff 2700→10800 s; calls `dns-fix.sh` each cycle; writes Outage Ledger `add-down`/`add-up`; tracks failed switch rounds → after 2 rounds + bounce-cooldown fires the **bearer bounce** (forced re-register on current PLMN via cmd 228 — see `bounce` one-shot mode); Telegram notifies | bounce honors its own cooldown + dry-run envs |
+| `x28-vps-heal` (S96) | loop | poll controller `auto` alive | if all nodes dead ≥**4 min** while local DNS :5353 answers → s-ui login (cookie jar) → `POST /app/api/restartSb`, with Telegram cards on heal/skip/fail; one-shot `heal` mode sources `/etc/sui-heal.conf` itself | best-effort; never blocks boot |
 | `x28-adblock` (S97) | `adblock-loop.sh` | hourly age-check (>7 d) | `adblock-update.sh`: fetch StevenBlack via socks→direct fallback, convert to `address=` lines, atomic swap, re-run dns-fix | last-known-good list kept on any failure |
 | `x28-tunnel` (S97) | stub loop | waits for `/etc/tunnel.conf` + cloudflared binary | no-op today (both absent) | exits silently |
+| `x28-maint` (S97) | maintenance-window loop | every 10 min | Sunday hour-05 window: uptime ≥14 d or free RAM <60 MB → warning card → marker → reboot; clock-skew guard (HTTP Date vs direct path) skips+alerts when device clock is off | dry-run + `once` mode |
+| `x28-drift` (S97) | config backup/drift loop | hourly age-gate (~20 h) | sha256 critical config set → classify vs last-good → ALERT card naming M/A/D files (SAME-AS-PENDING quiet); bounded snapshot ring (keep 14) under `snapshots/`; `ack` advances last-good | last-good never auto-advances |
+| `x28-boot-doctor` (S99, one-shot) | verify+repair ~90 s post-boot | once per boot | health gate GREEN → quiet verdict card; RED → ordered repairs (rules→dns→proxy→watchdog), re-check, single verdict card | pure planner in hnlib; crash found+fixed during live reboot exercise |
 | `harden.sh` | rc.local + rerunnable | boot | builds `X28_MGMT`, hooks INPUT jump (dedup) | idempotent |
 | `tproxy-fixed-enable.sh` (device-only) | rc.local + net-hotplug | boot/ifadd | builds `X28_SPLIT`, `X28_NOQUIC`, inserts VPS-panel RETURN | disable twin provided (`tproxy-fixed-disable.sh`) |
 | `dns-fix.sh` | rc.local, net-hotplug, watchdog cycle, post-switch, adblock-update | event | probe tunnel (SOCKS→egress generate_204, ×2 with sleep 2) → set dnsmasq upstream tunnel/ISP **and** insert/remove top `X28_SPLIT RETURN` (fail-open) | prints `mode=tunnel/isp`; no-op if unchanged |
 | `balance.sh` (`/root`) | CLI `--report/--cache/--daily/--check/--monitor` | bot taps, budget tick, monitor | NextAuth login to `pwa.samantel.ir` (CSRF→credentials→Bearer, token cached 28 d), packages JSON caches, tier/rate alerts via `/root/tg.sh`, **guarded cache** (only `"GB left across"` text persists) | failed query never poisons cache; bot falls back with age note |
 | Budget Guardian (`x28-budget.sh`) | hourly telemetry tick + on-demand | tiers exhausted<0.05 GB / urgent<3 GB,<3 d,<7 d proj / warn<10 GB,<7 d,<14 d proj | cooldown-gated TG alerts (exhausted bypasses); `/budget` Card incl. drain, projected Toman (busybox-date-hardened), Jalali exhaustion date | missing data → honest "no data" card |
-| Outage Ledger (`x28-outage-ledger.sh`) | watchdog hooks + `/outages` | on transitions | append-only `epoch|kind`, idempotent; pairing/monthly-Jalali totals in hnlib | file created lazily (absent today) |
+| Outage Ledger (`x28-outage-ledger.sh`) | watchdog hooks + `/outages` | on transitions | append-only `epoch|kind`, idempotent; pairing/monthly-Jalali totals in hnlib. **First pair recorded 2026-08-22 22:17→22:20 (2 m12 s)** — from the controlled bearer-bounce exercise | file created lazily |
 | People/Owners/Digest/WiFi scripts | bot + roll integration | as above | see §4 map | graceful cards when inputs missing |
 
 Shared libraries: `/data/proxy/hnlib.sh` **and** `/root/hnlib.sh` (identical pushes) — pure functions (Jalali, tiers, outage pairing, health score, cooldown, owner lookup, quality module); `/data/proxy/jq` static binary; `tg-notify.sh` (best-effort sendMessage via `socks5h://192.168.70.1:1080`); `/root/tg.sh` (AX-era card sender used by balance.sh).
@@ -221,9 +229,17 @@ Shared libraries: `/data/proxy/hnlib.sh` **and** `/root/hnlib.sh` (identical pus
 | Vendor web UI | `:80` / `:443` (mini_httpd, cgipat `cgi-bin/*`) | vendor login | LAN (WAN-side 80/443 dropped) | radio/SSID, operator, config export (cmd 180) |
 | Vendor JSON API | `http://192.168.70.1/cgi-bin/http.cgi` | cmd 232 session token → cmd 100 login (`sha256(token+pass)`) → `sessionId` | LAN (scripts use it) | operator select cmd 228; traffic counters cmd 18; **cmd 219 (PLMN lock) is forbidden by house policy** |
 | v2rayA UI | `:2017` | its own | LAN only (X28_MGMT) | legacy, unused |
-| mihomo REST | `127.0.0.1:9090` | none (localhost bind) | device-local (SSH) | proxies/rules/conns read; node select |
+| mihomo REST | `127.0.0.1:9090` | none (localhost bind) | device-local (SSH) | proxies/rules/conns read; per-node `/delay` ground-truth tests; node select |
 | Telegram bot | api.telegram.org via `socks5h://192.168.70.1:1080` | allowlisted CHAT_ID in `/etc/tg.conf` | anywhere the phone has Telegram | status read-outs; operator switch; owner assign; wifi share; digests |
+| Watchdog one-shots | CLI on device | root | SSH | `switch <plmn>` · `bounce` (forced re-register, dry-run env honored) |
 | Serial console | ttyS0 921600 8N1 | physical | board pads | U-Boot/recovery (AX3000T-style UART path applies here too) |
+
+### 5.9 Workstation-vantage components (new)
+
+- **`vps/sb-selfheal.sh` + systemd user timer** (`x28-sb-selfheal.timer`, every ~60 s): probes the tunnel end-to-end from the laptop (`socks5h://192.168.70.1:1080` → gstatic 204). Two dead minutes with a reachable panel → direct `restartSb`; if that leg fails (observed: panel returns empty reply to this vantage on that endpoint only), SSH-relays to the X28 and runs its one-shot heal. Crash-loop cap ≥4 restarts/15 min.
+- Creds: `~/home-network/.secrets/sui-heal.conf` (0600, git-ignored; symlinked to `~/.config/x28/sui-heal.conf`) — PANEL_* plus X28_SSH_PASS/X28_HOST for the relay.
+- Log: `~/.cache/x28-sb-selfheal.log`. State: `~/.cache/x28-sb-selfheal/` (fails counter, restart ring).
+- **Staged, not installed:** `vps/sb-selfheal-install.sh` prepares the true VPS-local systemd timer for the day VPS SSH opens (sshd currently publickey-only; device dropbear can't negotiate ed25519).
 
 ## 6. End-to-End Traffic Flows (verified)
 
@@ -232,8 +248,10 @@ Shared libraries: `/data/proxy/hnlib.sh` **and** `/root/hnlib.sh` (identical pus
 3. **Any UDP :443 (QUIC)** from br0: dropped in mangle `X28_NOQUIC` → client falls back to TCP → captured by flow 1/2. (Rule present; fallback INFERRED from standard browser behavior.)
 4. **Router-local traffic** (curl, bot, ntpd): OUTPUT is not redirected → egress ccmni1 directly; bot explicitly dials `socks5h://192.168.70.1:1080` to force the tunnel for Telegram/Samantel.
 5. **LAN → VPS panel `185.137.27.122`**: `RETURN`ed by `X28_SPLIT`, forwarded plain (also a DIRECT rule inside mihomo as belt-and-braces).
-6. **Tunnel death**: probe fails ×2 → dns-fix flips dnsmasq to ISP servers **and** inserts top `RETURN` in `X28_SPLIT` (whole LAN goes direct = fail-open; IR sites fine, filtered sites dark) → auto-reverts when the probe passes again. Watchdog independently handles carrier-level outages (operator switch) and vps-heal restarts the hung sing-box core after 10 min.
-7. **Operator loss**: 3 consecutive direct-probe failures → watchdog selects fallback PLMN (cmd 228), confirms data, re-applies dns-fix, notifies Telegram, records ledger pair; later probes preferred with exponential backoff and auto-returns.
+6. **Tunnel death**: probe fails ×2 → dns-fix flips dnsmasq to ISP servers **and** inserts top `RETURN` in `X28_SPLIT` (whole LAN goes direct = fail-open; IR sites fine, filtered sites dark) → auto-reverts when the probe passes again. In parallel: vps-heal fires panel `restartSb` after 4 min of dead auto-group, and — independently of the X28's own loop — the workstation watcher fires the same restart from its vantage at ~2 min (SSH-relay fallback if its direct leg is filtered).
+7. **Operator loss**: 3 consecutive direct-probe failures (at 60 s cadence ≈3 min) → watchdog selects fallback PLMN (cmd 228), confirms data, re-applies dns-fix, notifies Telegram, records ledger pair; later probes preferred with exponential backoff and auto-returns.
+8. **Wedged bearer** (IP present, no data, switches ineffective): after 2 failed switch rounds inside the cooldown-wait window the watchdog escalates to a **bearer bounce** — forced re-registration on the current PLMN via cmd 228 (verified live: data restored in ~19 s); ledgered + notified; dry-run env honored.
+9. **Power cut / reboot**: full stack rebuilds from rc.local + S95–S99 services + net-hotplug; ~90 s in, the Boot Doctor runs the health gate, repairs known races and sends one verdict card. **Verified by controlled reboot 2026-08-22**: SSH back in ~70 s, all 10 custom services running, iptables chains rebuilt, DNS tunnel mode restored, tunnel probe 204, HEALTH GREEN.
 
 ## 7. External Dependencies
 
@@ -251,20 +269,23 @@ Shared libraries: `/data/proxy/hnlib.sh` **and** `/root/hnlib.sh` (identical pus
 
 - **Survives reboot:** everything under `/data` (proxy stack, configs, ledgers, telemetry, backups, `bot-state/offset`, `owners.conf`, `adblock/`), `/overlay` files (`/root/*.sh`, `/etc/*.conf` secrets), vendor NVRAM (SSID/LAN), rc.d symlinks, rc.local edits, iptables are **rebuilt** at boot by scripts.
 - **Lost at reboot (by design):** `/tmp` — dnsmasq conf (regenerated by lan_mgr then fixed by dns-fix), leases, samantel token/packages cache, balance cache, bot pid/heartbeat, watchdog switch-stamps, budget cooldown stamps, mini_httpd confs.
-- **Retention:** telemetry ≤5000 lines; watchdog.log ≤400; usage day-files 35 days (owners rollups kept forever); adblock weekly; two rollback snapshots in repo `router/x28/backup/rollback-{20260820-2359,20260821-0028,20260822-0300}` + device tarballs `/data/proxy/backup/*.tar.gz` (0600, contain real secrets).
+- **Retention:** telemetry ≤5000 lines; watchdog.log ≤400; usage day-files 35 days (owners rollups kept forever); drift snapshots keep 14; adblock weekly; rollback snapshots in repo `router/x28/backup/rollback-{20260820-2359,20260821-0028,20260822-0300,20260822-2230}` + device tarballs `/data/proxy/backup/*.tar.gz` (0600, contain real secrets). The `-2230` one (40 files incl. secrets + generated dnsmasq conf) is the restore point for the always-up batch.
 - Growth watch: `/data` at 58 % (largest consumers: mihomo 70 M incl. geo data, legacy engines ~120 M combined, backups 25 M).
 
 ## 9. Current-State Inconsistencies
 
 1. **Dual writers / mixed schemas in one telemetry file** — `x28-thermal-loop.sh` appends minute-grain `ts|temp=|load=|rsrp=` rows while `x28-telemetry.sh` appends hourly `ts|total_gb|balance_gb|proxy|op|rsrp|temp|load` rows to the same `/data/proxy/usage/telemetry.log` (both formats observed interleaved). Any single-schema parser sees drift.
-2. **Device clock/timezone confusion** — uci timezone is `<+0330>-3:30` but `/etc/TZ` contains `UTC-4`; `date` prints a UTC-labelled wall clock that disagrees with the workstation clock by many hours (telemetry rows stamped “Aug 22 20:46” during an early-morning-UTC session). ntpd targets `cn.pool.ntp.org`/openwrt pools which may be unreachable without the tunnel. Impact: Jalali day boundaries, Friday-digest window, TLS validation. Magnitude UNVERIFIED precisely.
+2. **Device clock/timezone confusion — now guarded** — uci timezone is `<+0330>-3:30` but `/etc/TZ` contains `UTC-4`, and the wall clock has been observed hours off the workstation. ntpd targets `cn.pool.ntp.org`/openwrt pools which may be unreachable without the tunnel. The maintenance window now refuses to reboot when an HTTP-Date cross-check (fetched over the direct path) shows >±30 min skew, alerting once per day instead; Jalali/Friday logic still inherits the raw device clock.
 3. **uci vs runtime divergence** — `network.lan.ipaddr='192.168.1.1'` while live br0 is `192.168.70.1` (lan_mgr/NVRAM wins); uci dhcp `start=100 limit=150 leasetime=12h` vs generated `.100–.200, 24h`; uci firewall `forward=REJECT` vs live ACCEPT-with-custom-chains. Consequence: any tooling that trusts uci (or a future fw3 reload) will fight reality.
 4. **Repo/device script split** — rc.local and hotplug run the **device-only** `tproxy-fixed-enable.sh`; the repo’s `tproxy-enable.sh`/`stage2-*.sh` build different (older) chains and are not referenced at boot.
 5. **Legacy engine remnants** — xray/xray.stock/sing-box trees (~120 MB) and a running v2raya (`:2017`) serve no traffic purpose today; they consume `/data` and add surface area.
 6. **Balance history empty** — `/etc/balance-log/` does not exist because nothing schedules `balance.sh --daily`; consequently reports show “Drain: collecting data” and Budget’s days-axis relies on projections only.
-7. **Dormant features awaiting inputs** — `wifi.conf` absent (so `/wifi` always sends the explanatory card; `qrencode` also not installed), `/etc/tunnel.conf` + cloudflared absent (stub service spins forever), `owners.conf` maps both known devices to a single person.
-8. **Outage Ledger not yet created** — expected: no qualifying outage has occurred since deployment; file appears on first incident.
-9. **Month log zero-row** — `month/2026-08.log`’s first line totals zeros because `roll()` fired right after the midnight boundary before traffic accumulated (marker prevents a second write for that day).
+7. **Dormant features awaiting inputs** — `wifi.conf` absent (`/wifi` sends the explanatory card; `qrencode` still not installed), `/etc/tunnel.conf` + cloudflared absent (stub loop spins), `owners.conf` maps both known devices to one person.
+8. **babaii provider drift** — TCP :23993 is open again but the VLESS handshake fails identically with and without `flow: xtls-rprx-vision`: the provider rotated user/protocol facts we mirror in mihomo. Needs the babaii panel/subscription checked externally (ticket `needs-info`).
+9. **Panel restartSb is vantage-sensitive** — from the X28 (or anything dialing via its local path) `POST /app/api/restartSb` answers JSON `success:true`; from the workstation the identical request (every header/HTTP-version/raw-socket variant tested) closes with rc=52 empty-reply, while login/status work fine. Workaround shipped: workstation watcher falls back to SSH-relaying the device one-shot heal.
+10. **Controller alive-flag staleness** — right after an engine restart, `/proxies/<node>.alive` can read optimistic before the first url-test round completes; the per-node `/proxies/<n>/delay` endpoint is ground truth.
+11. **Outage Ledger seeded by a drill** — first recorded pair (2026-08-22 22:17→22:20, 2 m12 s) came from the controlled dead-endpoint ladder exercise, not a real outage; totals include it until ages out of monthly scope.
+12. **Month log zero-row** — `month/2026-08.log`’s first line totals zeros because `roll()` fired right after the midnight boundary before traffic accumulated (marker prevents a second write for that day).
 
 ## 10. Verification Reference
 
@@ -283,10 +304,19 @@ sh /data/proxy/dns-fix.sh                                   # prints: dns-fix: m
 curl -s 127.0.0.1:9090/rules | /data/proxy/jq -r '.rules[:6][].type+" "+.payload+" -> "+.proxy'
 curl -s http://127.0.0.1:9090/connections | /data/proxy/jq -r '.connections[]|.metadata.host+" "+(.chains|join(","))'
 sh /data/proxy/x28-health.sh                                # expect final line: HEALTH: GREEN
-pgrep -f 'x28-bot.sh supervise|mihomo|operator-watchdog|usage-collect|adblock-loop|x28-vps-heal|x28-thermal-loop'
+pgrep -f 'x28-bot.sh supervise|mihomo|operator-watchdog|usage-collect|adblock-loop|x28-vps-heal|x28-thermal-loop|x28-maint|x28-drift'
 ls /etc/rc.d/ | grep x28                                    # boot order sanity
 tail -3 /data/proxy/watchdog.log; tail -2 /data/proxy/usage/telemetry.log
 cat /tmp/dnsmasq.leases
+
+# always-up batch specifics
+tail -1 /data/proxy/watchdog.log                            # expect: interval=60s threshold=3 bounce_after=2
+sh /data/proxy/x28-maint.sh once                            # prints dow/hr/uptime/free/week -> decision
+sh /data/proxy/x28-drift.sh status                          # tracked count, pending?, last-run
+WATCHDOG_WAN_BOUNCE_DRYRUN=1 sh /data/proxy/operator-watchdog.sh bounce   # logs DRYRUN line only
+for n in vps-reality hy2 cdn-ws babaii; do curl -s -m 10 "http://127.0.0.1:9090/proxies/$n/delay?url=https%3A%2F%2Fwww.gstatic.com%2Fgenerate_204&timeout=8000"; echo; done
+BOOT_DELAY=1 sh /data/proxy/x28-boot-doctor.sh run          # one-shot verifier (sends verdict card)
+cat /data/proxy/outage-ledger.log                           # epoch|down/up pairs
 
 # --- from a LAN client ---
 curl -skI https://stdn2.iau.ir                              # should answer via DIRECT path

@@ -176,3 +176,14 @@ Each piece is independently reversible:
 - **Adblock**: `apk del adblock luci-app-adblock` (frees ~0.8 MB, restores RAM)
 - **SQM**: `uci set sqm.eth1.download=0` (or restore prior values) + restart SQM
 - **Timezone**: set `system.@system[0].zonename='UTC'`, `timezone='GMT0'`, restart system + cron
+
+## Self-heal chain (X28, current timings — post always-up batch)
+
+1. **0–60 s** — mihomo `auto` url-test rotates nodes internally.
+2. **~2 min** — workstation watcher (`sb-selfheal.timer` on the laptop) fires panel `restartSb` after 2 dead minutes; SSH-relay fallback runs the X28 one-shot heal if its direct leg is filtered.
+3. **~3 min** — carrier outage: the operator watchdog switches MCI↔Rightel after 3×60 s failed probes (storm guard ≤3/h, cooldown 600 s); after 2 failed switch rounds it escalates to a **bearer bounce** (forced re-register on the current PLMN).
+4. **~4 min** — X28-side core heal (`x28-vps-heal`) fires the same `restartSb` as backstop.
+5. **Throughout a tunnel death** — dns-fix fail-open keeps raw internet alive: ISP DNS + top `RETURN` in the split chain.
+6. **Post-reboot** — Boot Doctor verifies/repairs at ~90 s and sends one verdict card.
+7. **Weekly** — Sunday 05:00 maintenance reboot when uptime ≥14 d or free RAM <60 MB (skipped with an alert if the clock fails its HTTP-Date sanity check).
+8. **Nightly** — drift guard snapshots the critical config set and alerts on any unexpected change (`x28-drift.sh ack` after review).
