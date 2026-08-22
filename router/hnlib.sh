@@ -761,6 +761,31 @@ hn_owner_of() {
     printf '%s' "$line" | cut -d'|' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
 
+# ---- Boot doctor planner (post-boot convergence repair) ----
+# hn_boot_repair_plan <health_gate_output> — pure. Reads the PASS/FAIL lines
+# of x28-health.sh and prints the local repair actions, one per line, in a
+# stable order: rules → dns → proxy → watchdog. Empty output = healthy boot,
+# nothing to repair. Upstream failures (proxied_path alone, direct_path,
+# v2raya) deliberately produce NO local repair — the watchdog/heal loops own
+# those; restarting things locally would be noise.
+
+# hn_boot_repair_plan <health_output>
+hn_boot_repair_plan() {
+    printf '%s\n' "$1" | sed -n 's/^FAIL //p' | awk '{print $1}' | sort -u | awk '
+        {
+            if      ($1 == "tproxy_chain" || $1 == "quic_block") r = 1
+            else if ($1 == "dns_chain")                          d = 1
+            else if ($1 == "xray_core")                          p = 1
+            else if ($1 == "op_watchdog")                        w = 1
+        }
+        END {
+            if (r) print "rules"
+            if (d) print "dns"
+            if (p) print "proxy"
+            if (w) print "watchdog"
+        }'
+}
+
 # ---- quality-history rollup (the hourly link-quality chart feed) ----
 # The hourly telemetry rows already carry the quality fields (latency,
 # passive_mbps, node) — this reader rolls them into the chart series the
