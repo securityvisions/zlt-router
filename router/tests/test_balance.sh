@@ -35,4 +35,27 @@ export RA_BALANCE_REPORT_TS="$TMP/nonexistent.ts"
 out=$(ra_json_balance)
 assert_json_eq "balance no cache" '{"cached":false,"as_of_unix":0,"data_plan":null,"packages":[]}' "$out"
 
+# ---- cache-write guard (transient ISP failures must not poison the cache) ----
+BALANCE_SH="$HERE/../balance.sh"
+grep -q "cache_report" "$BALANCE_SH" && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - cache_report guard missing"; }
+# functional: a failure string is refused, a real report is written
+FAKE_CACHE="$TMP/fake_cache"; export TMPDIR_BAK=""
+sh -c '
+    cache_report() {
+        case "$1" in
+            *"GB left across"*)
+                printf "%s\n" "$1" > "$2" 2>/dev/null
+                date +%s > "$2.ts" 2>/dev/null
+                ;;
+        esac
+    }
+    : > "$1"
+    cache_report "No data packages found." "$1"
+    [ -s "$1" ] && echo "POISONED" || echo "GUARDED-failure"
+    cache_report "📦 Samantel — 109.8 GB left across 1 plan(s)" "$1"
+    grep -q "GB left across" "$1" && echo "WROTE-real" || echo "MISSED-real"
+' -- "$FAKE_CACHE" > "$TMP/guard.out"
+assert_eq "guard refuses failure text" "GUARDED-failure" "$(sed -n '1p' "$TMP/guard.out")"
+assert_eq "guard writes real report" "WROTE-real" "$(sed -n '2p' "$TMP/guard.out")"
+
 summary

@@ -154,6 +154,28 @@ Use /status to check the current state."
 # hr — section rule line.
 hr() { echo "──────────────────────"; }
 
+# bal_card — live balance with last-good-cache fallback. A transient ISP/API
+# failure used to both poison the cache and show the user "No data packages
+# found."; now a failed live query falls back to the guarded cache with an
+# age note (balance.sh itself no longer persists failures).
+bal_card() {
+    local out ts age mins
+    out=$(sh /root/balance.sh --report 2>/dev/null)
+    case "$out" in
+        *"GB left across"*) printf '%s\n' "$out" ;;
+        *)
+            if [ -f /tmp/balance_report ] && grep -q "GB left across" /tmp/balance_report 2>/dev/null; then
+                ts=$(cat /tmp/balance_report.ts 2>/dev/null || echo 0)
+                age=$(( $(date +%s) - ${ts:-0} )); [ "$age" -lt 0 ] && age=0
+                mins=$(( age / 60 ))
+                printf '%s\n(cached ~%sm ago — live query failed)\n' "$(cat /tmp/balance_report 2>/dev/null)" "$mins"
+            else
+                printf '%s\n' "$out"
+            fi
+            ;;
+    esac
+}
+
 # fmt_status — the polished status card body.
 fmt_status() {
     local out
@@ -281,7 +303,7 @@ $(hr)
 $(sh /data/proxy/usage/x28-usage.sh today 2>/dev/null)" ;;
                     balance) body="💰 Samantel balance
 $(hr)
-$(sh /root/balance.sh --report 2>/dev/null | head -12)" ;;
+$(bal_card 2>/dev/null | head -12)" ;;
                     devices) body="📱 Devices on network
 $(hr)
 $(fmt_devices)" ;;
@@ -317,7 +339,8 @@ $(sh /data/proxy/x28-people.sh 2>/dev/null)" ;;
                     *)       body="unknown tap" ;;
                 esac
                 answer_cbq "$cbid"
-                [ -n "$cbmid" ] && edit_panel "$cbmid" "$(printf 'X28 Panel — %s\n──────────────\n%s' "$action" "$body")"
+                # bodies carry their own emoji titles — no extra wrapper header
+                [ -n "$cbmid" ] && edit_panel "$cbmid" "$body"
             elif [ "$cid" = "$CHAT_ID" ] && [ -n "$text" ]; then
                 # staleness guard: anything older than 10 minutes is a replay
                 # (reboot lost the offset once and an old /switch re-fired)
@@ -351,7 +374,7 @@ $(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null)" ;;
                     /balance)
                         send "💰 Samantel balance
 $(hr)
-$(sh /root/balance.sh --report 2>/dev/null | head -20)" ;;
+$(bal_card 2>/dev/null | head -20)" ;;
                     /devices)
                         send "📱 Devices on network
 $(hr)

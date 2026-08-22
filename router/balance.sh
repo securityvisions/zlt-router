@@ -373,20 +373,38 @@ monitor() {
 
     # Refresh the panel balance cache (Q3)
     if [ "$fetched" = "1" ] && [ -n "$rows" ]; then
-        # rows already fetched — write cache for free
-        echo "$rows" | build_report > /tmp/balance_report 2>/dev/null
-        date +%s > /tmp/balance_report.ts 2>/dev/null
+        # rows already fetched — write cache for free (only if it parses as a real report)
+        cache_report "$(echo "$rows" | build_report 2>/dev/null)"
     elif [ ! -f /tmp/balance_report.ts ] || [ $(( now - $(cat /tmp/balance_report.ts 2>/dev/null || echo 0) )) -ge 900 ]; then
-        # cache older than 15 min — one extra API call
-        report_text > /tmp/balance_report 2>/dev/null
-        date +%s > /tmp/balance_report.ts 2>/dev/null
+        # cache older than 15 min — one extra API call (guarded write)
+        cache_report "$(report_text)"
     fi
 }
 
 # ---------- CLI ----------
+# cache_report <text> — persist ONLY real reports to /tmp/balance_report.
+# A transient ISP/API failure ("No data packages found.") used to be tee'd
+# straight into the cache, blinding every reader (panel, budget guardian,
+# digest) until the next successful query. Last-good survives failures.
+cache_report() {
+    case "$1" in
+        *"GB left across"*)
+            printf '%s\n' "$1" > /tmp/balance_report 2>/dev/null
+            date +%s > /tmp/balance_report.ts 2>/dev/null
+            ;;
+    esac
+}
+
 case "$1" in
-    --report) report_text | tee /tmp/balance_report; date +%s > /tmp/balance_report.ts ;;
-    --cache)  report_text > /tmp/balance_report; date +%s > /tmp/balance_report.ts ;;
+    --report)
+        out=$(report_text)
+        printf '%s\n' "$out"
+        cache_report "$out"
+        ;;
+    --cache)
+        out=$(report_text)
+        cache_report "$out"
+        ;;
     --daily)
         rows=$(balance_rows)
         if [ -z "$rows" ]; then
