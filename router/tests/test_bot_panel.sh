@@ -48,6 +48,9 @@ grep -q "bal_card" /home/parsavisions/home-network/router/x28/x28-bot.sh && PASS
 grep -q "cached ~.*live query failed" /home/parsavisions/home-network/router/x28/x28-bot.sh && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - cache fallback note missing"; }
 # panel edit no longer double-wraps card titles
 grep -q 'edit_panel "$cbmid" "$body"' /home/parsavisions/home-network/router/x28/x28-bot.sh && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - edit_panel still wraps body in extra header"; }
+# no bare `continue` in the bot: inside the update batch loop it skips i++ and
+# re-fires the same tap forever (the WiFi-panel send-loop incident)
+if grep -qE '^[[:space:]]*continue[[:space:]]*$' /home/parsavisions/home-network/router/x28/x28-bot.sh; then FAIL=$((FAIL+1)); echo "FAIL - bare continue in bot loop"; else PASS=$((PASS+1)); fi
 
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

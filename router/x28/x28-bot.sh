@@ -325,14 +325,16 @@ $(sh /data/proxy/x28-outage-ledger.sh report 2>/dev/null)" ;;
 $(hr)
 $(sh /data/proxy/x28-people.sh 2>/dev/null)" ;;
                     wifi)
-                        answer_cbq "$cbid"
+                        # send photo (or explanatory card) — body stays empty so the
+                        # common tail skips edit_panel; NEVER `continue` here: it
+                        # would skip this batch's i++ and re-fire the same tap forever.
                         if path=$(sh /data/proxy/x28-wifi.sh qr 2>/dev/null); then
                             cap=$(sh /data/proxy/x28-wifi.sh card 2>/dev/null | head -n 3)
                             send_photo "$path" "$cap" || send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
                         else
                             send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
                         fi
-                        continue
+                        body=""
                         ;;
                     help)    body="$(help_text)" ;;
                     panel|start) body="$(help_text)" ;;
