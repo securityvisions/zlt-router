@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved (workstation-vantage + relay; VPS-local installer staged)
 
 - [ ] Health check runs on the VPS every minute: core process alive AND its inbound answers locally (cheap self-probe), else restart via the panel's own service mechanism
 - [ ] Restart action logged on the VPS with timestamp; consecutive-restart cap prevents crash-loops (after N rapid restarts it stops and alerts instead)
