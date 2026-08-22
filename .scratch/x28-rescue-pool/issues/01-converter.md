@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Valid known-answer fixture per protocol converts to expected YAML fields
 - [ ] Hostile corpus (oversized fields, bad base64, injection shapes, wrong schemes, >300 lines) drops offenders without aborting the whole run
