@@ -883,6 +883,22 @@ hn_drift_classify() {
     ' "$1" "$2" "$_pend"
 }
 
+# ---- Bearer-bounce escalation (watchdog last rung) ----
+# hn_bounce_decide <failed_rounds> <last_bounce_age_s> [after=2] [cooldown_s=3600]
+# Pure. "yes" only when enough full switch-rounds have failed to restore
+# data AND the previous bounce is outside its cooldown. The bounce itself is
+# a forced re-registration on the current PLMN (cmd 228) — proven mechanics,
+# not a new vendor surface.
+
+# hn_bounce_decide <failed_rounds> <last_bounce_age_s> [after] [cooldown]
+hn_bounce_decide() {
+    local r="${1:-0}" age="${2:-999999}" after="${3:-2}" cd="${4:-3600}"
+    case "$r"   in *[!0-9]*) r=0      ;; esac
+    case "$age" in *[!0-9]*) age=999999 ;; esac
+    [ "$r" -ge "$after" ] && [ "$age" -ge "$cd" ] && { echo "yes"; return; }
+    echo "no"
+}
+
 # ---- quality-history rollup (the hourly link-quality chart feed) ----
 # The hourly telemetry rows already carry the quality fields (latency,
 # passive_mbps, node) — this reader rolls them into the chart series the

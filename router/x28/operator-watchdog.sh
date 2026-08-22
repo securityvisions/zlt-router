@@ -31,10 +31,16 @@ PROBE_MIN="${WATCHDOG_PROBE_MIN:-2700}"      # min secs between preferred probes
 PROBE_MAX="${WATCHDOG_PROBE_MAX:-10800}"     # probe backoff cap (3h)
 COOLDOWN="${WATCHDOG_COOLDOWN:-600}"         # no-switch window after a switch
 MAX_PER_HOUR="${WATCHDOG_MAX_H:-3}"          # switch storm guard
+BOUNCE_AFTER="${WATCHDOG_BOUNCE_AFTER:-2}"   # failed switch-rounds before bearer bounce
+BOUNCE_COOLDOWN="${WATCHDOG_BOUNCE_COOLDOWN:-3600}"  # min secs between bounces
+WAN_BOUNCE_DRYRUN="${WATCHDOG_WAN_BOUNCE_DRYRUN:-0}" # 1 = log the bounce, never act
 
 LOG=/data/proxy/watchdog.log
 STATEDIR=/tmp/x28-watchdog
-ENDPOINTS="https://1.1.1.1 https://216.239.38.120"
+ENDPOINTS="${WATCHDOG_ENDPOINTS:-https://1.1.1.1 https://216.239.38.120}"
+
+# hnlib: bounce decision + outage ledger hooks (best-effort source)
+for _hnl in /data/proxy/hnlib.sh /root/hnlib.sh; do [ -f "$_hnl" ] && . "$_hnl" && break; done
 
 mkdir -p "$STATEDIR"
 
@@ -139,10 +145,49 @@ do_switch() {
     return 1
 }
 
+# do_bounce <plmn> — escalation rung: forced re-registration on the CURRENT
+# operator (same proven cmd 228 path as a switch, but without the already-on
+# shortcut) — this is what unsticks a wedged data bearer. Ledgered + notified;
+# WAN_BOUNCE_DRYRUN=1 logs the decision and never acts.
+do_bounce() {
+    cur="$1"
+    if [ "$WAN_BOUNCE_DRYRUN" = "1" ] || [ "$WATCHDOG_DRYRUN" = "1" ]; then
+        log "DRYRUN: would bounce bearer (forced re-register on $cur)"
+        return 0
+    fi
+    log "escalation: bouncing bearer via forced re-register on $cur"
+    echo "$(now)" > "$STATEDIR/last-bounce"
+    sh /data/proxy/x28-outage-ledger.sh add-down 2>/dev/null || true
+    resp=$(X28_TARGET_PLMN="$cur" X28_TARGET_ACT="$ACT" timeout 100 sh /data/proxy/reselect.sh 2>&1 | tail -n1)
+    log "bounce reselect: $resp"
+    i=0
+    while [ $i -lt 8 ]; do
+        sleep 15
+        if check_data; then
+            sh /data/proxy/dns-fix.sh >/dev/null 2>&1 || true
+            sh /data/proxy/x28-outage-ledger.sh add-up 2>/dev/null || true
+            log "bearer bounce OK: data restored"
+            notify "🔄 Bearer bounced — data restored" \
+                   "Switches failed $ROUNDS_FAILED round(s); forced re-register on $(opname "$cur") recovered the data plane."
+            return 0
+        fi
+        i=$((i + 1))
+    done
+    log "bearer bounce done but data still down"
+    notify "🔄 Bearer bounced — still down" \
+           "Forced re-register on $(opname "$cur") did not restore data; watchdog keeps monitoring."
+    return 1
+}
+
 # ---- one-shot modes ----
 cmd="$1"
 if [ "$cmd" = "switch" ] && [ -n "$2" ]; then
     do_switch "$2"
+    exit $?
+fi
+if [ "$cmd" = "bounce" ]; then
+    cur="$(cur_plmn)"; [ -z "$cur" ] && cur="$PREFERRED"
+    do_bounce "$cur"
     exit $?
 fi
 if [ "$cmd" = "once" ]; then
@@ -154,10 +199,11 @@ fi
 
 # ---- daemon ----
 fails=0
+ROUNDS_FAILED=0
 last_probe=0
 probe_delay=$PROBE_MIN
 echo "$(now)" > "$STATEDIR/lastswitch"
-log "watchdog started (preferred=$PREFERRED fallback=$FALLBACK interval=${CHECK_INTERVAL}s threshold=$FAIL_THRESHOLD dryrun=${WATCHDOG_DRYRUN:-0})"
+log "watchdog started (preferred=$PREFERRED fallback=$FALLBACK interval=${CHECK_INTERVAL}s threshold=$FAIL_THRESHOLD bounce_after=$BOUNCE_AFTER dryrun=${WATCHDOG_DRYRUN:-0})"
 
 while :; do
     sleep "$CHECK_INTERVAL"
@@ -174,6 +220,7 @@ while :; do
 $(sh /data/proxy/x28-status.sh 2>/dev/null | sed -n '1,3p')"
         fi
         fails=0
+        ROUNDS_FAILED=0
         echo "$(now)" > "$STATEDIR/lastdata"
         if [ "$p" = "$FALLBACK" ]; then
             t=$(now); lp=$(cat "$STATEDIR/lastswitch" 2>/dev/null || echo 0)
@@ -202,11 +249,28 @@ $(sh /data/proxy/x28-status.sh 2>/dev/null | sed -n '1,3p')"
             t=$(now); lp=$(cat "$STATEDIR/lastswitch" 2>/dev/null || echo 0)
             if [ $((t - lp)) -lt "$COOLDOWN" ]; then
                 log "cooldown active ($((t - lp))s since last switch) - waiting"
+                # Escalation rung: switches keep failing to restore data →
+                # bounce the bearer itself (forced re-register, own cooldown).
+                lb=$(cat "$STATEDIR/last-bounce" 2>/dev/null || echo 0)
+                age=$((t - lb))
+                case "$age" in *[!0-9]*) age=999999 ;; esac
+                if [ "$(hn_bounce_decide "$ROUNDS_FAILED" "$age" "$BOUNCE_AFTER" "$BOUNCE_COOLDOWN")" = "yes" ]; then
+                    target="$p"
+                    [ -z "$target" ] && target="$PREFERRED"
+                    do_bounce "$target"
+                    ROUNDS_FAILED=0
+                fi
             else
                 if [ "$p" = "$PREFERRED" ] || [ -z "$p" ]; then
-                    do_switch "$FALLBACK" || true
+                    do_switch "$FALLBACK"; rc=$?
                 else
-                    do_switch "$PREFERRED" || true
+                    do_switch "$PREFERRED"; rc=$?
+                fi
+                if [ "$rc" = "0" ]; then
+                    ROUNDS_FAILED=0
+                else
+                    ROUNDS_FAILED=$((ROUNDS_FAILED + 1))
+                    log "switch round failed ($ROUNDS_FAILED consecutive) — escalation ladder armed"
                 fi
                 fails=0
             fi
