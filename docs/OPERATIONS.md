@@ -185,5 +185,12 @@ Each piece is independently reversible:
 4. **~4 min** — X28-side core heal (`x28-vps-heal`) fires the same `restartSb` as backstop.
 5. **Throughout a tunnel death** — dns-fix fail-open keeps raw internet alive: ISP DNS + top `RETURN` in the split chain.
 6. **Post-reboot** — Boot Doctor verifies/repairs at ~90 s and sends one verdict card.
-7. **Weekly** — Sunday 05:00 maintenance reboot when uptime ≥14 d or free RAM <60 MB (skipped with an alert if the clock fails its HTTP-Date sanity check).
+7. **~4 min owned-dead, all nodes** — rescue pool promotion: `world` selector flips to admitted collected nodes (requires ≥1 alive candidate); reverts automatically after ~10 min of stable owned health. `/rescue off` disables and forces world→auto.
+8. **Weekly** — Sunday 05:00 maintenance reboot when uptime ≥14 d or free RAM <60 MB (skipped with an alert if the clock fails its HTTP-Date sanity check).
+9. **Nightly** — drift guard snapshots the critical config set and alerts on any unexpected change (`x28-drift.sh ack` after review).
 8. **Nightly** — drift guard snapshots the critical config set and alerts on any unexpected change (`x28-drift.sh ack` after review).
+
+### Rescue pool quick-troubleshooting
+- `sh /data/proxy/x28-rescue.sh status` — enabled? world? pool aliveness?
+- Pool empty/0 alive for days → sweep found nothing new; check `collect.log` and consider adding channels to `rescue-channels.txt`.
+- Want out instantly: send `/rescue off` (persists across reboots).
