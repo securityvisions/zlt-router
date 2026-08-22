@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 02, 03, 04, 05, 06, 07 — snapshot gates first deploy; docs describe what actually shipped.
 
-**Status:** ready-for-agent
+**Status:** resolved (07 remains needs-info)
 
 - [ ] Rollback snapshot created before this batch's first deploy (manifest verified, restore notes written)
 - [ ] CONTEXT.md glossary entries added in house style (with _Avoid:_ lines where applicable)
