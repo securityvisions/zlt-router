@@ -82,6 +82,13 @@ proxy-groups:
       - babaii
 
 rules:
+  # Iranian academic portals (SRBIAU/IAU family) — pinned DIRECT by domain:
+  # foreign CDN fronting defeats GEOIP,IR, and university SSO rejects
+  # non-Iranian exits. Covers *.iau.ir (stdn2 etc.), *.srbiau.ac.ir
+  # (amoozesh/edu/reg/login), and any host containing "amoozesh".
+  - DOMAIN-SUFFIX,iau.ir,DIRECT
+  - DOMAIN-SUFFIX,srbiau.ac.ir,DIRECT
+  - DOMAIN-KEYWORD,amoozesh,DIRECT
   - DOMAIN-SUFFIX,saymyname.website,DIRECT
   - IP-CIDR,185.137.27.122/32,DIRECT,no-resolve
   - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
