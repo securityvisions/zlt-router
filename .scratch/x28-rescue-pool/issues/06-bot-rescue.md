@@ -4,7 +4,7 @@
 
 **Blocked by:** 05.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Status/on/off wired to the persisted flag; survives reboot
 - [ ] off forces world→auto immediately even while promoted
