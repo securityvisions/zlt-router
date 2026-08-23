@@ -195,9 +195,12 @@ roll() {
                         month_marker="$DIR/month-marker"
                         last_month=$(cat "$month_marker" 2>/dev/null || echo "")
                         if [ "$last_month" != "$prev_jmonth" ]; then
-                            if sh /data/proxy/x28-people.sh "$prev_jmonth" 2>/dev/null | grep -q "TOTAL"; then
-                                card2=$(sh /data/proxy/x28-people.sh "$prev_jmonth" 2>/dev/null)
-                                [ -n "$card2" ] && sh /data/proxy/tg-notify.sh "Monthly People — $prev_jmonth" "$card2" 2>/dev/null || true
+                            if sh /data/proxy/usage/x28-people.sh --html "$prev_jmonth" 2>/dev/null | grep -q "Toman"; then
+                                card2=$(sh /data/proxy/usage/x28-people.sh --html "$prev_jmonth" 2>/dev/null)
+                                [ -n "$card2" ] && sh /data/proxy/tg-notify.sh "📊 Monthly Ledger — $prev_jmonth" "$card2" 2>/dev/null || true
+                                # freeze the page (immutable history, survives pruning)
+                                mkdir -p "${DIR}/ledger" 2>/dev/null
+                                printf '%s' "$card2" > "${DIR}/ledger/J-${prev_jmonth}.txt" 2>/dev/null || true
                                 echo "$prev_jmonth" > "$month_marker" 2>/dev/null || true
                             fi
                         fi

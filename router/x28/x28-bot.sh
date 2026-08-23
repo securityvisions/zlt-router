@@ -415,6 +415,9 @@ $(esc "$(sh /data/proxy/x28-outage-ledger.sh report 2>/dev/null)")" ;;
                                 html_send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
                             fi
                             body="" ;;
+                        ledg:*)
+                            lf=${action#ledg:}
+                            if [ -f "$lf" ]; then body=$(cat "$lf"); else body="page not found"; fi ;;
                         help)    body="$(help_text)" ;;
                         panel|start) body="$(help_text)" ;;
                         *)       body="unknown tap" ;;
@@ -500,6 +503,23 @@ $out" ;;
 $(esc "$(sh /data/proxy/x28-rescue.sh status 2>/dev/null)")$( [ -n "$rarg" ] && printf '\n<i>switched: %s</i>' "$rarg" )" ;;
                     /digest)
                         html_send "$(sh /data/proxy/x28-digest.sh 2>/dev/null)" ;;
+                    /ledger)
+                        ldir="/data/proxy/usage/ledger"
+                        if [ -d "$ldir" ] && ls "$ldir"/J-*.txt >/dev/null 2>&1; then
+                            kb='{"inline_keyboard":['
+                            first=1
+                            for f in $(ls -1r "$ldir"/J-*.txt 2>/dev/null | head -12); do
+                                jm=$(basename "$f" .txt); [ "$first" = "0" ] && kb="$kb,"
+                                kb="$kb[{"text":"$jm","callback_data":"ledg:$f"}]"; first=0
+                            done; kb="$kb]}"
+                            timeout 20 curl -s -m 18 -x "$PROXY" "$API/sendMessage" \
+                                --data-urlencode "chat_id=$CHAT_ID" \
+                                --data-urlencode "text=📜 <b>Frozen Ledger pages</b> — tap to view" \
+                                --data-urlencode "parse_mode=HTML" \
+                                --data-urlencode "reply_markup=$kb" >/dev/null 2>&1 || true
+                        else
+                            html_send "📜 <b>Ledger</b> — no frozen pages yet (first appears after next Jalali month-end)"
+                        fi ;;
                     /switch_mci)     do_switch "$MCI" "MCI" ;;
                     /switch_rightel) do_switch "$RIGHTEL" "Rightel" ;;
                     *) html_send "❓ Unknown command — <code>/help</code> lists everything." ;;
