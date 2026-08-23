@@ -83,7 +83,7 @@ assert_contains "people unassigned" "unassigned" "$out"
 assert_contains "people total" "TOTAL" "$out"
 # Ensure outside files not counted: 07-22 and 08-23 should not affect total (if they were, total would be 5.5)
 # We already verified total 4.5, so outside not counted
-echo "$out" | grep -q "4.50" || { echo "FAIL - people total GB 4.50"; echo "$out"; FAIL=$((FAIL+1)); } 
+echo "$out" | grep -q "4.5 GB" || { echo "FAIL - people total GB 4.5"; echo "$out"; FAIL=$((FAIL+1)); }
 PASS=$((PASS+1))
 # Invalid month
 out=$(USAGE_DIR="$USAGE" sh "$PEOPLE_SH" invalid 2>&1); rc=$?
