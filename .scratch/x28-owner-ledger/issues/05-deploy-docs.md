@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 02, 03, 04.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Snapshot taken before first deploy of the batch (manifest + restore notes)
 - [ ] Docs updated in house style; suite + web typecheck green
