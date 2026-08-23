@@ -4,6 +4,7 @@ HERE=$(cd "$(dirname "$0")" 2>/dev/null && pwd)
 HN_LIB="$HERE/../hnlib.sh"
 [ -f "$HN_LIB" ] || HN_LIB="$HERE/hnlib.sh"
 . "$HN_LIB"
+[ -f "$(dirname "$0")/../ledger-rules.sh" ] && . "$(dirname "$0")/../ledger-rules.sh"
 
 PASS=0; FAIL=0
 assert_eq() { if [ "$2" = "$3" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); echo "FAIL - $1"; printf '  expect: [%s]\n' "$2"; printf '  actual: [%s]\n' "$3"; fi; }
