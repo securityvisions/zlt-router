@@ -30,7 +30,8 @@ MAXMSG="${MAXMSG:-4000}"
 esc() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
 
 split_chunks() {
-    printf '%s\n' "${1:-}" | awk -v max="$MAXMSG" '
+    printf '%s\n' "${1:-}" | awk -v max="${MAXMSG:-4000}" '
+    BEGIN { if (max !~ /^[0-9]+$/ || max == 0) max = 4000 }
     {
         line = $0 "\n"
         while (length(line) > max) { print substr(line, 1, max); line = substr(line, max+1) }

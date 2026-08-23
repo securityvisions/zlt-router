@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] tg-lib.sh exports: send, edit, send_photo, ack_cbq, post (generic)
 - [ ] Chunk budget (MAXMSG), preview suppression, HTML parse_mode are module constants/config
