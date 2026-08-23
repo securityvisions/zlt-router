@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — freezes the rendered ledger card.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Freeze fires once per Jalali month (marker), writes the page under the ledger store, survives reboot
 - [ ] `/ledger` lists months newest-first; tapping any renders the frozen page verbatim
