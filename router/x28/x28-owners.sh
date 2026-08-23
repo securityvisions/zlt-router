@@ -8,7 +8,9 @@ OWNERS_FILE="${OWNERS_FILE:-/data/proxy/owners.conf}"
 HN_LIB="${HN_LIB:-/root/hnlib.sh}"
 [ -f "$HN_LIB" ] || HN_LIB="/data/proxy/hnlib.sh"
 [ -f "$HN_LIB" ] || HN_LIB="$(dirname "$0")/../hnlib.sh"
-[ -f "$HN_LIB" ] && . "$HN_LIB" 2>/dev/null || true
+[ -f "$HN_LIB" ] && . "$HN_LIB"
+_rules_dir="$(dirname "$0")"
+[ -f "$_rules_dir/ledger-rules.sh" ] && . "$_rules_dir/ledger-rules.sh" 2>/dev/null || true
 
 cmd="${1:-list}"
 case "$cmd" in
@@ -82,6 +84,47 @@ case "$cmd" in
         done < "$OWNERS_FILE" > "$tmp"
         mv "$tmp" "$OWNERS_FILE"
         echo "✏️ $old_name → $new_name ($(grep -c "$new_name" "$OWNERS_FILE") devices)"
+        ;;
+    reattribute)
+        # walk existing owners-d files and update person names from current conf
+        od="${USAGE_DIR:-/data/proxy/usage}/owners-d"
+        [ -d "$od" ] || { echo "no owners-d dir"; exit 0; }
+        count=0
+        for f in "$od"/20*; do
+            [ -f "$f" ] || continue
+            tmp="$f.attr"
+            while IFS='|' read -r mac up down; do
+                p=$(hn_owner_of "$mac" 2>/dev/null || echo "")
+                [ -z "$p" ] && p="unassigned"
+                printf '%s|%s|%s|%s\n' "$p" "$mac" "$up" "$down"
+            done < "$f" > "$tmp"
+            if ! cmp -s "$f" "$tmp"; then mv "$tmp" "$f"; count=$((count+1)); else rm -f "$tmp"; fi
+        done
+        echo "✅ re-attributed $count files"
+        ;;
+    reattribute)
+        od="${USAGE_DIR:-/data/proxy/usage}/owners-d"
+        [ -d "$od" ] || { echo "no owners-d directory"; exit 0; }
+        count=0
+        for f in "$od"/20*; do
+            [ -f "$f" ] || continue
+            tmp="$f.reattr"
+            while IFS='|' read -r mac up down; do
+                p=""
+                if command -v hn_owner_of >/dev/null 2>&1; then
+                    p=$(hn_owner_of "$mac" "$OWNERS_FILE" 2>/dev/null)
+                else
+                    want=$(printf '%s' "$mac" | tr 'A-Z' 'a-z')
+                    line=$(grep -i "^$(printf '%s' "$want" | sed 's/[][\.*^$]/\\&/g')|" "$OWNERS_FILE" 2>/dev/null | head -1)
+                    p=$(printf '%s' "$line" | cut -d'|' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                fi
+                [ -z "$p" ] && p="unassigned"
+                printf '%s|%s|%s|%s\n' "$p" "$mac" "$up" "$down"
+            done < "$f" > "$tmp"
+            if ! cmp -s "$f" "$tmp"; then mv "$tmp" "$f"; count=$((count+1)); fi
+            rm -f "$tmp"
+        done
+        echo "✅ re-attributed $count files"
         ;;
     get)
         mac="${2:-}"

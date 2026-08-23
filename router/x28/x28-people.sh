@@ -32,9 +32,69 @@ bar() { awk -v p="${1:-0}" -v w="${2:-10}" 'BEGIN{
     for(i=0;i<w;i++){ if(i<f) s=s "▰"; else s=s "▱" } print s}'; }
 
 mode="text"; jmonth=""
+
+# ── daily mode: single day ──────────────────────────────────────────────────
+if [ "${1:-}" = "--daily" ]; then
+    ddate="${2:?date required}"
+    OWNERS_D="${USAGE_DIR:-/data/proxy/usage}/owners-d"
+    f="$OWNERS_D/$ddate"
+    if [ ! -f "$f" ]; then echo "(no data for $ddate)"; exit 0; fi
+    [ -r "$USAGE_DIR/billing.conf" ] && . "$USAGE_DIR/billing.conf" 2>/dev/null || true
+    RATE_FULL="${RATE_FULL:-7700}"; RATE_FRIDAY="${RATE_FRIDAY:-4620}"
+    is_fri=$(date -d "$ddate" +%u 2>/dev/null || echo 1)
+    rate=$RATE_FULL; [ "$is_fri" = "5" ] && rate=$RATE_FRIDAY
+    echo "📅 Daily — $ddate"
+    echo "person        GB      Toman"
+    while IFS='|' read -r person mac up down; do
+        bytes=$(( ${up:-0} + ${down:-0} )); [ $bytes -le 0 ] && continue
+        cost=$(awk -v b="$bytes" -v r="$rate" 'BEGIN{printf "%.0f", b/1073741824*r}')
+        gb=$(awk -v b=$bytes 'BEGIN{printf "%.2f",b/1073741824}')
+        printf '%-12s %7s GB %9d T\n' "${person:-?}" "$gb" "$cost"
+    done < "$f" | sort -t'#' -k1
+    exit 0
+fi
+
+# ── yearly mode: aggregate all months in a Jalali year ────────────────────
+if [ "${1:-}" = "--yearly" ]; then
+    jyear="${2:?Jalali year required (e.g. 1405)}"
+    OWNERS_D="${USAGE_DIR:-/data/proxy/usage}/owners-d"
+    AGGY=$(mktemp); : > "$AGGY"
+    for m in $(seq 1 12); do
+        mj=$(printf '%04d-%02d' "$jyear" "$m")
+        mr=$(hn_jalali_month_range "$mj" 2>/dev/null) || continue
+        [ -z "$mr" ] && continue
+        ms=$(echo "$mr"|cut -d' ' -f1); me=$(echo "$mr"|cut -d' ' -f2)
+        cd2="$ms"
+        while [ -n "$cd2" ]; do
+            [ "$cd2" \> "$me" ] 2>/dev/null && break
+            f="$OWNERS_D/$cd2"
+            if [ -f "$f" ]; then
+                while IFS='|' read -r person mac up down; do
+                    [ -n "$person" ]||continue; bytes=$(( ${up:-0}+${down:-0} ))
+                    printf '%s|%s|%s\n' "$person" "$bytes" "$(( bytes * RATE_FULL / 1073741824 ))" >> "$AGGY"
+                done < "$f"
+            fi
+            cd2=$(hn_jalali_to_greg "$(hn_greg_to_jalali "$cd2" | awk -F- '{jd=$3+1;printf "%04d-%02d-%02d",$1,$2,jd}')" 2>/dev/null) || break
+            [ -z "$cd2" ] && break
+        done
+    done
+    if [ -s "$AGGY" ]; then
+        echo "📅 Yearly — $jyear"
+        echo "person        GB      Toman"
+        sort "$AGGY" | awk -F'|' '{u[$1]+=$2;c[$1]+=$3}
+            END{for(p in u) printf "%-12s %7.2f GB %9d T\n",p,u[p]/1073741824,c[p]}'
+    else
+        echo "(no data for year $jyear)"
+    fi
+    rm -f "$AGGY"; exit 0
+fi
+
+mode="text"; jmonth=""
 case "${1:-}" in
     --html)  mode="html"; jmonth="${2:-}" ;;
     --freeze) mode="freeze"; jmonth="${2:?month required}" ;;
+    --daily)  mode="daily"; jmonth="${2:?date required (YYYY-MM-DD)}" ;;
+    --yearly) mode="yearly"; jmonth="${2:?Jalali year required (YYYY)}" ;;
     *)       jmonth="${1:-}" ;;
 esac
 
@@ -103,6 +163,40 @@ no_data() {
     fi
     return 0
 }
+
+# yearly mode: aggregate all months in the Jalali year
+if [ "$mode" = "yearly" ]; then
+    : > "$AGG"
+    for m in $(seq 1 12); do
+        mj=$(printf '%04d-%02d' "$jy" "$m")
+        mr=$(hn_jalali_month_range "$mj" 2>/dev/null) || continue
+        [ -z "$mr" ] && continue
+        ms=$(printf '%s' "$mr" | cut -d' ' -f1)
+        me=$(printf '%s' "$mr" | cut -d' ' -f2)
+        cd2="$ms"
+        while [ -n "$cd2" ]; do
+            [ "$cd2" \> "$me" ] 2>/dev/null && break
+            f="$OWNERS_D/$cd2"
+            if [ -f "$f" ]; then
+                while IFS='|' read -r person mac up down; do
+                    [ -n "$person" ] || continue
+                    bytes=$(( ${up:-0} + ${down:-0} ))
+                    cost=$(awk -v b="$bytes" -v r="$RATE_FULL" 'BEGIN{printf "%.0f", b/1073741824*r}')
+                    printf '%s\t%s\t%s\t%s\n' "$person" "$mac" "$bytes" "$cost" >> "$AGG.tmp"
+                done < "$f"
+            fi
+            cd2=$(hn_jalali_to_greg "$(hn_greg_to_jalali "$cd2" | awk -F- '{jd=$3+1; printf "%04d-%02d-%02d",$1,$2,jd}')" 2>/dev/null) || break
+            [ -z "$cd2" ] && break
+        done
+    done
+    if [ -s "${AGG}.tmp" ]; then
+        awk -F'\t' '{u[$1]+=$2;c[$1]+=$3}
+            END{for(p in u) printf "%s\t%d\t%d\n",p,u[p],c[p]}' "${AGG}.tmp" > "$AGG"
+        rm -f "${AGG}.tmp"
+    fi
+    # override label for yearly display
+    label="سال $jy"
+fi
 
 if [ ! -s "$AGG" ]; then no_data; [ "$mode" = "freeze" ] && exit 1; exit 0; fi
 
