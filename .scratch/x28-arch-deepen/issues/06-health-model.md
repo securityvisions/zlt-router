@@ -4,7 +4,7 @@
 
 **Blocked by:** 04.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] health-model.sh exports: hn_health_link_penalty, hn_health_proxy_penalty, hn_health_freshness_penalty, hn_health_score, hn_health_band, hn_svc_probe, hn_svc_down, hn_svc_penalty, hn_dns_success_rate, hn_dns_penalty, hn_dns_stats, hn_q_decision, hn_q_suspicious
 - [ ] hnlib re-exports during migration

@@ -45,6 +45,9 @@ DIV=1073741824
 # implementation. Tests point HN_LIB at the repo copy.
 HN_LIB="${HN_LIB:-/root/hnlib.sh}"
 [ -f "$HN_LIB" ] && . "$HN_LIB"
+# health model (re-exported from hnlib, now a separate module)
+_hm_dir="$(dirname "$HN_LIB")"
+[ -f "$_hm_dir/health-model.sh" ] && . "$_hm_dir/health-model.sh"
 
 # ---------- tiny JSON helpers ----------
 ra_esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
