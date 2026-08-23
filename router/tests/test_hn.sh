@@ -7,6 +7,7 @@ HERE=$(cd "$(dirname "$0")" 2>/dev/null && pwd)
 HN_LIB="$HERE/../hnlib.sh"
 [ -f "$HN_LIB" ] || HN_LIB="$HERE/hnlib.sh"
 . "$HN_LIB"
+[ -f "$(dirname "$0")/../health-model.sh" ] && . "$(dirname "$0")/../health-model.sh"
 
 PASS=0; FAIL=0
 assert_eq() {  # assert_eq <desc> <expected> <actual>
