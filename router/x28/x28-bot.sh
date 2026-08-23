@@ -90,6 +90,21 @@ safe_arg() {
 }
 now_hm() { date '+%H:%M' 2>/dev/null; }
 
+# join_chunks <text> - <=MAXMSG pieces joined by the sentinel "[[C]]".
+# Pieces land in a temp file first so every awk has an explicit input file
+# (deep $( ) nesting + inherited stdin caused a rare pipe hang).
+join_chunks() {
+    _jf=$(mktemp) || return 1
+    split_chunks "${1:-}" > "$_jf"
+    awk -v max="$MAXMSG" -v sep="[[C]]" '
+    {
+        piece = $0 "\n"
+        if (length(buf) > 0 && length(buf) + length(piece) > max) { printf "%s%s", buf, sep; buf = "" }
+        buf = buf piece
+    }
+    END { sub(/\n$/, "", buf); printf "%s", buf }' "$_jf"
+    rm -f "$_jf"
+}
 # ---------- telegram transport ----------
 tg_post() {  # tg_post <method> <args…> — response-aware logging
     _m="$1"; shift
@@ -103,31 +118,38 @@ tg_post() {  # tg_post <method> <args…> — response-aware logging
     printf '%s' "$_resp"
 }
 
-html_send() {  # html_send <html-text> — chunked sendMessage (HTML, no preview)
-    split_chunks "${1:-}" | while IFS= read -r _part; do
-        [ -n "$_part" ] || continue
-        tg_post sendMessage \
-            --data-urlencode "chat_id=${CHAT_ID:-}" \
-            --data-urlencode "text=$_part" \
-            --data-urlencode "parse_mode=HTML" \
-            --data-urlencode 'link_preview_options={"is_disabled":true}' >/dev/null 2>&1 || true
+send_one() {  # send_one <html-text> — exactly one sendMessage call
+    tg_post sendMessage \
+        --data-urlencode "chat_id=${CHAT_ID:-}" \
+        --data-urlencode "text=$1" \
+        --data-urlencode "parse_mode=HTML"         --data-urlencode 'link_preview_options={"is_disabled":true}' >/dev/null 2>&1 || true
+}
+
+html_send() {  # html_send <html-text>
+    rest=$(join_chunks "${1:-}")
+    while [ -n "$rest" ]; do
+        case "$rest" in
+            *"[[C]]"*) part=${rest%%"[[C]]"*}; rest=${rest#*"[[C]]"} ;;
+            *)         part=$rest;             rest="" ;;
+        esac
+        [ -n "$part" ] && send_one "$part"
     done
 }
 
 edit_html() {  # edit_html <mid> <html-text> — edit in place, fall back to send
     _mid="$1"
-    split_chunks "$2" | while IFS= read -r _part; do
-        [ -n "$_part" ] || continue
-        _resp=$(tg_post editMessageText \
-            --data-urlencode "chat_id=${CHAT_ID:-}" \
-            --data-urlencode "message_id=$_mid" \
-            --data-urlencode "text=$_part" \
-            --data-urlencode "parse_mode=HTML" \
-            --data-urlencode 'link_preview_options={"is_disabled":true}')
+    rest=$(join_chunks "$2")
+    while [ -n "$rest" ]; do
+        case "$rest" in
+            *"[[C]]"*) part=${rest%%"[[C]]"*}; rest=${rest#*"[[C]]"} ;;
+            *)         part=$rest;             rest="" ;;
+        esac
+        [ -n "$part" ] || continue
+        _resp=$(tg_post editMessageText             --data-urlencode "chat_id=${CHAT_ID:-}"             --data-urlencode "message_id=$_mid"             --data-urlencode "text=$part"             --data-urlencode "parse_mode=HTML"             --data-urlencode 'link_preview_options={"is_disabled":true}')
         _ok=$(printf '%s' "$_resp" | "$JQ" -r '.ok // "false"' 2>/dev/null)
         if [ "$_ok" != "true" ]; then
-            # not-modified is benign; anything else -> fresh message so data lands
-            html_send "$_part"
+            _desc=$(printf '%s' "$_resp" | "$JQ" -r '.description // ""' 2>/dev/null)
+            case "$_desc" in *"not modified"*) : ;; *) html_send "$part" ;; esac
         fi
     done
 }

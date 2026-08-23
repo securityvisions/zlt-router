@@ -44,4 +44,19 @@ assert_eq "verdict: green passthrough" "✅ HEALTH: GREEN (all checks passed)" "
 assert_contains "verdict: red" "❌ HEALTH: RED" "$(verdict_emoji 'HEALTH: RED (2 check(s) failed)')"
 assert_eq "verdict: unknown" "⚠️ unknown" "$(verdict_emoji '')"
 
+
+# ── join_chunks — regression for the one-message-per-line incident ─────────
+multi=$(for i in $(seq 1 300); do echo "line-$i-padding-padding-padding"; done)
+j=$(join_chunks "$multi")
+printf '%s' "$j" | grep -q $'\n' && { FAIL=$((FAIL+1)); echo "FAIL - joined output contains raw newline"; } || PASS=$((PASS+1))
+# single small card => exactly one piece (no sentinel at all)
+small_card=$(printf 'a\nb\nc')
+j2=$(join_chunks "$small_card")
+printf '%s' "$j2" | grep -qF '[[C]]' && { FAIL=$((FAIL+1)); echo "FAIL - sentinel in single chunk"; } || PASS=$((PASS+1))
+assert_contains "join preserves content" "line-300" "$j"
+# oversize => exactly one sentinel between two parts
+big=$(printf 'x%.0s' $(seq 1 4500))
+n=$(printf '%s' "$(join_chunks "$big")" | grep -oF '[[C]]' | wc -l)
+assert_eq "join: oversize splits once" "1" "$n"
+
 summary
