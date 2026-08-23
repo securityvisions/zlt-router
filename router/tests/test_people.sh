@@ -4,6 +4,7 @@ HERE=$(cd "$(dirname "$0")" 2>/dev/null && pwd)
 HN_LIB="$HERE/../hnlib.sh"
 [ -f "$HN_LIB" ] || HN_LIB="$HERE/hnlib.sh"
 . "$HN_LIB"
+[ -f "$(dirname "$0")/../ledger-rules.sh" ] && . "$(dirname "$0")/../ledger-rules.sh"
 
 PASS=0; FAIL=0
 assert_eq() { if [ "$2" = "$3" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); echo "FAIL - $1"; printf '  expect: [%s]\n' "$2"; printf '  actual: [%s]\n' "$3"; fi; }
@@ -106,10 +107,12 @@ cat > "$ROLL_TMP/owners.conf" <<'EOF'
 aa:bb:cc:dd:ee:ff|Ali
 EOF
 # Simulate roll's owners aggregation (call the same logic as in usage-collect.sh)
-DIR="$ROLL_TMP" HN_OWNERS_FILE="$ROLL_TMP/owners.conf" HN_LIB="$HN_LIB" sh -c '
+DIR="$ROLL_TMP" HN_OWNERS_FILE="$ROLL_TMP/owners.conf" HN_LIB="$HN_LIB" OWNERS_FILE="$ROLL_TMP/owners.conf" sh -c '
     DIR="$1"; HN_OWNERS_FILE="$2"; HN_LIB="$3"
     day="2026-08-22"; dayf="$DIR/day/$day"
     . "$HN_LIB" 2>/dev/null || true
+    _lr="$(dirname "$HN_LIB")/ledger-rules.sh"
+    [ -f "$_lr" ] && . "$_lr" 2>/dev/null || true
     OWNER_DIR="$DIR/owners"
     mkdir -p "$OWNER_DIR"
     : > "$DIR/.person.tmp"

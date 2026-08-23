@@ -6,31 +6,30 @@
 #   --html [month]     HTML card   — bot (/people · /month · Panel)
 #   --freeze <month>   write the rendered page to ledger/J-<month>.txt
 #
-# Data: owners-d/YYYY-MM-DD rows (person|mac|up|down) — device-granularity,
-# written by the nightly roll and the one-shot backfill.
-#
-# Env seams for tests: USAGE_DIR, HN_OWNERS_FILE, HN_LIB, NOW override via
-# PEOPLE_TODAY (Gregorian YYYY-MM-DD).
+# Data: owners-d/YYYY-MM-DD rows (person|mac|up|down) via ledger-store.
+# Env seams: USAGE_DIR, HN_OWNERS_FILE, HN_LIB, PEOPLE_TODAY.
 set -eu
 
 USAGE_DIR="${USAGE_DIR:-/data/proxy/usage}"
-OWNERS_D="$USAGE_DIR/owners-d"
 LEDGER_DIR="${LEDGER_DIR:-$USAGE_DIR/ledger}"
 HN_LIB="${HN_LIB:-/root/hnlib.sh}"
 [ -f "$HN_LIB" ] || HN_LIB="/data/proxy/hnlib.sh"
 [ -f "$HN_LIB" ] || HN_LIB="$(dirname "$0")/../hnlib.sh"
 [ -f "$HN_LIB" ] && . "$HN_LIB" 2>/dev/null || true
 
-RATE_FULL=7700
-RATE_FRIDAY=4620
+# source the shared Ledger store (day-walk + rates + aggregation)
+for _ls in "$(dirname "$0")/ledger-store.sh" "/data/proxy/usage/ledger-store.sh"; do
+    [ -f "$_ls" ] && . "$_ls" && break
+done 2>/dev/null
+
+RATE_FULL="${RATE_FULL:-7700}"
+RATE_FRIDAY="${RATE_FRIDAY:-4620}"
 [ -r "$USAGE_DIR/billing.conf" ] && . "$USAGE_DIR/billing.conf" 2>/dev/null || true
 
 esc() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
-bar() {  # bar <pct> <width>
-    awk -v p="${1:-0}" -v w="${2:-10}" 'BEGIN{
-        f=int(p*w/100+0.5); if(f>w)f=w; if(f<0)f=0;
-        for(i=0;i<w;i++){ if(i<f) s=s "▰"; else s=s "▱" } print s}'
-}
+bar() { awk -v p="${1:-0}" -v w="${2:-10}" 'BEGIN{
+    f=int(p*w/100+0.5); if(f>w)f=w; if(f<0)f=0;
+    for(i=0;i<w;i++){ if(i<f) s=s "▰"; else s=s "▱" } print s}'; }
 
 mode="text"; jmonth=""
 case "${1:-}" in
@@ -51,7 +50,7 @@ start_d=$(printf '%s' "$range" | cut -d' ' -f1)
 end_d=$(printf '%s' "$range" | cut -d' ' -f2)
 
 today=${PEOPLE_TODAY:-$(date +%F 2>/dev/null)}
-if [ -n "$today" ] && [ "$start_d" \> "$today" ] 2>/dev/null; then : # future month
+if [ -n "$today" ] && [ "$start_d" \> "$today" ] 2>/dev/null; then :
 elif [ -n "$today" ] && [ "$end_d" \> "$today" ] 2>/dev/null; then end_d="$today"; fi
 
 jy=$(printf '%s' "$jmonth" | cut -d- -f1)
@@ -62,53 +61,54 @@ days_in=$(awk -v s="$start_d" -v e="$end_d" 'BEGIN{
     "date -d " e " +%s" | getline ee; close("date -d " e " +%s")
     print int((ee-se)/86400)+1 }' 2>/dev/null || echo "?")
 
-TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
-RAW="$TMP/raw"
+# ---- aggregate via ledger-store ----
+LS_SCRIPT="$(dirname "$0")/ledger-store.sh"
+[ -f "$LS_SCRIPT" ] || LS_SCRIPT="/data/proxy/usage/ledger-store.sh"
 
-# aggregate across the range: person|mac totals.
-# Busybox-safe: Jalali day-index -> Gregorian via hnlib, weekday via pure-awk
-# civil-days math (no GNU date -d dependency on the router).
-gday() { hn_jalali_to_greg "$1"; }                       # jalali YYYY-MM-DD -> gregorian
-dow_u() {  # weekday 1..7 (Mon=1) from YYYY-MM-DD, pure awk
-    awk -v d="$1" 'BEGIN{
-        split(d,a,"-"); y=a[1]+0; m=a[2]+0; dd=a[3]+0
-        if(m<=2){y--; m+=12}
-        A=int(y/100); B=int(A/4)
-        E=int(365.25*(y+4716)) + int(30.6001*(m+1)) + dd + B - A - 1524.5 - 2440588
-        w=(int(E)%7+3)%7+1   # 1970-01-01 = Thursday(4)
-        print w
-    }'
+AGG=$(mktemp)
+trap 'rm -f "$AGG"' EXIT
+
+# run the store's query in a subshell with correct env
+sh "$LS_SCRIPT" query "$jmonth" > "$AGG" 2>/dev/null || {
+    # fallback: inline walk using hnlib directly
+    : > "$AGG"
+    start_j="$jy-$jm_n-01"
+    jd=1
+    [ "$days_in" = "?" ] 2>/dev/null && days_in=31
+    while [ "$jd" -le "$days_in" ]; do
+        g=$(hn_jalali_to_greg "$(printf '%04d-%02d-%02d' "$jy" "$jm_n" "$jd")" 2>/dev/null) || { jd=$((jd+1)); continue; }
+        [ -n "$g" ] || { jd=$((jd+1)); continue; }
+        [ "$g" \> "$end_d" ] 2>/dev/null && break
+        f="$OWNERS_D/$cur"
+        f="$USAGE_DIR/owners-d/$g"
+        if [ -f "$f" ]; then
+            is_fri=$(dow_u "$g" 2>/dev/null || echo 1)
+            rate=$RATE_FULL; [ "$is_fri" = "5" ] && rate=$RATE_FRIDAY
+            while IFS='|' read -r person mac up down; do
+                [ -n "$person" ] || continue
+                bytes=$(( ${up:-0} + ${down:-0} ))
+                cost=$(awk -v b="$bytes" -v r="$rate" 'BEGIN{printf "%.0f", b/1073741824*r}')
+                printf '%s\t%s\t%s\t%s\n' "$person" "$mac" "$bytes" "$cost" >> "$AGG"
+            done < "$f"
+        fi
+        jd=$((jd + 1))
+    done
 }
 
-jd=1
-[ "$days_in" = "?" ] 2>/dev/null && days_in=31
-while [ "$jd" -le "$days_in" ]; do
-    g=$(hn_jalali_to_greg "$(printf '%04d-%02d-%02d' "$jy" "$jm_n" "$jd")" 2>/dev/null) || { jd=$((jd+1)); continue; }
-    [ -n "$g" ] || { jd=$((jd+1)); continue; }
-    [ "$g" \> "$end_d" ] 2>/dev/null && break
-    cur="$g"
-    f="$OWNERS_D/$cur"
-    if [ -f "$f" ]; then
-        is_fri=$(dow_u "$cur")
-        rate=$RATE_FULL; [ "$is_fri" = "5" ] && rate=$RATE_FRIDAY
-        while IFS='|' read -r person mac up down; do
-            [ -n "$person" ] || continue
-            bytes=$(( ${up:-0} + ${down:-0} ))
-            cost=$(awk -v b="$bytes" -v r="$rate" 'BEGIN{printf "%.0f", b/1073741824*r}')
-            printf '%s\t%s\t%s\t%s\n' "$person" "$mac" "$bytes" "$cost" >> "$RAW"
-        done < "$f"
+no_data() {
+    if [ "$mode" = "html" ]; then
+        printf '<b>👥 دفتر %s %s</b> · %s روز · <i>%s … %s</i>\n' "$(esc "$label")" "$(esc "$jy")" "$(esc "$days_in")" "$(esc "$start_d")" "$(esc "$end_d")"
+    else
+        printf '👥 People — %s (%s)\nrange %s to %s\n(no usage data for this month yet)\n' "$jmonth" "${label:-}" "$start_d" "$end_d"
     fi
-    jd=$((jd + 1))
-done
+    return 0
+}
 
-AGG="$TMP/agg"
-if [ -s "$RAW" ]; then
-    awk -F'\t' '{ u[$1]+=$3; c[$1]+=$4; n[$1]++ }
-                 END { for(p in u) printf "%s\t%d\t%d\n", p, u[p], c[p] }' "$RAW" \
-        | sort -t "$(printf '\t')" -k2,2 -nr > "$AGG"
-fi
+if [ ! -s "$AGG" ]; then no_data; [ "$mode" = "freeze" ] && exit 1; exit 0; fi
 
+total_bytes=$(cut -f2 "$AGG" | awk '{s+=$1} END{print s+0}')
+total_cost=$(cut -f3 "$AGG" | awk '{s+=$1} END{print s+0}')
+total_gb=$(awk -v b="$total_bytes" 'BEGIN{printf "%.1f", b/1073741824}')
 
 hdr() {
     if [ "$mode" = "html" ]; then
@@ -116,67 +116,30 @@ hdr() {
     else
         printf '👥 People — %s (%s)\nrange %s to %s\n' "$jmonth" "$label" "$start_d" "$end_d"
     fi
+    return 0
 }
-no_data() { hdr; if [ "$mode" = "text" ]; then echo "(no usage data for this month yet)"; fi; return 0; }
-
-render_row_html() {  # render_row_html <person> <bytes> <cost> <max_bytes>
-    local gb pct bars
-    gb=$(awk -v b="$2" 'BEGIN{printf "%.1f", b/1073741824}')
-    pct=$(awk -v b="$2" -v m="$4" 'BEGIN{print (m>0)? int(b/m*100):0}')
-    bars=$(bar "$pct" 10)
-    printf '%s <code>%s</code>  %.1f GB · %s T · %s%%\n' \
-        "$(esc "$1")" "$bars" "$gb" "$(printf "%'d" "$3" 2>/dev/null || printf '%s' "$3")" "$pct"
-}
-render_row_text() {
-    local gb
-    gb=$(awk -v b="$2" 'BEGIN{printf "%.2f", b/1073741824}')
-    printf '%-12s %7s GB %9d T\n' "$1" "$gb" "$3"
-}
-
-if [ ! -s "$AGG" ]; then no_data
-    [ "$mode" = "freeze" ] && exit 1
-    exit 0
-fi
-
-total_bytes=$(awk -F'\t' '{s+=$2} END{print s+0}' "$AGG")
-total_cost=$(awk -F'\t' '{s+=$3} END{print s+0}' "$AGG")
-total_gb=$(awk -v b="$total_bytes" 'BEGIN{printf "%.1f", b/1073741824}')
-
 hdr
-[ "$mode" = "text" ] && echo "range $start_d to $end_d"
-max_bytes=$(awk -F'\t' 'BEGIN{m=0} {if($2>m)m=$2} END{print m}' "$AGG")
+
+max_bytes=$(cut -f2 "$AGG" | sort -n | tail -1)
+
+render_html() { printf '%s <code>%s</code>  %.1f GB · %s T · %s%%\n' \
+    "$(esc "$1")" "$(bar "$5" 10)" "$(awk -v b="$2" 'BEGIN{printf "%.1f", b/1073741824}')" \
+    "$(printf "%'d" "$3" 2>/dev/null || echo "$3")" "$5"; }
+render_text() { printf '%-12s %7s GB %9d T\n' "$1" \
+    "$(awk -v b="$2" 'BEGIN{printf "%.2f", b/1073741824}')" "$3"; }
+
+while IFS="$(printf '\t')" read -r person bytes cost; do
+    [ "${bytes:-0}" -gt 0 ] 2>/dev/null || continue
+    pct=0; [ "$max_bytes" -gt 0 ] 2>/dev/null && pct=$(( bytes * 100 / max_bytes ))
+    if [ "$mode" = "html" ]; then render_html "$person" "$bytes" "$cost" "$pct"
+    else render_text "$person" "$bytes" "$cost"; fi
+done < "$AGG"
 
 if [ "$mode" = "html" ]; then
-    echo ""
-    while IFS="$(printf '\t')" read -r person bytes cost; do
-        [ "${bytes:-0}" -gt 0 ] 2>/dev/null || continue
-        render_row_html "$person" "$bytes" "$cost" "$max_bytes"
-    done < "$AGG"
     echo "<i>total <b>${total_gb} GB</b> · $(printf "%'d" "$total_cost" 2>/dev/null || echo "$total_cost") Toman</i>"
 else
-    echo "person        GB      Toman"
-    while IFS="$(printf '\t')" read -r person bytes cost; do
-        [ "${bytes:-0}" -gt 0 ] 2>/dev/null || continue
-        render_row_text "$person" "$bytes" "$cost"
-    done < "$AGG"
     total_gb=$(awk -v b="$total_bytes" 'BEGIN{printf "%.2f", b/1073741824}')
     printf '%-12s %7s GB %9d T\n' "TOTAL" "$total_gb" "$total_cost"
 fi
 
-# breakdown per person (HTML only): expandable per-device lines
-if [ "$mode" = "html" ] && [ -s "${RAW:-}" ]; then
-    echo ""
-    echo "<blockquote expandable>"
-    awk -F'\t' '{ u[$1 SUBSEP $2]+=$3 } END { for(k in u){ split(k,a,SUBSEP); print a[1] "\t" a[2] "\t" u[k] } }' "$RAW" \
-        | sort | while IFS="$(printf '\t')" read -r person mac bytes; do
-            case "$mac" in [0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]) ;; *) continue ;; esac
-            case "${bytes:-}" in ''|[!0-9]*) continue ;; esac
-            [ "${bytes:-0}" -gt 0 ] || continue
-            gb=$(awk -v b="$bytes" 'BEGIN{printf "%.1f", b/1073741824}')
-            printf '%s · <code>%s</code> · %s GB\n' "$(esc "$person")" "$(esc "$mac")" "$gb"
-        done
-    echo "</blockquote>"
-fi
-
-# freeze mode: caller redirects stdout into ledger/J-<month>.txt
 exit 0
