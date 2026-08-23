@@ -119,10 +119,13 @@ roll() {
         tot_up=$(awk -F"|" '!/^#/ {s+=$4} END{print s+0}' "$dayf")
         tot_down=$(awk -F"|" '!/^#/ {s+=$5} END{print s+0}' "$dayf")
         echo "$day total_up=$tot_up total_down=$tot_down" >> "$DIR/month/$(date +%Y-%m).log"
-        # per-owner daily roll (before prune, so Jalali months stay computable)
+        # per-owner daily roll (before prune, so Jalali months stay computable).
+        # Two stores: owners/ (aggregated, legacy readers) and owners-d/
+        # (device-granularity: person|mac|up|down — powers ledger breakdowns).
         OWNERS_FILE="${HN_OWNERS_FILE:-/data/proxy/owners.conf}"
         OWNER_DIR="$DIR/owners"
-        mkdir -p "$OWNER_DIR" 2>/dev/null
+        OWNER_D_DIR="$DIR/owners-d"
+        mkdir -p "$OWNER_DIR" "$OWNER_D_DIR" 2>/dev/null
         if [ ! -f "$OWNER_DIR/.rolled-$day" ]; then
             HN_LIB="${HN_LIB:-/data/proxy/hnlib.sh}"
             [ -f "$HN_LIB" ] || HN_LIB="$(dirname "$0")/../hnlib.sh"
@@ -143,7 +146,9 @@ roll() {
                 fi
                 [ -z "$person" ] && person="unassigned"
                 printf '%s|%s|%s\n' "$person" "$up" "$down" >> "$DIR/.person.tmp"
+                printf '%s|%s|%s|%s\n' "$person" "$mac" "$up" "$down" >> "$DIR/.persond.tmp"
             done < "$dayf"
+            [ -f "$DIR/.persond.tmp" ] && mv "$DIR/.persond.tmp" "$OWNER_D_DIR/$day" 2>/dev/null               || : > "$OWNER_D_DIR/$day"
             if [ -s "$DIR/.person.tmp" ]; then
                 awk -F'|' '{ up[$1]+=$2; down[$1]+=$3 } END { for(p in up) print p"|"up[p]"|"down[p] }' "$DIR/.person.tmp" > "$OWNER_DIR/$day.tmp" 2>/dev/null
                 mv "$OWNER_DIR/$day.tmp" "$OWNER_DIR/$day" 2>/dev/null
