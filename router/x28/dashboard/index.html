@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>X28 Dashboard</title>
+<style>
+:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#e6edf3;--dim:#8b949e;
+      --green:#3fb950;--red:#f85149;--yellow:#d29922;--blue:#58a6ff;
+      --radius:12px;--gap:16px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;padding:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--gap);max-width:1200px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:var(--gap)}
+.card h2{font-size:.85rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card h2 .icon{font-size:1.1em}
+.row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #21262d;font-size:.92rem}
+.row:last-child{border:none}
+.row .k{color:var(--dim)}
+.row .v{font-weight:500;text-align:right}
+.badge{display:inline-block;padding:4px 10px;border-radius:999px;font-size:.78rem;font-weight:700}
+.b-green{background:#23863630;color:var(--green);border:1px solid #23863650}
+.b-red{background:#da363020;color:var(--red);border:1px solid #f8514950}
+.b-yellow{background:#bb800920;color:var(--yellow);border:1px solid #d2992250}
+.bar{height:8px;background:#21262d;border-radius:4px;overflow:hidden;margin:4px 0}
+.bar span{display:block;height:100%;background:var(--blue);border-radius:4px;transition:width .5s}
+.btn{padding:8px 16px;border-radius:8px;border:1px solid var(--border);cursor:pointer;font-size:.85rem;font-weight:600;transition:.15s}
+.btn:hover{filter:brightness(1.2)}
+.btn-danger{background:#da363020;color:var(--red);border-color:#f8514950}
+.btn-warn{background:#bb800920;color:var(--yellow);border-color:#d2992250}
+.btn-blue{background:#1f6feb20;color:var(--blue);border-color:#58a6ff50}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th{text-align:left;color:var(--dim);font-size:.75rem;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--border)}
+td{padding:6px 8px;border-bottom:1px solid #21262d}
+.updated{color:var(--dim);font-size:.72rem;text-align:center;margin-top:12px}
+.modal-bg{position:fixed;top:0;left:0;width:100%;height:100%;background:#00000080;display:flex;align-items:center;justify-content:center;z-index:999}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:400px;width:90%}
+.modal h3{margin-bottom:12px}
+.modal p{color:var(--dim);font-size:.9rem;margin-bottom:16px}
+.modal .btns{display:flex;gap:8px;justify-content:flex-end}
+select,input[type=text]{background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:.9rem;width:100%}
+.header{text-align:center;margin-bottom:16px}
+.header h1{font-size:1.2rem;font-weight:700}
+.header .sub{color:var(--dim);font-size:.78rem}
+</style>
+</head>
+<body>
+<div class="header">
+<h1>🏠 X28 Dashboard</h1>
+<div class="sub" id="updated">loading…</div>
+</div>
+
+<div class="grid">
+<div class="card"><h2><span class="icon">📡</span> Status <span id="health-badge"></span></h2><div id="status-body">⏳ loading…</div></div>
+<div class="card"><h2><span class="icon">📶</span> Link</h2><div id="link-body">⏳</div></div>
+<div class="card"><h2><span class="icon">💰</span> Budget</h2><div id="budget-body">⏳</div></div>
+<div class="card"><h2><span class="icon">👥</span> Ledger</h2><div id="ledger-body">⏳</div></div>
+<div class="card"><h2><span class="icon">📱</span> Devices</h2><table><thead><tr><th>Host</th><th>IP</th><th>Owner</th></tr></thead><tbody id="devices-body">⏳</tbody></table></div>
+<div class="card"><h2><span class="icon">🛟</span> Rescue & Actions</h2><div id="rescue-body">⏳</div><div class="actions">
+<button class="btn btn-blue" onclick="doAction('toggle_adblock',{},true)">🛡 Toggle Adblock</button>
+<button class="btn btn-warn" onclick="confirmAction('restart_proxy','Restart proxy engine?')">🔄 Restart Proxy</button>
+<button class="btn btn-warn" onclick="showIspModal()">🔀 Switch ISP</button>
+<button class="btn btn-danger" onclick="confirmAction('reboot','Reboot the router? Internet will be down ~2 min.')">⚡ Reboot</button>
+</div></div>
+</div>
+
+<div id="modal-root"></div>
+<div class="updated" id="ts">—</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML};
+let lastUpdate=0;
+
+async function fetchJson(f){
+    try{const r=await fetch(`/api/${f}.json`);if(!r.ok)throw new Error(r.status);return await r.json()}
+    catch(e){console.warn(`fetch ${f}:`,e.message);return null}
+}
+
+function badge(v){
+    if(v==='green')return'<span class="badge b-green">GREEN</span>';
+    if(v==='red')return'<span class="badge b-red">RED</span>';
+    return'<span class="badge b-yellow">?</span>';
+}
+
+async function loadStatus(){
+    const d=await fetchJson('status');if(!d)return;
+    $('health-badge').innerHTML=badge(d.health_verdict);
+    $('status-body').innerHTML=[
+        ['Operator',esc(d.operator||'—')],
+        ['Data',esc(d.data||'—')],
+        ['Proxy',esc(d.proxy||'—')],
+        ['Devices',esc(d.devices||'—')],
+        ['Uptime',esc(d.uptime||'—')],
+        ['RAM',esc(d.ram||'—')],
+        ['Temp',esc(d.temp||'—')]
+    ].map(([k,v])=>`<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
+}
+
+async function loadLink(){
+    const d=await fetchJson('link');if(!d)return;
+    $('link-body').innerHTML=Object.entries(d).slice(0,6)
+        .map(([k,v])=>`<div class="row"><span class="k">${k.replace(/_/g,' ')}</span><span class="v">${v}</span></div>`).join('');
+}
+
+async function loadBudget(){
+    const d=await fetchJson('budget');if(!d||!d.remaining_gb)return;
+    $('budget-body').innerHTML=`<div class="row"><span class="k">Remaining</span><span class="v">${d.remaining_gb} GB</span></div>
+    <div class="row"><span class="k">Tier</span><span class="badge b-${d.tier==='ok'?'green':d.tier==='warn'?'yellow':'red'}">${d.tier}</span></div>
+    ${d.drain_gb_day?`<div class="row"><span class="k">Drain</span><span class="v">${d.drain_gb_day} GB/day</span></div>`:''}`;
+}
+
+async function loadLedger(){
+    const d=await fetchJson('ledger');if(!d||!Array.isArray(d)||!d.length){$('ledger-body').textContent='No data yet';return;}
+    const max=Math.max(...d.map(r=>r.bytes),1);
+    $('ledger-body').innerHTML=d.filter(r=>r.bytes>0).map(r=>{
+        const gb=(r.bytes/1073741824).toFixed(1),pct=Math.round(r.bytes/max*100);
+        return `<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between"><b>${r.person}</b><span>${gb} GB</span></div>
+        <div class="bar"><span style="width:${pct}%"></span></div></div>`;
+    }).join('');
+}
+
+async function loadDevices(){
+    const d=await fetchJson('devices');if(!Array.isArray(d))return;
+    $('devices-body').innerHTML=d.map(dev=>
+        `<tr><td>${dev.hostname||'?'}</td><td>${dev.ip}</td><td>${dev.owner||'⚠️ unassigned'}</td></tr>`
+    ).join('');
+}
+
+async function loadRescue(){
+    const d=await fetchJson('rescue');if(!d)return;
+    $('rescue-body').innerHTML=`<div class="row"><span class="k">Enabled</span><span class="badge b-${d.enabled?'green':'yellow'}">${d.enabled?'ON':'OFF'}</span></div>
+    <div class="row"><span class="k">World</span><span class="v">${d.world}</span></div>
+    <div class="row"><span class="k">Owned alive</span><span class="v">${d.owned_alive}</span></div>
+    <div class="actions"><button class="btn btn-blue" onclick="doAction('toggle_rescue',{state:'${d.enabled?'off':'on'}'})">🛟 Turn ${d.enabled?'Off':'On'}</button></div>`;
+}
+
+async function refresh(){
+    await Promise.allSettled([loadStatus(),loadLink(),loadBudget(),loadLedger(),loadDevices(),loadRescue()]);
+    lastUpdate=new Date();
+    $('updated').textContent=`last updated ${lastUpdate.toLocaleTimeString()} · next in 30 s`;
+}
+
+async function doAction(action,params={}){
+    try{
+        const r=await fetch('/cgi/x28-dash-actions.sh',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({action,...params})
+        });
+        return await r.json();
+    }catch(e){return{ok:false,message:e.message}}
+}
+
+function confirmAction(action,msg){
+    $('modal-root').innerHTML=`<div class="modal-bg"><div class="modal"><h3>⚠️ Confirm</h3><p>${msg}</p>
+    <div class="btns"><button class="btn" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-danger" onclick="execAction('${action}',{confirm:true})">Confirm</button></div></div></div>`;
+}
+
+function showIspModal(){
+    $('modal-root').innerHTML=`<div class="modal-bg"><div class="modal"><h3>🔀 Switch ISP</h3><p>This takes ~3 minutes. Choose target:</p>
+    <div class="btns"><button class="btn" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-warn" onclick="closeModal();doAction('switch_isp',{plmn:'43211',confirm:true})">MCI (preferred)</button>
+    <button class="btn btn-warn" onclick="closeModal();doAction('switch_isp',{plmn:'43220',confirm:true})">Rightel (backup)</button></div></div></div>`;
+}
+
+function closeModal(){$('modal-root').innerHTML=''}
+
+async function execAction(action,params){
+    const r=await doAction(action,params);
+    closeModal();
+    if(r&&r.ok)setTimeout(refresh,2000);
+    else alert(r?.message||'action failed');
+}
+
+refresh();
+setInterval(refresh,30000);
+</script>
+</body>
+</html>

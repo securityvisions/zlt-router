@@ -1,0 +1,26 @@
+#!/bin/sh /etc/rc.common
+# x28-dashboard — LAN-only web dashboard on :8080 (second mini_httpd instance).
+# ADDITIVE ONLY: does not touch vendor mini_httpd (:80/:443) or any existing service.
+
+START=97
+USE_PROCD=1
+
+start_service() {
+    mkdir -p /data/proxy/dashboard/www /data/proxy/dashboard/cgi /tmp/dash-cgi-bin
+    # symlink CGI into doc root (mini_httpd uses cgipat=cgi-bin/*)
+    ln -sf /data/proxy/dashboard/cgi/x28-dash-actions.sh /tmp/dash-cgi-bin/x28-dash-actions.sh 2>/dev/null || true
+    ln -sfn /tmp/dash-cgi-bin /data/proxy/dashboard/www/cgi-bin 2>/dev/null || true
+    cat > /tmp/mini_dash.conf <<'CONF'
+port=8080
+host=192.168.70.1
+dir=/data/proxy/dashboard/www
+user=root
+cgipat=cgi-bin/*
+CONF
+    procd_open_instance
+    procd_set_param command /usr/bin/mini_httpd -C /tmp/mini_dash.conf
+    procd_set_param respawn 3600 5 0
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_close_instance
+}
