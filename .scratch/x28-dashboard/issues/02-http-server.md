@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] busybox httpd running on 192.168.70.1:8080 via procd init script
 - [ ] Serves static files from document root; CGI enabled for action endpoints

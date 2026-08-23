@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — needs the HTTP server to route CGI requests.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] POST /api/action/assign → x28-owners.sh assign (validates MAC format, person name charset)
 - [ ] POST /api/action/unassign → x28-owners.sh unassign

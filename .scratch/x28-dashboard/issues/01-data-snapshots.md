@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Procd service runs every 60 s; each snapshot written atomically (tmp+mv)
 - [ ] JSON files: status.json, health.json, budget.json, ledger.json, devices.json, outages.json, rescue.json, link.json

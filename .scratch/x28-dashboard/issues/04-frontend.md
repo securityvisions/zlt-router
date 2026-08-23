@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (needs data snapshots), 03 (needs action endpoints).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Dark theme consistent with bot card aesthetic
 - [ ] Status section: health verdict badge + signal bars + operator + uptime + temp + devices count
