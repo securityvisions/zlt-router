@@ -35,6 +35,11 @@ MAXMSG=4000
 
 mkdir -p "$STATEDIR"
 
+# Telegram transport module (provides esc/split/join/send/edit/photo/ack)
+TGLIB="$(dirname "$0")/tg-lib.sh"
+[ -f "$TGLIB" ] || TGLIB="/data/proxy/tg-lib.sh"
+[ -f "$TGLIB" ] && . "$TGLIB"
+
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOGF"; tail -c 8192 "$LOGF" > "$LOGF.t" 2>/dev/null && mv "$LOGF.t" "$LOGF"; return 0; }
 hb()  { echo $(date +%s) > "$HB.w"; mv "$HB.w" "$HB"; }
 
