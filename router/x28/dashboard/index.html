@@ -297,14 +297,20 @@ async function loadDevices(){
 }
 
 function assignRowHTML(dev,idx,persons){
-    const rnd=dev.random_mac?' <span style="opacity:.35;font-size:.75rem">⌘</span>':'';
+    const rnd=dev.random_mac?' <span style="opacity:.3;font-size:.7rem">⌘</span>':'';
+    const online=dev.online
+        ?'<span class="dot dot-green"></span>'
+        :'<span class="dot" style="background:var(--faint)"></span>';
     const host=`<span style="font-weight:500;font-size:.9rem">${dev.hostname||'?'}${rnd}</span>`;
     const ip=`<span style="color:var(--dim);font-size:.8rem" class="num">${dev.ip}</span>`;
-    const isUn=dev.owner==='unassigned';
+    const traffic=dev.today_gb>0
+        ?`<span class="num" style="font-size:.85rem">${dev.today_gb} GB</span>`
+        :'<span style="color:var(--faint);font-size:.8rem">—</span>';
+    const isUn=!dev.owner||dev.owner==='unassigned'||dev.owner==='__new__';
     const chip=isUn
         ?`<span class="chip" style="color:var(--yellow);border-color:var(--yellow-dim)" onclick="toggleAssignEditor(${idx})">unassigned</span>`
-        :`<span class="chip owner" onclick="toggleAssignEditor(${idx})">${esc(dev.owner)} <span style="opacity:.35;font-size:.7rem">✎</span></span>`;
-    const editor=`<div id="editor-${idx}" style="display:none;margin-top:6px;padding:10px;background:var(--bg);border-radius:var(--r-sm);flex-wrap:wrap;gap:6px;align-items:center">
+        :`<span class="chip owner" onclick="toggleAssignEditor(${idx})">${esc(dev.owner)}<span style="opacity:.3;font-size:.65rem;margin-left:4px">✎</span></span>`;
+    const editor=`<div id="editor-${idx}" style="display:none;margin-top:8px;padding:10px;background:var(--bg);border-radius:var(--r-sm);flex-wrap:wrap;gap:6px;align-items:center;width:100%">
         <span style="color:var(--dim);font-size:.72rem;margin-right:4px">assign to</span>
         ${persons.map(p=>`<span class="chip" onclick="doAssign('${dev.mac}','${p}',${idx})">${esc(p)}</span>`).join('')}
         <span class="chip" style="border-style:dashed" onclick="showNewPersonInput(${idx})">new</span>
@@ -313,7 +319,12 @@ function assignRowHTML(dev,idx,persons){
             onkeydown="if(event.key==='Enter')doAssign('${dev.mac}',this.value,${idx})"
             onblur="if(!this.value)closeEditor(${idx})">
     </div>`;
-    return `<div style="padding:10px 0"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${host} ${ip} ${chip}</div>${editor}</div>`;
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${online} ${host} ${ip} ${mac}</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:4px;flex-wrap:wrap">
+        <span class="label" style="min-width:42px">today</span> ${traffic}
+        <span class="label" style="margin-left:12px">owner</span> ${chip}
+    </div>${editor}</div>`;
 }
 
 function toggleAssignEditor(idx){

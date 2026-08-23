@@ -100,19 +100,42 @@ snap_ledger() {
 snap_devices() {
     local leases="/tmp/dnsmasq.leases"
     local owners="/data/proxy/owners.conf"
+    local od="/data/proxy/usage/owners-d"
+    local today=$(date +%F 2>/dev/null)
+    local today_f="$od/$today"
     [ -f "$leases" ] || { echo '[]'; return; }
+
     cat "$leases" | while IFS=' ' read -r expiry mac ip hostname clientid; do
         [ -z "$mac" ] && continue
+
+        # owner lookup
         person="unassigned"
         if [ -f "$owners" ]; then
             person=$(grep -i "^${mac}|" "$owners" 2>/dev/null | head -1 | cut -d'|' -f2)
             [ -z "$person" ] && person="unassigned"
         fi
+
+        # random MAC detection
         rnd=false
         c=$(printf '%s' "$mac" | cut -c2)
         case $c in [26aeAE]) rnd=true ;; esac
-        printf '{"hostname":"%s","ip":"%s","mac":"%s","owner":"%s","random_mac":%s}\n' \
-            "${hostname:-?}" "$ip" "$mac" "$person" "$rnd"
+
+        # today's traffic from owners-d (matched by MAC)
+        today_gb=0
+        if [ -f "$today_f" ]; then
+            today_gb=$(grep "|${mac}|" "$today_f" 2>/dev/null | awk -F'|' '{s+=$3+$4} END{printf "%.1f",s/1073741824}')
+            [ -z "$today_gb" ] && today_gb=0
+        fi
+
+        # online status from ARP table
+        online=false
+        if grep -q "$ip " /proc/net/arp 2>/dev/null; then online=true; fi
+
+        # last seen = lease expiry (unix time)
+        last_seen=$expiry
+
+        printf '{"hostname":"%s","ip":"%s","mac":"%s","owner":"%s","random_mac":%s,"today_gb":%s,"online":%s,"last_seen":%s}\n' \
+            "${hostname:-?}" "$ip" "$(echo "$mac" | tr "A-Z" "a-z")" "$person" "$rnd" "$today_gb" "$online" "$last_seen"
     done | "$JQ" -s '.' 2>/dev/null
 }
 
