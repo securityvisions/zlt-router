@@ -3,103 +3,214 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>X28 Dashboard</title>
+<title>X28 — Network Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
-:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#e6edf3;--dim:#8b949e;
-      --green:#3fb950;--red:#f85149;--yellow:#d29922;--blue:#58a6ff;
-      --radius:12px;--gap:16px}
+:root{
+  --bg:#0c0f14;
+  --surface:#131720;
+  --surface-hover:#181d28;
+  --border:#1c2330;
+  --text:#dce1e8;
+  --dim:#7a8494;
+  --faint:#3a4356;
+  --accent:#7b8cde;
+  --accent-dim:#7b8cde20;
+  --green:#5cb87a;
+  --green-dim:#5cb87a18;
+  --red:#e06c6c;
+  --red-dim:#e06c6c15;
+  --yellow:#d4a843;
+  --yellow-dim:#d4a84315;
+  --r-lg:16px;--r-md:10px;--r-sm:6px;
+  --gap:14px;
+}
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;padding:16px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--gap);max-width:1200px;margin:0 auto}
-.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:var(--gap)}
-.card h2{font-size:.85rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.card h2 .icon{font-size:1.1em}
-.row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #21262d;font-size:.92rem}
-.row:last-child{border:none}
-.row .k{color:var(--dim)}
-.row .v{font-weight:500;text-align:right}
-.badge{display:inline-block;padding:4px 10px;border-radius:999px;font-size:.78rem;font-weight:700}
-.b-green{background:#23863630;color:var(--green);border:1px solid #23863650}
-.b-red{background:#da363020;color:var(--red);border:1px solid #f8514950}
-.b-yellow{background:#bb800920;color:var(--yellow);border:1px solid #d2992250}
-.bar{height:8px;background:#21262d;border-radius:4px;overflow:hidden;margin:4px 0}
-.bar span{display:block;height:100%;background:var(--blue);border-radius:4px;transition:width .5s}
-.btn{padding:8px 16px;border-radius:8px;border:1px solid var(--border);cursor:pointer;font-size:.85rem;font-weight:600;transition:.15s}
-.btn:hover{filter:brightness(1.2)}
-.btn-danger{background:#da363020;color:var(--red);border-color:#f8514950}
-.btn-warn{background:#bb800920;color:var(--yellow);border-color:#d2992250}
-.btn-blue{background:#1f6feb20;color:var(--blue);border-color:#58a6ff50}
-.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-table{width:100%;border-collapse:collapse;font-size:.88rem}
-th{text-align:left;color:var(--dim);font-size:.75rem;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--border)}
-td{padding:6px 8px;border-bottom:1px solid #21262d}
-.updated{color:var(--dim);font-size:.72rem;text-align:center;margin-top:12px}
-.modal-bg{position:fixed;top:0;left:0;width:100%;height:100%;background:#00000080;display:flex;align-items:center;justify-content:center;z-index:999}
-.modal{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:400px;width:90%}
-.modal h3{margin-bottom:12px}
-.modal p{color:var(--dim);font-size:.9rem;margin-bottom:16px}
+body{background:var(--bg);color:var(--text);font-family:'Outfit',system-ui,sans-serif;font-weight:400;padding:20px 16px;min-height:100dvh}
+::selection{background:var(--accent-dim);color:var(--text)}
+
+/* ── layout ── */
+.wrap{max-width:1140px;margin:0 auto}
+.header{margin-bottom:20px;display:flex;align-items:baseline;justify-content:space-between}
+.header h1{font-size:1.1rem;font-weight:600;letter-spacing:-.02em}
+.header .sub{font-size:.75rem;color:var(--dim);font-weight:400}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--gap)}
+.hero{max-width:1140px;margin:0 auto var(--gap);display:flex;align-items:center;gap:24px;
+  background:var(--surface);border-radius:var(--r-lg);padding:20px 28px;
+  transition:background .2s}
+.hero:hover{background:var(--surface-hover)}
+
+/* ── cards ── */
+.card{background:var(--surface);border-radius:var(--r-lg);padding:20px;
+  transition:background .2s,transform .2s}
+.card:hover{background:var(--surface-hover)}
+.card h2{font-size:.72rem;font-weight:600;color:var(--dim);text-transform:uppercase;
+  letter-spacing:.08em;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card h2 .icon{font-size:1em;opacity:.7}
+.card h2 .btn{margin-left:auto}
+
+/* ── typography ── */
+.row{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;font-size:.9rem}
+.row .k{color:var(--dim);font-weight:400}
+.row .v{font-weight:500;font-variant-numeric:tabular-nums;text-align:right}
+.num{font-variant-numeric:tabular-nums}
+.label{font-size:.68rem;font-weight:500;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+.mono{font-family:'Outfit',monospace;font-variant-numeric:tabular-nums}
+
+/* ── badges & status ── */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:var(--r-sm);
+  font-size:.75rem;font-weight:600;letter-spacing:.02em}
+.b-green{background:var(--green-dim);color:var(--green)}
+.b-red{background:var(--red-dim);color:var(--red)}
+.b-yellow{background:var(--yellow-dim);color:var(--yellow)}
+.b-blue{background:var(--accent-dim);color:var(--accent)}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.dot-green{background:var(--green)}.dot-red{background:var(--red)}
+
+/* ── bars ── */
+.bar{height:5px;background:var(--faint);border-radius:3px;overflow:hidden;margin:4px 0}
+.bar span{display:block;height:100%;border-radius:3px;transition:width .6s cubic-bezier(.22,1,.36,1)}
+
+/* ── buttons ── */
+.btn{padding:6px 14px;border-radius:var(--r-sm);border:1px solid transparent;cursor:pointer;
+  font-family:inherit;font-size:.82rem;font-weight:500;letter-spacing:.01em;
+  transition:all .18s cubic-bezier(.25,.46,.45,.94);user-select:none}
+.btn:hover{filter:brightness(1.15)}
+.btn:active{transform:scale(.97)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn-blue{background:var(--accent-dim);color:var(--accent);border-color:var(--accent-dim)}
+.btn-blue:hover{background:var(--accent-dim);border-color:var(--accent)}
+.btn-danger{background:var(--red-dim);color:var(--red);border-color:var(--red-dim)}
+.btn-danger:hover{background:var(--red-dim);border-color:var(--red)}
+.btn-warn{background:var(--yellow-dim);color:var(--yellow);border-color:var(--yellow-dim)}
+.btn-warn:hover{background:var(--yellow-dim);border-color:var(--yellow)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+
+/* ── tables ── */
+table{width:100%;border-collapse:collapse;font-size:.86rem}
+th{text-align:left;color:var(--dim);font-size:.68rem;font-weight:500;
+  text-transform:uppercase;letter-spacing:.06em;padding:6px 8px}
+td{padding:7px 8px;font-variant-numeric:tabular-nums}
+tr{transition:background .15s}
+tr:hover{background:#ffffff05}
+
+/* ── chips ── */
+.chip{display:inline-flex;align-items:center;padding:4px 12px;border-radius:999px;
+  font-size:.8rem;font-weight:500;cursor:pointer;user-select:none;
+  transition:all .15s cubic-bezier(.25,.46,.45,.94);border:1px solid var(--faint);
+  background:transparent;color:var(--dim)}
+.chip:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.chip:active{transform:scale(.96)}
+.chip.owner{color:var(--green);border-color:var(--green-dim);background:var(--green-dim)}
+.chip-input{background:var(--bg);color:var(--text);border:1px solid var(--accent);
+  border-radius:999px;padding:4px 12px;font-size:.8rem;outline:none;width:110px;
+  font-family:inherit}
+.chip-input::placeholder{color:var(--faint)}
+
+/* ── inputs ── */
+input[type=date],input[type=text],textarea,select{
+  background:var(--bg);color:var(--text);border:1px solid var(--border);
+  border-radius:var(--r-sm);padding:6px 10px;font-size:.84rem;font-family:inherit;
+  transition:border-color .15s;outline:none}
+input[type=date]:focus,input[type=text]:focus,textarea:focus,select:focus{
+  border-color:var(--accent)}
+select option{background:var(--surface)}
+
+/* ── modal ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);
+  display:flex;align-items:center;justify-content:center;z-index:999;
+  animation:fadeIn .15s ease}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:28px;max-width:380px;width:90%;animation:scaleIn .2s cubic-bezier(.34,1.3,.64,1)}
+.modal h3{font-size:1rem;font-weight:600;margin-bottom:8px}
+.modal p{color:var(--dim);font-size:.88rem;margin-bottom:20px;line-height:1.5}
 .modal .btns{display:flex;gap:8px;justify-content:flex-end}
-select,input[type=text]{background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:.9rem;width:100%}
-.header{text-align:center;margin-bottom:16px}
-.header h1{font-size:1.2rem;font-weight:700}
-.header .sub{color:var(--dim);font-size:.78rem}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes scaleIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
 
-.chip{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:999px;font-size:.82rem;font-weight:600;cursor:pointer;transition:.15s;border:1px solid var(--border);background:#21262d;color:var(--text);user-select:none}
-.chip:hover{background:#30363d;transform:scale(1.04)}
-.chip.owner{background:#23863620;color:var(--green);border-color:#23863650}
-.chip-input{background:#0d1117;color:var(--text);border:1px solid #58a6ff;border-radius:999px;padding:4px 12px;font-size:.82rem;outline:none;width:120px}
+/* ── hero widget ── */
+.hero .big-num{font-size:2.4rem;font-weight:300;letter-spacing:-.03em;
+  font-variant-numeric:tabular-nums;line-height:1}
+.hero .big-label{font-size:.68rem;color:var(--dim);text-transform:uppercase;
+  letter-spacing:.08em;margin-top:4px}
 
+/* ── charts ── */
+.chart-container svg{width:100%;height:auto;display:block}
+.chart-bar-row{margin-bottom:6px}
+.chart-bar-row .lbl{display:flex;justify-content:space-between;font-size:.78rem;
+  color:var(--dim);margin-bottom:2px}
+.chart-bar-row .bar-track{height:6px;background:var(--faint);border-radius:3px;overflow:hidden}
+.chart-bar-row .bar-fill{height:100%;border-radius:3px;
+  transition:width .6s cubic-bezier(.22,1,.36,1)}
+
+/* ── device rows ── */
+.device-row{display:flex;align-items:center;gap:10px;padding:10px 0;
+  border-bottom:1px solid var(--border);flex-wrap:wrap;transition:background .15s}
+.device-row:hover{background:#ffffff03}
+.device-row:last-child{border:none}
+.device-row .host{font-weight:500;font-size:.9rem;min-width:110px}
+.device-row .ip{color:var(--dim);font-size:.8rem;font-variant-numeric:tabular-nums}
+.device-row .mac{color:var(--faint);font-size:.72rem;font-family:monospace}
+
+/* ── updated footer ── */
+.updated{color:var(--faint);font-size:.7rem;text-align:center;margin-top:16px;
+  font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
-<div class="header">
-<h1>🏠 X28 Dashboard</h1>
-<div class="sub" id="updated">loading…</div>
+<div class="header wrap">
+<h1>X28</h1>
+<div class="sub" id="updated">connecting…</div>
 </div>
 
-<div class="card" style="margin:0 auto 16px;max-width:1200px;display:flex;align-items:center;gap:20px;padding:16px 24px">
-<div style="text-align:center"><div style="font-size:2rem;font-weight:700;color:var(--blue)" id="hero-gb">—</div><div style="color:var(--dim);font-size:.72rem">GB REMAINING</div></div>
-<div style="flex:1"><div style="display:flex;gap:8px;flex-wrap:wrap" id="hero-badges"></div>
-<div style="margin-top:6px;font-size:.85rem;color:var(--dim)" id="hero-drain"></div></div></div>
+<div class="hero">
+<div><div class="big-num" id="hero-gb">—</div><div class="big-label">GB remaining</div></div>
+<div style="flex:1"><div style="display:flex;gap:6px;flex-wrap:wrap" id="hero-badges"></div>
+<div style="margin-top:8px;font-size:.82rem;color:var(--dim)" id="hero-drain"></div></div>
+</div>
 
-<div class="grid">
-<div class="card"><h2><span class="icon">📡</span> Status <span id="health-badge"></span></h2><div id="status-body">⏳ loading…</div></div>
-<div class="card"><h2><span class="icon">📶</span> Link</h2><div id="link-body">⏳</div></div>
-<div class="card"><h2><span class="icon">💰</span> Budget</h2><div id="budget-body">⏳</div></div>
-<div class="card"><h2><span class="icon">📶</span> RSRP Trend (72h)</h2><div id="rsrp-chart">loading...</div></div>
-<div class="card"><h2><span class="icon">📊</span> Daily Usage (30d)</h2><div id="usage-chart">loading...</div></div>
-<div class="card"><h2><span class="icon">📉</span> Outage Timeline</h2><div id="outage-body">loading...</div></div>
-<div class="card"><h2><span class="icon">⚙️</span> Services</h2><div id="services-body">loading...</div>
-<div class="actions" id="service-actions"></div></div>
-<div class="card"><h2><span class="icon">👥</span> Ledger
-<button class="btn btn-blue" style="padding:3px 8px;font-size:.72rem;margin-left:auto" onclick="setLedgerMode('monthly')">Monthly</button>
-<button class="btn" style="padding:3px 8px;font-size:.72rem;margin-left:4px" onclick="setLedgerMode('daily')">Daily</button>
-<button class="btn" style="padding:3px 8px;font-size:.72rem;margin-left:4px" onclick="setLedgerMode('yearly')">Yearly</button>
+<div class="wrap"><div class="grid">
+
+<div class="card"><h2><span class="icon">◉</span> status <span id="health-badge"></span></h2><div id="status-body">···</div></div>
+<div class="card"><h2><span class="icon">◈</span> link</h2><div id="link-body">···</div></div>
+<div class="card"><h2><span class="icon">◆</span> budget</h2><div id="budget-body">···</div></div>
+<div class="card"><h2><span class="icon">▤</span> rsrp trend <span class="label">72h</span></h2><div id="rsrp-chart" class="chart-container">···</div></div>
+<div class="card"><h2><span class="icon">▥</span> daily usage <span class="label">30d</span></h2><div id="usage-chart">···</div></div>
+<div class="card"><h2><span class="icon">◔</span> ledger
+<button class="btn btn-blue" style="padding:2px 8px;font-size:.68rem;margin-left:auto" onclick="setLedgerMode('monthly')">month</button>
+<button class="btn" style="padding:2px 8px;font-size:.68rem;margin-left:4px" onclick="setLedgerMode('daily')">day</button>
+<button class="btn" style="padding:2px 8px;font-size:.68rem;margin-left:4px" onclick="setLedgerMode('yearly')">year</button>
 </h2>
-<div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
-<input type="date" id="ledg-from" style="background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:.82rem">
-<span style="color:var(--dim)">→</span>
-<input type="date" id="ledg-to" style="background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:.82rem">
-<button class="btn btn-blue" onclick="loadLedgerRange()" style="padding:4px 12px">Query</button>
-<button class="btn" onclick="presetLedger(0)" style="padding:4px 8px">This Month</button>
-<button class="btn" onclick="presetLedger(-30)" style="padding:4px 8px">Last 30d</button>
-</div><div id="ledger-body">⏳</div></div>
-<div class="card"><h2><span class="icon">📱</span> Devices</h2><table><thead><tr><th>Host</th><th>IP</th><th>Owner (tap to change)</th></tr></thead><tbody id="devices-body">⏳</tbody></table></div>
-<div class="card"><h2><span class="icon">🛰️</span> Proxy Nodes <button class="btn btn-blue" onclick="testAllNodes()" style="margin-left:auto;padding:4px 12px">Test All</button></h2>
-<table><thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead><tbody id="proxy-body">⏳</tbody></table>
-<div style="margin-top:10px">
-<textarea id="add-uri" placeholder="Paste vless:// vmess:// trojan:// ss:// hy2:// tuic:// juicity:// URI…" rows="2"
- style="width:100%;background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:.85rem;resize:vertical"></textarea>
-<button class="btn btn-blue" onclick="addProxyNode()" style="margin-top:6px">➕ Add Node</button>
-<span id="add-status" style="margin-left:8px;font-size:.82rem"></span>
+<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+<input type="date" id="ledg-from" style="flex:1;min-width:120px">
+<span style="color:var(--faint)">→</span>
+<input type="date" id="ledg-to" style="flex:1;min-width:120px">
+<button class="btn btn-blue" onclick="loadLedgerRange()" style="padding:4px 10px">go</button>
+</div><div id="ledger-body">···</div></div>
+<div class="card"><h2><span class="icon">◌</span> devices</h2><div id="devices-body">···</div></div>
+<div class="card"><h2><span class="icon">◍</span> proxy nodes
+<button class="btn btn-blue" style="padding:2px 8px;font-size:.68rem;margin-left:auto" onclick="testAllNodes()">test all</button></h2>
+<table><thead><tr><th>node</th><th>type</th><th>status</th><th></th></tr></thead><tbody id="proxy-body">···</tbody></table>
+<div style="margin-top:12px">
+<textarea id="add-uri" placeholder="paste vless:// vmess:// trojan:// ss:// hy2:// tuic:// juicity://…" rows="2"
+ style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;font-size:.82rem;resize:vertical;font-family:inherit"></textarea>
+<button class="btn btn-blue" onclick="addProxyNode()" style="margin-top:6px">add node</button>
+<span id="add-status" style="margin-left:8px;font-size:.8rem;color:var(--dim)"></span>
 </div></div>
-<div class="card"><h2><span class="icon">🛟</span> Rescue & Actions</h2><div id="rescue-body">⏳</div><div class="actions">
-<button class="btn btn-blue" onclick="doAction('toggle_adblock',{},true)">🛡 Toggle Adblock</button>
-<button class="btn btn-warn" onclick="confirmAction('restart_proxy','Restart proxy engine?')">🔄 Restart Proxy</button>
-<button class="btn btn-warn" onclick="showIspModal()">🔀 Switch ISP</button>
-<button class="btn btn-danger" onclick="confirmAction('reboot','Reboot the router? Internet will be down ~2 min.')">⚡ Reboot</button>
+<div class="card"><h2><span class="icon">○</span> outage timeline</h2><div id="outage-body">···</div></div>
+<div class="card"><h2><span class="icon">⚙</span> services</h2><div id="services-body">···</div>
+<div class="actions" id="service-actions"></div></div>
+<div class="card"><h2><span class="icon">◈</span> rescue</h2><div id="rescue-body">···</div>
+<div class="actions"><button class="btn btn-blue" onclick="doAction('toggle_rescue',{state:'toggle'})" id="rescue-btn">toggle</button></div></div>
+<div class="card"><h2><span class="icon">⚡</span> actions</h2><div class="actions">
+<button class="btn btn-blue" onclick="doAction('toggle_adblock',{},true)">toggle adblock</button>
+<button class="btn btn-warn" onclick="confirmAction('restart_proxy','restart the proxy engine?')">restart proxy</button>
+<button class="btn btn-warn" onclick="showIspModal()">switch ISP</button>
+<button class="btn btn-danger" onclick="confirmAction('reboot','reboot the router? internet will be down for about 2 minutes.')">reboot</button>
 </div></div>
-</div>
+
+</div></div>
 
 <div id="modal-root"></div>
 <div class="updated" id="ts">—</div>
@@ -115,42 +226,42 @@ async function fetchJson(f){
 }
 
 function badge(v){
-    if(v==='green')return'<span class="badge b-green">GREEN</span>';
-    if(v==='red')return'<span class="badge b-red">RED</span>';
-    return'<span class="badge b-yellow">?</span>';
+    if(v==='green')return'<span class="badge b-green">● green</span>';
+    if(v==='red')return'<span class="badge b-red">● red</span>';
+    return'<span class="badge b-yellow">● ?</span>';
 }
 
 async function loadStatus(){
     const d=await fetchJson('status');if(!d)return;
     $('health-badge').innerHTML=badge(d.health_verdict);
-    $('status-body').innerHTML=[
-        ['Operator',esc(d.operator||'—')],
-        ['Data',esc(d.data||'—')],
-        ['Proxy',esc(d.proxy||'—')],
-        ['Devices',esc(d.devices||'—')],
-        ['Uptime',esc(d.uptime||'—')],
-        ['RAM',esc(d.ram||'—')],
-        ['Temp',esc(d.temp||'—')]
-    ].map(([k,v])=>`<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
+    const rows=[['operator',d.operator],['data',d.data],['proxy',d.proxy],['devices',d.devices],['uptime',d.uptime],['ram',d.ram],['temp',d.temp]];
+    $('status-body').innerHTML=rows.filter(r=>r[1]).map(([k,v])=>
+        `<div class="row"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('');
 }
 
 async function loadLink(){
     const d=await fetchJson('link');if(!d)return;
     $('link-body').innerHTML=Object.entries(d).slice(0,6)
-        .map(([k,v])=>`<div class="row"><span class="k">${k.replace(/_/g,' ')}</span><span class="v">${v}</span></div>`).join('');
+        .map(([k,v])=>`<div class="row"><span class="k">${k.replace(/_/g,' ')}</span><span class="v mono">${esc(v)}</span></div>`).join('');
 }
 
 async function loadBudget(){
     const d=await fetchJson('budget');if(!d||!d.remaining_gb)return;
-    $('budget-body').innerHTML=`<div class="row"><span class="k">Remaining</span><span class="v">${d.remaining_gb} GB</span></div>
-    <div class="row"><span class="k">Tier</span><span class="badge b-${d.tier==='ok'?'green':d.tier==='warn'?'yellow':'red'}">${d.tier}</span></div>
-    ${d.drain_gb_day?`<div class="row"><span class="k">Drain</span><span class="v">${d.drain_gb_day} GB/day</span></div>`:''}`;
+    $('budget-body').innerHTML=`<div class="row"><span class="k">remaining</span><span class="v num">${d.remaining_gb} GB</span></div>
+    <div class="row"><span class="k">tier</span><span class="badge b-${d.tier==='ok'?'green':d.tier==='warn'?'yellow':'red'}">${d.tier}</span></div>
+    ${d.drain_gb_day?`<div class="row"><span class="k">drain</span><span class="v num">${d.drain_gb_day} GB/day</span></div>`:''}`;
 }
+
+async function loadHero(){
+    const d=await fetchJson('budget');if(!d||!d.remaining_gb)return;
+    $('hero-gb').textContent=d.remaining_gb;
+    const cls=d.tier==='urgent'?'b-red':d.tier==='warn'?'b-yellow':'b-green';
+    $('hero-badges').innerHTML=`<span class="badge ${cls}">${d.tier}</span>`;
+    $('hero-drain').textContent=d.drain_gb_day?`drain ${d.drain_gb_day} GB/day · ~${d.projected_days_left} days left`:'';}
 
 async function loadLedger(){
     let d=await fetchJson('ledger');
     if(!d||!Array.isArray(d)||!d.length){
-        // current month empty — try previous month
         const now=new Date();
         const prev=new Date(now.getFullYear(),now.getMonth()-1,15);
         const from=prev.toISOString().split('T')[0];
@@ -160,89 +271,24 @@ async function loadLedger(){
             const rd=await r.json();
             if(rd.entries&&rd.entries.length){
                 d=rd.entries.map(e=>({person:e.person,bytes:e.bytes,cost:e.cost}));
-                $('ledger-body').innerHTML=`<i style="color:var(--dim);font-size:.75rem">showing ${from} → ${to}</i><br>`+
+                $('ledger-body').innerHTML=`<i style="color:var(--dim);font-size:.72rem">${from} → ${to}</i><br>`+
                     d.filter(r=>r.bytes>0).map(r=>{
                     const gb=(r.bytes/1073741824).toFixed(1);
-                    return `<div class="row"><span class="k">${r.person}</span><span class="v">${gb} GB</span></div>`;}).join('');
+                    return `<div class="row"><span class="k">${r.person}</span><span class="v num">${gb} GB</span></div>`;}).join('');
                 return;
             }
         }catch(e){}
-        $('ledger-body').textContent='No data yet';return;
+        $('ledger-body').innerHTML='<span style="color:var(--dim)">no data yet</span>';return;
     }
     const max=Math.max(...d.map(r=>r.bytes),1);
     $('ledger-body').innerHTML=d.filter(r=>r.bytes>0).map(r=>{
         const gb=(r.bytes/1073741824).toFixed(1),pct=Math.round(r.bytes/max*100);
-        return `<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between"><b>${r.person}</b><span>${gb} GB</span></div>
-        <div class="bar"><span style="width:${pct}%"></span></div></div>`;
-    }).join('');
+        return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-weight:500">${r.person}</span><span class="num">${gb} GB</span></div>
+        <div class="bar"><span style="width:${pct}%;background:var(--accent)"></span></div>
+        <div style="text-align:right;font-size:.75rem;color:var(--dim)" class="num">${(r.cost||0).toLocaleString()} T</div></div>`;}).join('');
 }
 
 async function loadDevices(){
-    const d=await fetchJson('devices');if(!Array.isArray(d))return;
-    $('devices-body').innerHTML=d.map(dev=>
-        `<tr><td>${dev.hostname||'?'}</td><td>${dev.ip}</td><td>${dev.owner||'⚠️ unassigned'}</td></tr>`
-    ).join('');
-}
-
-async function loadRescue(){
-    const d=await fetchJson('rescue');if(!d)return;
-    $('rescue-body').innerHTML=`<div class="row"><span class="k">Enabled</span><span class="badge b-${d.enabled?'green':'yellow'}">${d.enabled?'ON':'OFF'}</span></div>
-    <div class="row"><span class="k">World</span><span class="v">${d.world}</span></div>
-    <div class="row"><span class="k">Owned alive</span><span class="v">${d.owned_alive}</span></div>
-    <div class="actions"><button class="btn btn-blue" onclick="doAction('toggle_rescue',{state:'${d.enabled?'off':'on'}'})">🛟 Turn ${d.enabled?'Off':'On'}</button></div>`;
-}
-
-async function refresh(){
-    await Promise.allSettled([loadStatus(),loadLink(),loadBudget(),loadLedger(),loadDevices(),loadRescue(),loadHero(),loadDevicesWithAssign(),loadProxies(),loadTrends(),loadOutages(),loadServices()]);
-    lastUpdate=new Date();
-    $('updated').textContent=`last updated ${lastUpdate.toLocaleTimeString()} · next in 30 s`;
-}
-
-async function doAction(action,params={}){
-    try{
-        const r=await fetch('/cgi-bin/x28-dash-actions.sh',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({action,...params})
-        });
-        return await r.json();
-    }catch(e){return{ok:false,message:e.message}}
-}
-
-function confirmAction(action,msg){
-    $('modal-root').innerHTML=`<div class="modal-bg"><div class="modal"><h3>⚠️ Confirm</h3><p>${msg}</p>
-    <div class="btns"><button class="btn" onclick="closeModal()">Cancel</button>
-    <button class="btn btn-danger" onclick="execAction('${action}',{confirm:true})">Confirm</button></div></div></div>`;
-}
-
-function showIspModal(){
-    $('modal-root').innerHTML=`<div class="modal-bg"><div class="modal"><h3>🔀 Switch ISP</h3><p>This takes ~3 minutes. Choose target:</p>
-    <div class="btns"><button class="btn" onclick="closeModal()">Cancel</button>
-    <button class="btn btn-warn" onclick="closeModal();doAction('switch_isp',{plmn:'43211',confirm:true})">MCI (preferred)</button>
-    <button class="btn btn-warn" onclick="closeModal();doAction('switch_isp',{plmn:'43220',confirm:true})">Rightel (backup)</button></div></div></div>`;
-}
-
-function closeModal(){$('modal-root').innerHTML=''}
-
-async function execAction(action,params){
-    const r=await doAction(action,params);
-    closeModal();
-    if(r&&r.ok)setTimeout(refresh,2000);
-    else alert(r?.message||'action failed');
-}
-
-
-// ── hero budget widget ──
-async function loadHero(){
-    const d=await fetchJson('budget');if(!d||!d.remaining_gb)return;
-    $('hero-gb').textContent=d.remaining_gb+' GB';
-    const cls=d.tier==='urgent'?'b-red':d.tier==='warn'?'b-yellow':'b-green';
-    $('hero-badges').innerHTML=`<span class="badge ${cls}">${d.tier}</span>`;
-    $('hero-drain').textContent=d.drain_gb_day?`drain ${d.drain_gb_day} GB/day → ~${d.projected_days_left}d left`:'';}
-
-// ── device assignment dropdown ──
-let knownPersons=[];
-async function loadDevicesWithAssign(){
     const d=await fetchJson('devices');if(!Array.isArray(d))return;
     window._devices=d;
     const persons=[...new Set(d.map(x=>x.owner).filter(o=>o&&o!=='unassigned'))];
@@ -251,23 +297,23 @@ async function loadDevicesWithAssign(){
 }
 
 function assignRowHTML(dev,idx,persons){
-    const rnd=dev.random_mac?' <span style="opacity:.4">🎲</span>':'';
-    const host=`<span style="font-weight:600">${dev.hostname||'?'}${rnd}</span>`;
-    const ip=`<span style="color:var(--dim);font-size:.78rem">${dev.ip}</span>`;
+    const rnd=dev.random_mac?' <span style="opacity:.35;font-size:.75rem">⌘</span>':'';
+    const host=`<span style="font-weight:500;font-size:.9rem">${dev.hostname||'?'}${rnd}</span>`;
+    const ip=`<span style="color:var(--dim);font-size:.8rem" class="num">${dev.ip}</span>`;
     const isUn=dev.owner==='unassigned';
     const chip=isUn
-        ?`<span class="chip" style="color:var(--yellow);border-color:var(--yellow)" onclick="toggleAssignEditor(${idx})">⚠️ unassigned</span>`
-        :`<span class="chip owner" onclick="toggleAssignEditor(${idx})">${esc(dev.owner)}<span style="opacity:.4;font-size:.7rem;margin-left:4px">✎</span></span>`;
-    const editor=`<div id="editor-${idx}" style="display:none;margin-top:6px;padding:8px;background:#0d1117;border-radius:8px;border:1px solid #21262d">
-        <span style="color:var(--dim);font-size:.75rem;margin-right:6px">assign to:</span>
+        ?`<span class="chip" style="color:var(--yellow);border-color:var(--yellow-dim)" onclick="toggleAssignEditor(${idx})">unassigned</span>`
+        :`<span class="chip owner" onclick="toggleAssignEditor(${idx})">${esc(dev.owner)} <span style="opacity:.35;font-size:.7rem">✎</span></span>`;
+    const editor=`<div id="editor-${idx}" style="display:none;margin-top:6px;padding:10px;background:var(--bg);border-radius:var(--r-sm);flex-wrap:wrap;gap:6px;align-items:center">
+        <span style="color:var(--dim);font-size:.72rem;margin-right:4px">assign to</span>
         ${persons.map(p=>`<span class="chip" onclick="doAssign('${dev.mac}','${p}',${idx})">${esc(p)}</span>`).join('')}
-        <span class="chip" style="border-style:dashed" onclick="showNewPersonInput(${idx})">➕ new</span>
-        <span class="chip" style="border-style:dashed;opacity:.4" onclick="closeEditor(${idx})">✕</span>
+        <span class="chip" style="border-style:dashed" onclick="showNewPersonInput(${idx})">new</span>
+        <span class="chip" style="opacity:.3" onclick="closeEditor(${idx})">✕</span>
         <input type="text" class="chip-input" id="newperson-${idx}" placeholder="name…" style="display:none"
             onkeydown="if(event.key==='Enter')doAssign('${dev.mac}',this.value,${idx})"
             onblur="if(!this.value)closeEditor(${idx})">
     </div>`;
-    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #21262d;flex-wrap:wrap">${host} ${ip} ${mac} ${chip}</div>${editor}`;
+    return `<div style="padding:10px 0"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${host} ${ip} ${chip}</div>${editor}</div>`;
 }
 
 function toggleAssignEditor(idx){
@@ -296,54 +342,30 @@ async function doAssign(mac,person,idx){
     } else alert(r?.message||'assignment failed');
 }
 
-// ── custom date range ledger query ──
-async function loadLedgerRange(){
-    const from=$('ledg-from').value,to=$('ledg-to').value;
-    if(!from||!to)return alert('pick both dates');
-    try{
-        const r=await fetch(`/cgi-bin/ledger-range.sh?from=${from}&to=${to}`);
-        const d=await r.json();
-        if(!d.entries||!d.entries.length){$('ledger-body').textContent='no data for this range';return;}
-        const max=Math.max(...d.entries.map(e=>e.bytes),1);
-        $('ledger-body').innerHTML=d.entries.filter(e=>e.bytes>0).map(e=>{
-            const gb=(e.bytes/1073741824).toFixed(1),pct=Math.round(e.bytes/max*100);
-            const cost=(e.cost||0).toLocaleString();
-            return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between"><b>${e.person}</b><span>${gb} GB · ${cost} T</span></div>
-            <div class="bar"><span style="width:${pct}%"></span></div></div>`;}).join('');
-        $('ledger-body').innerHTML+=`<div class="row"><span class="k">TOTAL</span><span class="v">${(d.entries.reduce((a,e)=>a+e.bytes,0)/1073741824).toFixed(1)} GB · ${(d.entries.reduce((a,e)=>a+e.cost,0)).toLocaleString()} Toman</span></div>`;
-    }catch(e){$('ledger-body').textContent='query failed';}}
-
-function presetLedger(daysBack){
-    const to=new Date().toISOString().split('T')[0];
-    const from=new Date(Date.now()+daysBack*86400000).toISOString().split('T')[0];
-    $('ledg-from').value=from;$('ledg-to').value=to;loadLedgerRange();}
-
-// ── proxy node manager ──
 async function loadProxies(){
     try{
         const r=await fetch('/cgi-bin/proxy-mgmt.sh?list');const d=await r.json();if(!d.nodes)return;
         $('proxy-body').innerHTML=d.nodes.map(n=>{
-            const badge=n.alive?'<span class="badge b-green">●</span>':'<span class="badge b-red">○</span>';
-            const active=d.active===n.name?' <span class="badge b-blue">ACTIVE</span>':'';
-            return `<tr><td>${n.name}${active}</td><td>${n.type}</td><td>${badge}</td>
-            <td><button class="btn btn-blue" style="padding:2px 8px;font-size:.75rem" onclick="testNode('${n.name}')">Test</button>
-            ${d.active!==n.name?`<button class="btn btn-warn" style="padding:2px 8px;font-size:.75rem;margin-left:4px" onclick="switchTo('${n.name}')">Activate</button>`:''}</td></tr>`;}).join('');
-    }catch(e){console.warn('proxy load:',e)}}
+            const dot=n.alive?'<span class="dot dot-green"></span>':'<span class="dot dot-red"></span>';
+            const active=d.active===n.name?' <span class="badge b-blue">active</span>':'';
+            const btns=d.active!==n.name?`<button class="btn btn-warn" style="padding:2px 8px;font-size:.7rem" onclick="switchTo('${n.name}')">use</button>`:'';
+            return `<tr><td>${n.name}${active}</td><td style="color:var(--dim)">${n.type}</td><td>${dot}</td><td style="text-align:right">${btns}</td></tr>`;}).join('');
+    }catch(e){console.warn('proxy:',e)}}
 
 async function testNode(name){
     try{
         const r=await fetch(`/cgi-bin/proxy-mgmt.sh?test=${encodeURIComponent(name)}`);
         const d=await r.json();
-        if(d.delay&&d.delay!=='error')alert(`${name}: ${d.delay} ms ✓`);
-        else alert(`${name}: FAILED ✗`);
+        if(d.delay&&d.delay!=='error')alert(`${name}: ${d.delay} ms`);
+        else alert(`${name}: failed`);
     }catch(e){alert('test failed')}}
 
 async function switchTo(name){
-    const r=await doProxyAction('switch',{name});
+    await doProxyAction('switch',{name});
     setTimeout(()=>{loadProxies();refresh()},1000);}
 
 async function doProxyAction(action,params){
-    const r=await fetch(`/cgi/proxy-mgmt.sh?${action}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(params)});
+    const r=await fetch(`/cgi-bin/proxy-mgmt.sh?${action}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(params||{})});
     return await r.json()}
 
 async function addProxyNode(){
@@ -352,56 +374,105 @@ async function addProxyNode(){
     try{
         const r=await fetch('/cgi-bin/proxy-mgmt.sh?add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uri})});
         const d=await r.json();
-        $('add-status').textContent=d.message||(d.ok?'✓ added':'✗ failed');
+        $('add-status').textContent=d.message||(d.ok?'added':'failed');
         if(d.ok)setTimeout(loadProxies,2000);
-    }catch(e){$('add-status').textContent='error: '+e.message}}
+    }catch(e){$('add-status').textContent='error'}}
 
 async function testAllNodes(){
-    const d=await fetchJson('rescue');
     loadProxies();setTimeout(loadProxies,8000);}
 
+async function loadRescue(){
+    const d=await fetchJson('rescue');if(!d)return;
+    $('rescue-body').innerHTML=`<div class="row"><span class="k">enabled</span><span class="badge b-${d.enabled?'green':'yellow'}">${d.enabled?'on':'off'}</span></div>
+    <div class="row"><span class="k">world</span><span class="v">${d.world}</span></div>
+    <div class="row"><span class="k">owned alive</span><span class="v num">${d.owned_alive}</span></div>
+    <div class="row"><span class="k">rescue alive</span><span class="v num">${d.rescue_alive}</span></div>`;
+    $('rescue-btn').textContent=d.enabled?'disable':'enable';
+}
 
-// ── trend charts (pure SVG, no library) ──
+async function loadOutages(){
+    try{
+        const r=await fetch('/cgi-bin/outage-timeline.sh');const d=await r.json();if(!d)return;
+        if(!d.incidents.length){$('outage-body').innerHTML='<span style="color:var(--green);font-size:.85rem">no outages recorded</span>';return;}
+        const fmt=s=>{const e=new Date(s*1000);return `${String(e.getMonth()+1).padStart(2,'0')}/${String(e.getDate()).padStart(2,'0')} ${String(e.getHours()).padStart(2,'0')}:${String(e.getMinutes()).padStart(2,'0')}`};
+        const dur=s=>{const m=Math.round(s/60);return m>=60?`${Math.floor(m/60)}h ${m%60}m`:`${m}m`};
+        $('outage-body').innerHTML=d.incidents.slice(-8).map(i=>
+            `<div class="row"><span class="k num">${fmt(i.start)}</span><span class="v">${dur(i.duration_s)}</span></div>`
+        ).join('')+`<div class="row" style="border:none"><span class="k"><b>total</b></span><span class="v"><b>${dur(d.total_s)}</b></span></div>`;
+    }catch(e){$('outage-body').textContent='—'}}
+
+async function loadServices(){
+    try{
+        const r=await fetch('/cgi-bin/service-status.sh');const d=await r.json();if(!d.services)return;
+        const whitelist=['x28proxy','x28-bot','x28-adblock','x28-rescue','x28-drift','x28-dash-data'];
+        $('services-body').innerHTML='<table style="width:100%">'+d.services.map(s=>{
+            const dot=s.status==='running'?'<span class="dot dot-green"></span>':s.status==='stopped'?'<span class="dot dot-red"></span>':'<span class="dot" style="background:var(--faint)"></span>';
+            const btn=whitelist.includes(s.name)?`<button class="btn btn-warn" style="padding:1px 6px;font-size:.68rem" onclick="restartService('${s.name}')">restart</button>`:'';
+            return `<tr><td>${dot} ${s.name}</td><td style="text-align:right">${btn}</td></tr>`;}).join('')+'</table>';
+    }catch(e){$('services-body').textContent='error'}}
+
+async function restartService(name){
+    if(!confirm(`restart ${name}?`))return;
+    await doAction('restart_service',{service:name});
+    setTimeout(loadServices,2000);}
+
+// ── trend charts ──
 async function loadTrends(){
     try{
         const r=await fetch('/cgi-bin/trend-data.sh');const d=await r.json();
-        if(d.rsrp&&d.rsrp.length>1)drawLineChart('rsrp-chart',d.rsrp,'RSRP dBm',-110,-60);
-        if(d.usage&&d.usage.length>1)drawBarChart('usage-chart',d.usage,'GB');
+        if(d.rsrp&&d.rsrp.length>1)drawLineChart('rsrp-chart',d.rsrp,-110,-60);
+        if(d.usage&&d.usage.length>1)drawBarChart('usage-chart',d.usage);
     }catch(e){console.warn('trends:',e)}}
 
-function drawLineChart(id,data,label,min,max){
+function drawLineChart(id,data,min,max){
     const el=document.getElementById(id);if(!el||!data.length)return;
-    const w=el.offsetWidth||280,h=120,p=20;
+    const w=el.offsetWidth||280,h=120,p=16;
     let svg=`<svg width="100%" viewBox="0 0 ${w} ${h}" style="overflow:visible">`;
-    // grid lines
-    for(let i=0;i<=3;i++){const y=p+(h-2*p)*i/3;svg+=`<line x1="${p}" y1="${y}" x2="${w-p}" y2="${y}" stroke="#21262d" stroke-width="1"/>`;}
-    // path
+    for(let i=0;i<=3;i++){const y=p+(h-2*p)*i/3;svg+=`<line x1="${p}" y1="${y}" x2="${w-p}" y2="${y}" stroke="#1c2330" stroke-width="1"/>`;}
     const pts=data.map((d,i)=>{
         const x=p+(w-2*p)*i/(data.length-1);
         const y=h-p-(h-2*p)*(d.v-min)/(max-min||1);
         return `${x},${y}`;}).join(' ');
-    svg+=`<polyline points="${pts}" fill="none" stroke="#58a6ff" stroke-width="2"/>`;
-    // last point dot
-    if(data.length){const lx=p+(w-2*p);const ly=h-p-(h-2*p)*(data[data.length-1].v-min)/(max-min||1);
-        svg+=`<circle cx="${lx}" cy="${ly}" r="4" fill="#58a6ff"/>`;
-        svg+=`<text x="${lx-20}" y="${ly-8}" fill="#e6edf3" font-size="11">${data[data.length-1].v}</text>`;}
-    // min/max labels
-    svg+=`<text x="${p}" y="${h-5}" fill="#8b949e" font-size="9">${min}</text>`;
-    svg+=`<text x="${p}" y="${p-3}" fill="#8b949e" font-size="9">${max}</text>`;
+    svg+=`<polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/>`;
+    if(data.length){const last=data[data.length-1];
+        const lx=p+(w-2*p);const ly=h-p-(h-2*p)*(last.v-min)/(max-min||1);
+        svg+=`<circle cx="${lx}" cy="${ly}" r="3.5" fill="var(--accent)"/>`;
+        svg+=`<text x="${lx-24}" y="${ly-8}" fill="var(--text)" font-size="11" font-family="inherit" class="num">${last.v}</text>`;}
+    svg+=`<text x="${p}" y="${h-4}" fill="var(--faint)" font-size="9">${min}</text>`;
+    svg+=`<text x="${p}" y="${p-4}" fill="var(--faint)" font-size="9">${max}</text>`;
     svg+='</svg>';
     el.innerHTML=svg;}
 
-function drawBarChart(id,data,label){
+function drawBarChart(id,data){
     const el=document.getElementById(id);if(!el||!data.length)return;
     el.innerHTML=data.map(d=>{
-        const pct=Math.min(100,Math.round(d.gb/5*100)); // 5 GB = full bar
-        return `<div style="margin-bottom:4px"><div style="display:flex;justify-content:space-between;font-size:.75rem"><span>${d.date}</span><span>${d.gb} GB</span></div>
-        <div class="bar"><span style="width:${Math.max(pct,2)}%"></span></div></div>`;}).join('');}
+        const pct=Math.min(100,Math.round(d.gb/5*100));
+        return `<div class="chart-bar-row"><div class="lbl"><span>${d.date}</span><span class="num">${d.gb} GB</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.max(pct,2)}%;background:var(--accent)"></div></div></div>`;}).join('');}
 
-// ── ledger view switcher ──
-let ledgerMode='monthly';
+// ── ledger range ──
+async function loadLedgerRange(){
+    const from=$('ledg-from').value,to=$('ledg-to').value;
+    if(!from||!to)return;
+    try{
+        const r=await fetch(`/cgi-bin/ledger-range.sh?from=${from}&to=${to}`);
+        const d=await r.json();
+        if(!d.entries||!d.entries.length){$('ledger-body').innerHTML='<span style="color:var(--dim)">no data for this range</span>';return;}
+        const max=Math.max(...d.entries.map(e=>e.bytes),1);
+        $('ledger-body').innerHTML=d.entries.filter(e=>e.bytes>0).map(e=>{
+            const gb=(e.bytes/1073741824).toFixed(1),pct=Math.round(e.bytes/max*100);
+            const cost=(e.cost||0).toLocaleString();
+            return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-weight:500">${e.person}</span><span class="num">${gb} GB · ${cost} T</span></div>
+            <div class="bar"><span style="width:${pct}%;background:var(--accent)"></span></div></div>`;}).join('')+
+            `<div class="row" style="border:none"><span class="k"><b>total</b></span><span class="v num"><b>${(d.entries.reduce((a,e)=>a+e.bytes,0)/1073741824).toFixed(1)} GB · ${(d.entries.reduce((a,e)=>a+e.cost,0)).toLocaleString()} T</b></span></div>`;
+    }catch(e){$('ledger-body').textContent='query failed'}}
+
+function presetLedger(daysBack){
+    const to=new Date().toISOString().split('T')[0];
+    const from=new Date(Date.now()+daysBack*86400000).toISOString().split('T')[0];
+    $('ledg-from').value=from;$('ledg-to').value=to;loadLedgerRange();}
+
 function setLedgerMode(mode){
-    ledgerMode=mode;
     if(mode==='daily'){
         const today=new Date().toISOString().split('T')[0];
         $('ledg-from').value=today;$('ledg-to').value=today;loadLedgerRange();
@@ -414,40 +485,53 @@ async function loadYearlyLedger(){
     try{
         const r=await fetch('/cgi-bin/x28-dash-actions.sh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'yearly_ledger',year})});
         const d=await r.json();
-        $('ledger-body').innerHTML=d.ok?`<pre>${d.html}</pre>`:`<i>${d.message||'error'}</i>`;
+        $('ledger-body').innerHTML=d.ok?`<pre style="font-family:inherit;white-space:pre-wrap">${d.html}</pre>`:`<i>${d.message||'error'}</i>`;
     }catch(e){$('ledger-body').textContent='error loading yearly ledger'}}
 
-// ── outage timeline ──
-async function loadOutages(){
+// ── actions ──
+async function doAction(action,params={}){
     try{
-        const r=await fetch('/cgi-bin/outage-timeline.sh');const d=await r.json();if(!d)return;
-        if(!d.incidents.length){$('outage-body').innerHTML='<span style="color:var(--green)">✓ No outages recorded</span>';return;}
-        const fmt=s=>{const e=new Date(s*1000);return `${String(e.getMonth()+1).padStart(2,'0')}/${String(e.getDate()).padStart(2,'0')} ${String(e.getHours()).padStart(2,'0')}:${String(e.getMinutes()).padStart(2,'0')}`};
-        const dur=s=>{const m=Math.round(s/60);return m>=60?`${Math.floor(m/60)}h${m%60}m`:`${m}m`};
-        $('outage-body').innerHTML=d.incidents.slice(-10).map(i=>
-            `<div class="row"><span class="k">${fmt(i.start)}</span><span class="v">${dur(i.duration_s)}</span></div>`
-        ).join('')+`<div class="row" style="border:none"><span class="k"><b>Total</b></span><span class="v"><b>${dur(d.total_s)}</b></span></div>`;
-    }catch(e){$('outage-body').textContent='—'}}
+        const r=await fetch('/cgi-bin/x28-dash-actions.sh',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({action,...params})});
+        return await r.json();
+    }catch(e){return{ok:false,message:e.message}}
+}
 
-// ── service manager ──
-let serviceWhitelist=['x28proxy','x28-bot','x28-adblock','x28-rescue','x28-drift','x28-dash-data'];
-async function loadServices(){
+function confirmAction(action,msg){
+    $('modal-root').innerHTML=`<div class="modal-bg"><div class="modal"><h3>confirm</h3><p>${msg}</p>
+    <div class="btns"><button class="btn" onclick="closeModal()">cancel</button>
+    <button class="btn btn-danger" onclick="closeModal();execAction('${action}',{confirm:true})">confirm</button></div></div></div>`;
+}
+
+function showIspModal(){
+    $('modal-root').innerHTML=`<div class="modal-bg"><div class="modal"><h3>switch ISP</h3><p>this takes about 3 minutes. choose target:</p>
+    <div class="btns"><button class="btn" onclick="closeModal()">cancel</button>
+    <button class="btn btn-warn" onclick="closeModal();execAction('switch_isp',{plmn:'43211',confirm:true})">MCI</button>
+    <button class="btn btn-warn" onclick="closeModal();execAction('switch_isp',{plmn:'43220',confirm:true})">Rightel</button></div></div></div>`;
+}
+
+function closeModal(){$('modal-root').innerHTML=''}
+
+async function execAction(action,params){
+    const r=await doAction(action,params);
+    closeModal();
+    if(r&&r.ok)setTimeout(refresh,2000);
+}
+
+// ── wifi ──
+async function loadWifiQR(){
     try{
-        const r=await fetch('/cgi-bin/service-status.sh');const d=await r.json();if(!d.services)return;
-        $('services-body').innerHTML='<table style="width:100%">'+d.services.map(s=>{
-            const dot=s.status==='running'?'🟢':s.status==='stopped'?'🔴':'⚪';
-            const btn=(serviceWhitelist.includes(s.name)||s.name==='mihomo')?`<button class="btn btn-warn" style="padding:2px 6px;font-size:.7rem" onclick="restartService('${s.name}')">↻</button>`:'';
-            return `<tr><td>${dot} ${s.name}</td><td style="text-align:right">${btn}</td></tr>`;}).join('')+'</table>';
-    }catch(e){$('services-body').textContent='error'}}
+        const r=await fetch('/cgi-bin/x28-dash-actions.sh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'wifi_qr'})});
+        const d=await r.json();
+    }catch(e){}}
 
-async function restartService(name){
-    if(!confirm(`Restart ${name}?`))return;
-    await doAction('restart_service',{service:name});
-    setTimeout(loadServices,2000);}
-
-async function testAllNodes(){
-    const d=await fetchJson('rescue');
-    loadProxies();setTimeout(loadProxies,8000);}
+// ── init ──
+async function refresh(){
+    await Promise.allSettled([loadStatus(),loadLink(),loadBudget(),loadHero(),loadLedger(),loadDevices(),loadRescue(),loadProxies(),loadTrends(),loadOutages(),loadServices()]);
+    lastUpdate=new Date();
+    $('updated').textContent=`updated ${lastUpdate.toLocaleTimeString()} · refreshing in 30 s`;
+}
 
 refresh();
 setInterval(refresh,30000);
