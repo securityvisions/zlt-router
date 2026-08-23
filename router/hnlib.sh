@@ -20,6 +20,11 @@ CAL_LIB="$_cal_dir/cal-lib.sh"
 [ -f "$CAL_LIB" ] || CAL_LIB="/data/proxy/cal-lib.sh"
 [ -f "$CAL_LIB" ] && . "$CAL_LIB"
 
+# ---- household rules (re-exported from ledger-rules.sh) ----
+for _rd in "$(dirname "${BASH_SOURCE[0]:-$0}")" "$(dirname "$0")" /data/proxy /root; do
+    [ -f "$_rd/ledger-rules.sh" ] && . "$_rd/ledger-rules.sh" && break
+done 2>/dev/null
+
 # ── balance report ───────────────────────────────────────────────────────────
 
 # hn_balance_fields [FILE] — parse the Samantel balance report text.

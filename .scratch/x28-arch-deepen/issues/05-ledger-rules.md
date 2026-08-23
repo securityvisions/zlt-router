@@ -4,7 +4,7 @@
 
 **Blocked by:** 04 — proves the hnlib split pattern before tackling the larger rules group.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] ledger-rules.sh exports: hn_owner_of, hn_budget_tier, hn_bounce_decide, hn_drift_classify (if present), hn_outage_pair, hn_outage_total, hn_outage_format_duration, hn_rescue_decide
 - [ ] hnlib re-exports during migration

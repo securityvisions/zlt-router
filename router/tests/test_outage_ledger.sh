@@ -4,6 +4,7 @@ HERE=$(cd "$(dirname "$0")" 2>/dev/null && pwd)
 HN_LIB="$HERE/../hnlib.sh"
 [ -f "$HN_LIB" ] || HN_LIB="$HERE/hnlib.sh"
 . "$HN_LIB"
+[ -f "$HERE/../ledger-rules.sh" ] && . "$HERE/../ledger-rules.sh"
 LEDGER_SH="$HERE/../x28/x28-outage-ledger.sh"
 
 PASS=0; FAIL=0

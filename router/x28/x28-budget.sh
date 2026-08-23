@@ -13,6 +13,10 @@ HN_LIB="${HN_LIB:-/root/hnlib.sh}"
 [ -f "$HN_LIB" ] || HN_LIB="/data/proxy/hnlib.sh"
 [ -f "$HN_LIB" ] || HN_LIB="$(dirname "$0")/../hnlib.sh"
 [ -f "$HN_LIB" ] && . "$HN_LIB"
+# household rules (budget tier etc.) now live in ledger-rules.sh
+for _rd in "$(dirname "$0")" "$(dirname "$HN_LIB")"; do
+    [ -f "$_rd/ledger-rules.sh" ] && . "$_rd/ledger-rules.sh" && break
+done
 
 DATE_CMD="${DATE_CMD:-date}"
 
