@@ -29,7 +29,7 @@ esc() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/
 bar() {  # bar <pct> <width>
     awk -v p="${1:-0}" -v w="${2:-10}" 'BEGIN{
         f=int(p*w/100+0.5); if(f>w)f=w; if(f<0)f=0;
-        s=""; for(i=0;i<w;i++) s = s ((i<f)?"▰":"▱"); print s}'
+        for(i=0;i<w;i++){ if(i<f) s=s "▰"; else s=s "▱" } print s}'
 }
 
 mode="text"; jmonth=""
