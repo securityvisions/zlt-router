@@ -40,7 +40,7 @@ echo "PASS=$PASS FAIL=$FAIL"
 # Test 3: help is button-based, commands updated, randomized MAC detection
 if grep -q "help_text" /home/parsavisions/home-network/router/x28/x28-bot.sh; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); echo "FAIL - help_text missing"; fi
 grep -q "/balance" /home/parsavisions/home-network/router/x28/x28-bot.sh && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - /balance missing from help"; }
-grep -q "is_random_mac\|rnd = 1" /home/parsavisions/home-network/router/x28/x28-bot.sh && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - random MAC detection"; }
+grep -q "26aeAE" /home/parsavisions/home-network/router/x28/x28-bot.sh && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - random MAC detection"; }
 grep -q "/devices" /home/parsavisions/home-network/router/x28/x28-bot.sh && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - /devices command"; }
 
 # Test 4: balance fallback (bal_card) — transient ISP failure shows last-good cache
@@ -50,7 +50,8 @@ grep -q "cached ~.*live query failed" /home/parsavisions/home-network/router/x28
 grep -q 'edit_panel "$cbmid" "$body"' /home/parsavisions/home-network/router/x28/x28-bot.sh && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - edit_panel still wraps body in extra header"; }
 # no bare `continue` in the bot: inside the update batch loop it skips i++ and
 # re-fires the same tap forever (the WiFi-panel send-loop incident)
-if grep -qE '^[[:space:]]*continue[[:space:]]*$' /home/parsavisions/home-network/router/x28/x28-bot.sh; then FAIL=$((FAIL+1)); echo "FAIL - bare continue in bot loop"; else PASS=$((PASS+1)); fi
+inner=$(sed -n '/while \[ "\$i" -lt "\$n" \]; do/,/^        done$/p' /home/parsavisions/home-network/router/x28/x28-bot.sh)
+printf '%s\n' "$inner" | grep -qE '^[[:space:]]*continue[[:space:]]*$' && { FAIL=$((FAIL+1)); echo "FAIL - bare continue inside update loop"; } || PASS=$((PASS+1))
 
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -1,70 +1,150 @@
 #!/bin/sh
 # x28-bot.sh — Telegram remote control for the X28 (@xirouterbot).
 #
-# Commands (only from the allowlisted chat in /etc/tg.conf):
-#   /status /link /usage /balance /budget /outages /people /month /owner /wifi
-#   /digest /bill /devices /proxy /switch_mci /switch_rightel /panel /help (/start = /help + Panel)
+# Commands: /status /link /usage /balance /budget /outages /people /month
+#   /owner /wifi /rescue /digest /bill /devices /proxy /switch_mci
+#   /switch_rightel /panel /help (/start = /help + Panel)
 #
-# Design notes:
-#   - Operator switching goes ONLY through operator-watchdog.sh's one-shot
-#     "switch" mode: the same proven vendor select (cmd 228) the web UI
-#     uses, plus the shared storm guard, dns-fix re-apply and data
-#     confirmation. The PLMN lock (cmd 219) that once wedged this modem
-#     appears nowhere.
-#   - Long-poll loop (timeout=50s); heartbeat file written every cycle and
-#     kept fresh by a keeper during long switches, so the supervisor can
-#     cull a wedged bot without false-positive mid-switch kills.
-#   - No `set -e`: Telegram/network errors must never kill the loop.
-#   - Device identity is hostname-first: phones with randomized MACs rotate
-#     addresses, so the stable name (DHCP hostname or user alias) wins and
-#     the MAC is shown as secondary info only.
+# Formatting system (HTML parse mode — verified against Bot API 10.2):
+#   esc()        — MANDATORY for every dynamic value (& < >)
+#   card anatomy — <b>emoji Title</b> · <i>meta</i> / verdict line /
+#                  rows or <pre> tables / <blockquote expandable> detail
+#   4096 budget  — split_chunks() splits on newlines; failed panel edits
+#                  fall back to a fresh message so data always arrives
+#   transport    — every API call logs ok/error_code/description
+#
+# Reliability notes:
+#   - instance lock via mkdir (atomic); supervisor cleans it each restart
+#   - heartbeat keeper watches the parent pid and self-exits (no orphans)
+#   - offset persisted AFTER handling; 600 s staleness filter absorbs replays
+#   - callback taps answered immediately, stale taps skipped
+#   - no `set -e`: Telegram/network errors must never kill the loop
 #
 # Canonical copy: router/x28/x28-bot.sh — deploys to /data/proxy/x28-bot.sh.
-# Service: /etc/init.d/x28-bot runs `x28-bot.sh supervise` under procd.
+# Tests source this file with `$1=lib` (pure helpers, no config required).
 
 CONF=/etc/tg.conf
-. "$CONF" 2>/dev/null || exit 1
-[ -n "${TOKEN:-}" ] || exit 1
-case "${CHAT_ID:-}" in ""|__*|0) exit 1 ;; esac
-
-JQ=/data/proxy/jq
-API="https://api.telegram.org/bot$TOKEN"
-PROXY="socks5h://192.168.70.1:1080"
 STATEDIR=/tmp/x28bot
-PSTATE=/data/proxy/bot-state   # persists reboots — see offset note below
+PSTATE=/data/proxy/bot-state
 LOGF=$STATEDIR/hb.log
 HB=$STATEDIR/hb
 SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
-
 MCI=43211
 RIGHTEL=43220
+MAXMSG=4000
 
 mkdir -p "$STATEDIR"
+
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOGF"; tail -c 8192 "$LOGF" > "$LOGF.t" 2>/dev/null && mv "$LOGF.t" "$LOGF"; return 0; }
-# hb — atomic heartbeat write (tmp+mv): the supervisor must never read a
-# half-written file and mistake it for a stale one (race that once culled a
-# healthy bot mid-switch).
 hb()  { echo $(date +%s) > "$HB.w"; mv "$HB.w" "$HB"; }
 
-# send <text> — reply to the allowlisted chat (best-effort).
-send() {
-    timeout 20 curl -s -m 18 -x "$PROXY" "$API/sendMessage" \
-        --data-urlencode "chat_id=$CHAT_ID" \
-        --data-urlencode "text=$1" >/dev/null 2>&1 || true
+load_conf() {
+    . "$CONF" 2>/dev/null || { log "bot: cannot load $CONF"; return 1; }
+    [ -n "${TOKEN:-}" ] || { log "bot: TOKEN missing"; return 1; }
+    case "${CHAT_ID:-}" in ""|__*|0) log "bot: CHAT_ID missing"; return 1 ;; esac
+    API="https://api.telegram.org/bot$TOKEN"
+    PROXY="${PROXY:-socks5h://192.168.70.1:1080}"
+    JQ="${JQ_BIN:-/data/proxy/jq}"
+    [ -x "$JQ" ] || JQ=$(command -v jq 2>/dev/null || true)
+    [ -n "${JQ:-}" ] || { log "bot: FATAL jq unavailable"; return 1; }
+    return 0
 }
 
-# send_photo <path> <caption> — send a photo (best-effort, multipart).
+load_conf_or_die() {
+    load_conf || exit 1
+    # jq is the bot's nervous system — degrade loudly instead of zombie-looping
+    if [ ! -x "$JQ" ]; then
+        log "bot: FATAL jq missing at $JQ"
+        timeout 10 curl -s -m 8 -x "$PROXY" "$API/sendMessage" \
+            --data-urlencode "chat_id=$CHAT_ID" \
+            --data-urlencode "text=⚠️ bot degraded: jq missing — commands disabled until restored" >/dev/null 2>&1 || true
+        exit 1
+    fi
+}
+
+# ---------- formatting helpers ----------
+esc() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+
+# split_chunks <text> — pieces ≤ MAXMSG chars, preferring newline boundaries.
+split_chunks() {
+    printf '%s\n' "${1:-}" | awk -v max="$MAXMSG" '
+    {
+        line = $0 "\n"
+        while (length(line) > max) { print substr(line, 1, max); line = substr(line, max+1) }
+        if (length(buf) + length(line) > max) { printf "%s", buf; buf = "" }
+        buf = buf line
+    }
+    END { sub(/\n$/, "", buf); printf "%s", buf }' | grep -v '^$' || printf '%s' "${1:-}" | head -c "$MAXMSG"
+}
+
+verdict_emoji() {
+    case "$1" in
+        *GREEN*) echo "✅ $1" ;;
+        *RED*)   echo "❌ $1" ;;
+        *)       echo "⚠️ ${1:-unknown}" ;;
+    esac
+}
+safe_arg() {
+    case "${1:-}" in "") return 1 ;; *[!A-Za-z0-9_.:-]*) return 1 ;; esac
+    printf '%s' "$1"
+}
+now_hm() { date '+%H:%M' 2>/dev/null; }
+
+# ---------- telegram transport ----------
+tg_post() {  # tg_post <method> <args…> — response-aware logging
+    _m="$1"; shift
+    _resp=$(timeout 20 curl -s -m 18 -x "$PROXY" "$API/$_m" "$@" 2>/dev/null)
+    _ok=$(printf '%s' "$_resp" | "$JQ" -r '.ok // "false"' 2>/dev/null)
+    if [ "$_ok" != "true" ]; then
+        _code=$(printf '%s' "$_resp" | "$JQ" -r '.error_code // "-"' 2>/dev/null)
+        _desc=$(printf '%s' "$_resp" | "$JQ" -r '.description // "empty response"' 2>/dev/null)
+        log "tg: $_m FAILED ($_code) $_desc"
+    fi
+    printf '%s' "$_resp"
+}
+
+html_send() {  # html_send <html-text> — chunked sendMessage (HTML, no preview)
+    split_chunks "${1:-}" | while IFS= read -r _part; do
+        [ -n "$_part" ] || continue
+        tg_post sendMessage \
+            --data-urlencode "chat_id=${CHAT_ID:-}" \
+            --data-urlencode "text=$_part" \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode 'link_preview_options={"is_disabled":true}' >/dev/null 2>&1 || true
+    done
+}
+
+edit_html() {  # edit_html <mid> <html-text> — edit in place, fall back to send
+    _mid="$1"
+    split_chunks "$2" | while IFS= read -r _part; do
+        [ -n "$_part" ] || continue
+        _resp=$(tg_post editMessageText \
+            --data-urlencode "chat_id=${CHAT_ID:-}" \
+            --data-urlencode "message_id=$_mid" \
+            --data-urlencode "text=$_part" \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode 'link_preview_options={"is_disabled":true}')
+        _ok=$(printf '%s' "$_resp" | "$JQ" -r '.ok // "false"' 2>/dev/null)
+        if [ "$_ok" != "true" ]; then
+            # not-modified is benign; anything else -> fresh message so data lands
+            html_send "$_part"
+        fi
+    done
+}
+
+answer_cbq() {
+    timeout 10 curl -s -m 8 -x "$PROXY" "$API/answerCallbackQuery" \
+        --data-urlencode "callback_query_id=$1" \
+        ${2:+--data-urlencode "text=$2"} >/dev/null 2>&1 || true
+}
+
 send_photo() {
-    local path="$1" cap="${2:-}"
-    [ -f "$path" ] || return 1
+    [ -f "$1" ] || return 1
     timeout 30 curl -s -m 25 -x "$PROXY" "$API/sendPhoto" \
-        -F "chat_id=$CHAT_ID" \
-        -F "photo=@$path" \
-        -F "caption=$cap" >/dev/null 2>&1 || true
+        -F "chat_id=${CHAT_ID:-}" -F "photo=@$1" -F "caption=$2" \
+        -F "parse_mode=HTML" >/dev/null 2>&1 || true
 }
 
-# panel_keyboard — the 4×2 Panel grid (bot-wonderful 01). callback_data
-# carries "panel:<action>" so the tap handler dispatches without parsing text.
 panel_keyboard() {
     printf '%s' '{"inline_keyboard":[
  [{"text":"📊 Status","callback_data":"panel:status"},{"text":"📶 Link","callback_data":"panel:link"}],
@@ -75,100 +155,121 @@ panel_keyboard() {
  [{"text":"👥 People","callback_data":"panel:people"},{"text":"📶 WiFi","callback_data":"panel:wifi"}]]}'
 }
 
-# send_panel — post the Panel message (keyboard + welcome body); stores message_id.
 send_panel() {
-    local resp mid kb
-    kb=$(panel_keyboard)
-    resp=$(timeout 20 curl -s -m 18 -x "$PROXY" "$API/sendMessage" \
-        --data-urlencode "chat_id=$CHAT_ID" \
-        --data-urlencode "text=X28 Panel — tap a button:
-──────────────
-$(sh /data/proxy/x28-status.sh 2>/dev/null | head -5)" \
-        --data-urlencode "reply_markup=$kb" 2>/dev/null)
-    mid=$(printf '%s' "$resp" | "$JQ" -r '.result.message_id // ""' 2>/dev/null)
-    [ -n "$mid" ] && echo "$mid" > "$STATEDIR/panel_msg_id"
+    _kb=$(panel_keyboard)
+    _body="<b>🎛 X28 Panel</b> · $(now_hm)
+$(fmt_status)"
+    _resp=$(timeout 20 curl -s -m 18 -x "$PROXY" "$API/sendMessage" \
+        --data-urlencode "chat_id=${CHAT_ID:-}" \
+        --data-urlencode "text=$_body" \
+        --data-urlencode "parse_mode=HTML" \
+        --data-urlencode "reply_markup=$_kb" \
+        --data-urlencode 'link_preview_options={"is_disabled":true}' 2>/dev/null)
+    _mid=$(printf '%s' "$_resp" | "$JQ" -r '.result.message_id // ""' 2>/dev/null)
+    [ -n "$_mid" ] && echo "$_mid" > "$STATEDIR/panel_msg_id"
 }
 
-# answer_cbq <callback_query_id> [text] — acknowledge a tap (stops the spinner).
-answer_cbq() {
-    timeout 10 curl -s -m 8 -x "$PROXY" "$API/answerCallbackQuery" \
-        --data-urlencode "callback_query_id=$1" \
-        ${2:+--data-urlencode "text=$2"} >/dev/null 2>&1 || true
-}
-
-# edit_panel <message_id> <text> — edit the Panel message in place, keyboard stays.
 edit_panel() {
-    local kb
-    kb=$(panel_keyboard)
-    timeout 20 curl -s -m 18 -x "$PROXY" "$API/editMessageText" \
-        --data-urlencode "chat_id=$CHAT_ID" \
+    _kb=$(panel_keyboard)
+    _resp=$(timeout 20 curl -s -m 18 -x "$PROXY" "$API/editMessageText" \
+        --data-urlencode "chat_id=${CHAT_ID:-}" \
         --data-urlencode "message_id=$1" \
         --data-urlencode "text=$2" \
-        --data-urlencode "reply_markup=$kb" >/dev/null 2>&1 || true
+        --data-urlencode "parse_mode=HTML" \
+        --data-urlencode "reply_markup=$_kb" \
+        --data-urlencode 'link_preview_options={"is_disabled":true}' 2>/dev/null)
+    _ok=$(printf '%s' "$_resp" | "$JQ" -r '.ok // "false"' 2>/dev/null)
+    if [ "$_ok" != "true" ]; then
+        _desc=$(printf '%s' "$_resp" | "$JQ" -r '.description // ""' 2>/dev/null)
+        case "$_desc" in *"not modified"*) : ;; *) html_send "$2" ;; esac
+    fi
 }
 
-# data_ok — same probe the watchdog uses (HTTPS by IP, no DNS).
+# ---------- data plumbing ----------
 data_ok() {
     code=$(curl -k -s -m 8 -o /dev/null -w '%{http_code}' https://1.1.1.1 2>/dev/null)
     case "$code" in 200|204|301|302) return 0 ;; esac
     return 1
 }
-
-# cur_plmn — live PLMN via the link reader.
 cur_plmn() {
     timeout 20 sh /data/proxy/linkstate.sh 2>/dev/null | sed -n 's/^plmn=//p' | head -1
 }
-
-# do_switch <plmn> <name> — storm-guarded switch via the watchdog one-shot,
-# heartbeat kept fresh while it runs (reselect + confirm can take ~3 min).
 do_switch() {
     target="$1" name="$2"
     cur=$(cur_plmn)
     if [ "$cur" = "$target" ] && data_ok; then
-        send "Already on $name — data OK. No switch needed."
+        html_send "🔄 <b>Already on $name</b>
+Data confirmed healthy — no switch needed."
         return 0
     fi
-    send "Switching to $name … can take up to ~3 min. Will report back."
-    ( while :; do hb; sleep 15; done ) &
+    html_send "🔄 <b>Switching to $name…</b>
+<i>This takes up to ~3 minutes. I'll report back automatically.</i>"
+    BOTPID=$$
+    ( while :; do kill -0 "$BOTPID" 2>/dev/null || exit 0; hb; sleep 15; done ) &
     keeper=$!
     timeout 300 sh /data/proxy/operator-watchdog.sh switch "$target" >/dev/null 2>&1
     rc=$?
     kill "$keeper" 2>/dev/null
     hb
-    tail2=$(tail -n 2 /data/proxy/watchdog.log 2>/dev/null)
+    tail2=$(tail -n 2 /data/proxy/watchdog.log 2>/dev/null | esc)
+    st=$(sh /data/proxy/x28-status.sh 2>/dev/null | head -5 | esc)
     if [ "$rc" = "0" ]; then
-        send "Switch to $name: OK (data confirmed)
-──────────────
-$(sh /data/proxy/x28-status.sh 2>/dev/null | sed -n '1,5p')"
+        html_send "✅ <b>Switch to $name complete</b> · $(now_hm)
+Data confirmed on the new operator.
+
+<pre>$st</pre>"
     else
-        send "Switch to $name: NOT confirmed (rc=$rc).
-──────────────
-$tail2
-Use /status to check the current state."
+        html_send "❌ <b>Switch to $name not confirmed</b>
+<pre>$tail2</pre>
+Check <code>/status</code> — the watchdog keeps monitoring."
     fi
     return 0
 }
 
-# ---- beautiful output helpers (bot-wonderful 02) ----
+# ---------- formatters (input-seamed for tests) ----------
+fmt_status() {  # fmt_status [status_output]
+    local out="${1:-}"
+    [ -z "$out" ] && out=$(sh /data/proxy/x28-status.sh 2>/dev/null)
+    [ -z "$out" ] && { echo "⚠️ status unavailable — try again shortly"; return; }
+    printf '%s\n' "$out" | awk '
+    {
+        key = $1; val = substr($0, length(key) + 2)
+        gsub(/_/, " ", key)
+        icon=""
+        if(key=="operator")icon="📡"; else if(key=="signal")icon="📶"
+        else if(key=="data")icon="🌐"; else if(key=="proxy")icon="🛰️"
+        else if(key=="devices")icon="📱"; else if(key=="uptime")icon="⏱"
+        else if(key=="ram")icon="🧠"; else if(key=="temp")icon="🌡️"
+        else if(key=="services")icon="⚙️"
+        printf "%s %s\n", icon, $0
+    }'
+}
 
-# hr — section rule line.
-hr() { echo "──────────────────────"; }
+fmt_devices() {  # fmt_devices [leases_file]
+    local f="${1:-/tmp/dnsmasq.leases}"
+    [ -f "$f" ] || { echo "No DHCP leases yet."; return; }
+    awk '
+    {
+        mac=$2; ip=$3; host=$4
+        if(host=="*"||host=="") host="?"
+        c=substr(mac,2,1); rnd=(c~/[26aeAE]/)?1:0
+        tag=rnd?" 🎲":""
+        printf "%-14s %-15s %s%s\n", host, ip, mac, tag
+    }' "$f" | sort
+}
 
-# bal_card — live balance with last-good-cache fallback. A transient ISP/API
-# failure used to both poison the cache and show the user "No data packages
-# found."; now a failed live query falls back to the guarded cache with an
-# age note (balance.sh itself no longer persists failures).
-bal_card() {
+bal_card() {  # bal_card [pre-fetched report]
     local out ts age mins
-    out=$(sh /root/balance.sh --report 2>/dev/null)
+    out="${1:-}"
+    [ -z "$out" ] && out=$(sh /root/balance.sh --report 2>/dev/null)
     case "$out" in
         *"GB left across"*) printf '%s\n' "$out" ;;
         *)
             if [ -f /tmp/balance_report ] && grep -q "GB left across" /tmp/balance_report 2>/dev/null; then
                 ts=$(cat /tmp/balance_report.ts 2>/dev/null || echo 0)
                 age=$(( $(date +%s) - ${ts:-0} )); [ "$age" -lt 0 ] && age=0
-                mins=$(( age / 60 ))
-                printf '%s\n(cached ~%sm ago — live query failed)\n' "$(cat /tmp/balance_report 2>/dev/null)" "$mins"
+                printf '%s\n<i>cached ~%d min ago — live query failed</i>\n' \
+                    "$(cat /tmp/balance_report 2>/dev/null)" $(( age / 60 ))
             else
                 printf '%s\n' "$out"
             fi
@@ -176,106 +277,68 @@ bal_card() {
     esac
 }
 
-# fmt_status — the polished status card body.
-fmt_status() {
-    local out
-    out=$(sh /data/proxy/x28-status.sh 2>/dev/null)
-    [ -z "$out" ] && { echo "⚠️ status unavailable"; return; }
-    # uppercase labels → emoji-prefixed aligned rows
-    printf '%s\n' "$out" | awk '
-    {
-        lbl = $1; sub(/^[^ ]* */, "")
-        key = $1
-        val = substr($0, length(key) + 2)
-        gsub(/_/, " ", key)
-        icon = ""
-        if (key == "operator")  icon = "📡"
-        else if (key == "signal")    icon = "📶"
-        else if (key == "data")      icon = "🌐"
-        else if (key == "proxy")     icon = "🛰️"
-        else if (key == "devices")   icon = "📱"
-        else if (key == "uptime")    icon = "⏱"
-        else if (key == "ram")       icon = "🧠"
-        else if (key == "temp")      icon = "🌡"
-        else if (key == "services")  icon = "⚙️"
-        printf "%s %-9s %s\n", icon, toupper(substr(key,1,1)) substr(key,2), val
-    }'
-}
-
-# fmt_devices — devices grouped by stable identity (hostname first), MAC shown
-# only when it looks real (not locally-administered/randomized). Randomized
-# MACs have the second hex nibble in {2,6,A,E} (locally administered bit set).
-is_random_mac() {
-    local m="${1:-}"
-    case "$m" in
-        ??[26aeAE]*:*) return 0 ;;   # x2/x6/xA/xE second nibble → randomized
-        *) return 1 ;;
-    esac
-}
-
-fmt_devices() {
-    local leases="/tmp/dnsmasq.leases"
-    [ -f "$leases" ] || { echo "no leases"; return; }
-    awk '
-    {
-        mac = $2; ip = $3; host = $4
-        if (host == "*" || host == "") host = "?"
-        rnd = 0
-        c = substr(mac, 2, 1)
-        if (c ~ /[26aeAE]/) rnd = 1
-        tag = rnd ? " 🎲" : ""
-        printf "%-14s %-15s %s%s\n", host, ip, mac, tag
-    }' "$leases" | sort
-}
-
-# help_text — full command list, grouped, pointing at the Panel buttons.
 help_text() {
     cat <<'EOF'
-🤖 X28 Bot — commands
+<b>🤖 X28 Bot</b>
 
-📊 Status    /status   live overview
-📶 Link      /link     modem signal detail
-💾 Usage     /usage    per-device traffic today
-💰 Balance   /balance  Samantel data left
-💰 Budget    /budget   forecast + tiered alerts
-📉 Outages   /outages  SLA ledger per Jalali month
-👥 People    /people   per-person Jalali month
-📅 Month     /month    any Jalali month (YYYY-MM)
-👤 Owner     /owner    assign device to person
-📶 WiFi      /wifi     share QR for guests
-🛟 Rescue    /rescue   collected-node failover status
-🧾 Digest    /digest   weekly story (Fri 20:00)
-🧾 Bill      /bill     weekly usage + cost
-📱 Devices   /devices  who is on the network
-🛰️ Proxy     /proxy    active node + health
+<b>Network</b>
+/status overview · /link signal detail
+/proxy tunnel state · /devices who's online
 
-🔄 Switch    /switch_mci · /switch_rightel
-🎛 Panel     /panel    button grid (tap to navigate)
+<b>Data</b>
+/balance Samantel left · /usage today
+/bill week + cost · /budget forecast
 
-Everything also lives in the Panel buttons below ⤵️
+<b>Reports</b>
+/outages SLA ledger · /people per-person month
+/month any Jalali month · /digest weekly story
+
+<b>Household</b>
+/wifi guest QR · /owner assign device→person
+
+<b>Control</b>
+/switch_mci · /switch_rightel
+/rescue collected-node failover
+
+Everything lives in the Panel too: /panel
 EOF
 }
 
-# ---- bot mode: the long-poll command loop ----
+# ---- bot mode ----
 bot() {
+    load_conf_or_die
+    # instance lock: atomic mkdir; supervisor cleans it between restarts
+    if ! mkdir "$STATEDIR/lock" 2>/dev/null; then
+        log "bot: another instance holds the lock — exiting"
+        exit 1
+    fi
+
     oldpid=$(cat "$STATEDIR/bot.pid" 2>/dev/null)
     if [ -n "$oldpid" ] && [ "$oldpid" != "$$" ] && kill -0 "$oldpid" 2>/dev/null; then
-        echo "bot already running (pid $oldpid)"; exit 1
+        log "bot: already running (pid $oldpid)"
+        rmdir "$STATEDIR/lock" 2>/dev/null
+        exit 1
     fi
     echo $$ > "$STATEDIR/bot.pid"
     hb
     log "bot: started pid=$$"
 
-    # offset persists in /data: after a reboot Telegram would otherwise
-    # redeliver the last command and re-run its side effects (a replayed
-    # /switch_* once did exactly that).
     mkdir -p "$PSTATE"
     off=$(cat "$PSTATE/offset" 2>/dev/null || echo 0)
     while :; do
         hb
         resp=$(curl -s -m 60 -x "$PROXY" "$API/getUpdates?timeout=50&offset=$off" 2>/dev/null)
         ok=$(printf '%s' "$resp" | "$JQ" -r '.ok // "false"' 2>/dev/null)
-        if [ "$ok" != "true" ]; then sleep 10; continue; fi
+        if [ "$ok" != "true" ]; then
+            code=$(printf '%s' "$resp" | "$JQ" -r '.error_code // ""' 2>/dev/null)
+            desc=$(printf '%s' "$resp" | "$JQ" -r '.description // "network/empty"' 2>/dev/null)
+            case "$code" in
+                409) log "poll: 409 conflict — another poller likely active" ;;
+                401) log "poll: 401 unauthorized — TOKEN invalid; backing off hard"; sleep 300 ;;
+                *)   log "poll: $code $desc"; sleep 10 ;;
+            esac
+            continue
+        fi
         n=$(printf '%s' "$resp" | "$JQ" '.result | length' 2>/dev/null)
         [ -z "$n" ] && { sleep 10; continue; }
         i=0
@@ -284,166 +347,156 @@ bot() {
             cid=$(printf '%s' "$resp" | "$JQ" -r ".result[$i].message.chat.id // \"\"" 2>/dev/null)
             text=$(printf '%s' "$resp" | "$JQ" -r ".result[$i].message.text // \"\"" 2>/dev/null)
             mdate=$(printf '%s' "$resp" | "$JQ" -r ".result[$i].message.date // \"\"" 2>/dev/null)
-            # callback_query (Panel taps)
             cbid=$(printf '%s' "$resp" | "$JQ" -r ".result[$i].callback_query.id // \"\"" 2>/dev/null)
             cbdata=$(printf '%s' "$resp" | "$JQ" -r ".result[$i].callback_query.data // \"\"" 2>/dev/null)
             cbcid=$(printf '%s' "$resp" | "$JQ" -r ".result[$i].callback_query.message.chat.id // \"\"" 2>/dev/null)
             cbmid=$(printf '%s' "$resp" | "$JQ" -r ".result[$i].callback_query.message.message_id // \"\"" 2>/dev/null)
-            off=$((uid + 1)); echo "$off" > "$PSTATE/offset"
+            cbdate=$(printf '%s' "$resp" | "$JQ" -r ".result[$i].callback_query.message.date // \"\"" 2>/dev/null)
             hb
+
             if [ "$cbcid" = "$CHAT_ID" ] && [ -n "$cbdata" ]; then
-                action=${cbdata#panel:}
-                log "bot: panel tap=$action"
-                case "$action" in
-                    status)  body=$(fmt_status) ;;
-                    link)    body="📶 Link detail
-$(hr)
-$(timeout 20 sh /data/proxy/linkstate.sh 2>/dev/null)" ;;
-                    usage)   body="💾 Usage today
-$(hr)
-$(sh /data/proxy/usage/x28-usage.sh today 2>/dev/null)" ;;
-                    balance) body="💰 Samantel balance
-$(hr)
-$(bal_card 2>/dev/null | head -12)" ;;
-                    devices) body="📱 Devices on network
-$(hr)
-$(fmt_devices)" ;;
-                    bill)    body="🧾 Weekly bill
-$(hr)
-$(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null)" ;;
-                    proxy)   body="🛰️ Proxy
-$(hr)
-active : $(curl -s -m 5 http://127.0.0.1:9090/proxies/auto 2>/dev/null | grep -o '"now":"[^"]*"' | cut -d'"' -f4)
-health : $(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)" ;;
-                    budget)  body="💰 Budget
-$(hr)
-$(sh /data/proxy/x28-budget.sh --card 2>/dev/null)" ;;
-                    outages) body="📉 Outages
-$(hr)
-$(sh /data/proxy/x28-outage-ledger.sh report 2>/dev/null)" ;;
-                    digest)  body="$(sh /data/proxy/x28-digest.sh 2>/dev/null)" ;;
-                    people)  body="👥 People
-$(hr)
-$(sh /data/proxy/x28-people.sh 2>/dev/null)" ;;
-                    wifi)
-                        # send photo (or explanatory card) — body stays empty so the
-                        # common tail skips edit_panel; NEVER `continue` here: it
-                        # would skip this batch's i++ and re-fire the same tap forever.
-                        if path=$(sh /data/proxy/x28-wifi.sh qr 2>/dev/null); then
-                            cap=$(sh /data/proxy/x28-wifi.sh card 2>/dev/null | head -n 3)
-                            send_photo "$path" "$cap" || send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
-                        else
-                            send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
-                        fi
-                        body=""
-                        ;;
-                    help)    body="$(help_text)" ;;
-                    panel|start) body="$(help_text)" ;;
-                    *)       body="unknown tap" ;;
-                esac
+                # instant ack, then staleness guard, then dispatch
                 answer_cbq "$cbid"
-                # bodies carry their own emoji titles — no extra wrapper header
-                [ -n "$cbmid" ] && edit_panel "$cbmid" "$body"
+                action=${cbdata#panel:}
+                if [ -n "$cbdate" ] && [ $(( $(date +%s) - cbdate )) -gt 600 ]; then
+                    log "cb: skipped stale tap=$action (age $(( $(date +%s) - cbdate ))s)"
+                else
+                    log "cb: tap=$action"
+                    case "$action" in
+                        status)  body="<b>📊 Status</b> · $(now_hm)
+$(esc "$(fmt_status)")" ;;
+                        link)    body="<b>📶 Link detail</b> · $(now_hm)
+<blockquote expandable>$(esc "$(timeout 20 sh /data/proxy/linkstate.sh 2>/dev/null)")</blockquote>" ;;
+                        usage)   body="<b>💾 Usage today</b>
+<pre>$(esc "$(sh /data/proxy/usage/x28-usage.sh today 2>/dev/null)")</pre>" ;;
+                        balance) body="<b>💰 Balance</b> · $(now_hm)
+$(esc "$(bal_card | head -12)")" ;;
+                        devices) body="<b>📱 Devices</b>
+<pre>$(esc "$(fmt_devices)")</pre>" ;;
+                        bill)    body="<b>🧾 Weekly bill</b>
+<pre>$(esc "$(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null)")</pre>" ;;
+                        proxy)   body="<b>🛰️ Proxy</b> · $(now_hm)
+active : <code>$(curl -s -m 5 http://127.0.0.1:9090/proxies/auto 2>/dev/null | grep -o '"now":"[^"]*"' | cut -d'"' -f4)</code>
+health : $(verdict_emoji "$(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)")
+rescue : $(sh /data/proxy/x28-rescue.sh status 2>/dev/null | tr '\n' ' ')" ;;
+                        budget)  body="<b>💰 Budget</b>
+$(esc "$(sh /data/proxy/x28-budget.sh --card 2>/dev/null)")" ;;
+                        outages) body="<b>📉 Outages</b>
+$(esc "$(sh /data/proxy/x28-outage-ledger.sh report 2>/dev/null)")" ;;
+                        digest)  body="$(sh /data/proxy/x28-digest.sh 2>/dev/null)" ;;
+                        people)  body="$(sh /data/proxy/x28-people.sh 2>/dev/null)" ;;
+                        wifi)
+                            if path=$(sh /data/proxy/x28-wifi.sh qr 2>/dev/null); then
+                                cap=$(sh /data/proxy/x28-wifi.sh card 2>/dev/null | head -n 3 | esc)
+                                send_photo "$path" "$cap" || html_send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
+                            else
+                                html_send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
+                            fi
+                            body="" ;;
+                        help)    body="$(help_text)" ;;
+                        panel|start) body="$(help_text)" ;;
+                        *)       body="unknown tap" ;;
+                    esac
+                    [ -n "$cbmid" ] && edit_panel "$cbmid" "$body"
+                fi
             elif [ "$cid" = "$CHAT_ID" ] && [ -n "$text" ]; then
-                # staleness guard: anything older than 10 minutes is a replay
-                # (reboot lost the offset once and an old /switch re-fired)
                 if [ -n "$mdate" ] && [ $(( $(date +%s) - mdate )) -gt 600 ]; then
-                    log "bot: skipped stale update uid=$uid (age $(( $(date +%s) - mdate ))s)"
+                    log "cmd: skipped stale update uid=$uid"
                 else
                 cmd=$(printf '%s' "$text" | awk '{print $1}')
-                log "bot: cmd=$cmd"
+                log "cmd: $cmd"
                 case "$cmd" in
-                    /start|/help)
-                        send "$(help_text)"
-                        send_panel ;;
-                    /panel)
-                        send_panel ;;
+                    /start|/help) html_send "$(help_text)"; send_panel ;;
+                    /panel)       send_panel ;;
                     /status)
-                        send "📊 X28 status
-$(hr)
-$(fmt_status)" ;;
+                        hv=$(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)
+                        html_send "<b>📊 Status</b> · $(now_hm)
+$(verdict_emoji "$hv")
+
+$(esc "$(fmt_status)")" ;;
                     /link)
-                        send "📶 Link detail
-$(hr)
-$(timeout 20 sh /data/proxy/linkstate.sh 2>/dev/null)" ;;
+                        html_send "<b>📶 Link detail</b> · $(now_hm)
+<blockquote expandable>$(esc "$(timeout 20 sh /data/proxy/linkstate.sh 2>/dev/null)")</blockquote>" ;;
                     /usage)
-                        send "💾 Usage today
-$(hr)
-$(sh /data/proxy/usage/x28-usage.sh today 2>/dev/null)" ;;
+                        html_send "<b>💾 Usage today</b>
+<pre>$(esc "$(sh /data/proxy/usage/x28-usage.sh today 2>/dev/null)")</pre>" ;;
                     /bill)
-                        send "🧾 Weekly bill
-$(hr)
-$(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null)" ;;
+                        html_send "<b>🧾 Weekly bill</b>
+<pre>$(esc "$(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null)")</pre>" ;;
                     /balance)
-                        send "💰 Samantel balance
-$(hr)
-$(bal_card 2>/dev/null | head -20)" ;;
+                        html_send "<b>💰 Balance</b> · $(now_hm)
+$(esc "$(bal_card | head -20)")" ;;
                     /devices)
-                        send "📱 Devices on network
-$(hr)
-$(fmt_devices)" ;;
+                        html_send "<b>📱 Devices</b>
+<pre>$(esc "$(fmt_devices)")</pre>" ;;
                     /proxy)
-                        send "🛰️ Proxy
-$(hr)
-active : $(curl -s -m 5 http://127.0.0.1:9090/proxies/auto 2>/dev/null | grep -o '"now":"[^"]*"' | cut -d'"' -f4)
-health : $(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)" ;;
+                        html_send "<b>🛰️ Proxy</b> · $(now_hm)
+active : <code>$(curl -s -m 5 http://127.0.0.1:9090/proxies/auto 2>/dev/null | grep -o '"now":"[^"]*"' | cut -d'"' -f4)</code>
+health : $(verdict_emoji "$(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)")
+rescue : $(sh /data/proxy/x28-rescue.sh status 2>/dev/null | tr '\n' ' ')" ;;
                     /budget)
-                        send "💰 Budget
-$(hr)
-$(sh /data/proxy/x28-budget.sh --card 2>/dev/null)" ;;
+                        html_send "<b>💰 Budget</b>
+$(esc "$(sh /data/proxy/x28-budget.sh --card 2>/dev/null)")" ;;
                     /outages)
-                        arg=$(printf '%s' "$text" | awk '{print $2}')
-                        send "📉 Outages
-$(hr)
-$(sh /data/proxy/x28-outage-ledger.sh report $arg 2>/dev/null)" ;;
-                    /people)
-                        arg=$(printf '%s' "$text" | awk '{print $2}')
-                        send "$(sh /data/proxy/x28-people.sh $arg 2>/dev/null)" ;;
-                    /month)
-                        arg=$(printf '%s' "$text" | awk '{print $2}')
-                        send "$(sh /data/proxy/x28-people.sh $arg 2>/dev/null)" ;;
+                        arg=$(safe_arg "$(printf '%s' "$text" | awk '{print $2}')")
+                        html_send "<b>📉 Outages</b>
+$(esc "$(sh /data/proxy/x28-outage-ledger.sh report $arg 2>/dev/null)")" ;;
+                    /people|/month)
+                        arg=$(safe_arg "$(printf '%s' "$text" | awk '{print $2}')")
+                        html_send "$(sh /data/proxy/x28-people.sh $arg 2>/dev/null)" ;;
                     /owner)
-                        args=$(printf '%s' "$text" | cut -d' ' -f2-)
-                        [ -z "$args" ] && args="list"
-                        out=$(sh /data/proxy/x28-owners.sh $args 2>&1)
-                        send "👤 Owner
-$(hr)
+                        sub=$(safe_arg "$(printf '%s' "$text" | awk '{print $2}')")
+                        rest=$(printf '%s' "$text" | cut -s -d' ' -f3-)
+                        case "$sub" in
+                            assign) mac=$(safe_arg "$(printf '%s' "$rest" | awk '{print $1}')"); person=$(printf '%s' "$rest" | cut -s -d' ' -f2-)
+                                    [ -n "$mac" ] && [ -n "$person" ] || { html_send "👤 <b>Usage</b>: <code>/owner assign &lt;mac&gt; &lt;name&gt;</code>"; continue; }
+                                    out=$(sh /data/proxy/x28-owners.sh assign "$mac" "$person" 2>&1 | esc) ;;
+                            unassign) mac=$(safe_arg "$(printf '%s' "$rest" | awk '{print $1}')")
+                                    [ -n "$mac" ] || { html_send "👤 <b>Usage</b>: <code>/owner unassign &lt;mac&gt;</code>"; continue; }
+                                    out=$(sh /data/proxy/x28-owners.sh unassign "$mac" 2>&1 | esc) ;;
+                            list|"") out=$(sh /data/proxy/x28-owners.sh list 2>&1 | esc) ;;
+                            get) out=$(sh /data/proxy/x28-owners.sh get "$(safe_arg "$rest")" 2>&1 | esc) ;;
+                            *) out=$(esc "unknown subcommand: $sub") ;;
+                        esac
+                        html_send "👤 Owner
 $out" ;;
                     /wifi)
                         if path=$(sh /data/proxy/x28-wifi.sh qr 2>/dev/null); then
-                            cap=$(sh /data/proxy/x28-wifi.sh card 2>/dev/null | head -n 3)
-                            send_photo "$path" "$cap" || send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
+                            cap=$(sh /data/proxy/x28-wifi.sh card 2>/dev/null | head -n 3 | esc)
+                            send_photo "$path" "$cap" || html_send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
                         else
-                            send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
+                            html_send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
                         fi
                         ;;
                     /rescue)
-                        rarg=$(printf '%s' "$text" | awk '{print $2}')
+                        rarg=$(safe_arg "$(printf '%s' "$text" | awk '{print $2}')")
                         case "$rarg" in
                             on|off) sh /data/proxy/x28-rescue.sh switch "$rarg" >/dev/null 2>&1 ;;
+                            *)      rarg="" ;;
                         esac
-                        send "🛟 Rescue
-$(hr)
-$(sh /data/proxy/x28-rescue.sh status 2>/dev/null)
-$( [ "$rarg" = "on" ] || [ "$rarg" = "off" ] && echo "switched: $rarg" )" ;;
+                        html_send "🛟 Rescue · $(now_hm)
+$(esc "$(sh /data/proxy/x28-rescue.sh status 2>/dev/null)")$( [ -n "$rarg" ] && printf '\n<i>switched: %s</i>' "$rarg" )" ;;
                     /digest)
-                        send "$(sh /data/proxy/x28-digest.sh 2>/dev/null)" ;;
+                        html_send "$(sh /data/proxy/x28-digest.sh 2>/dev/null)" ;;
                     /switch_mci)     do_switch "$MCI" "MCI" ;;
                     /switch_rightel) do_switch "$RIGHTEL" "Rightel" ;;
-                    *) send "Unknown command — try /help" ;;
+                    *) html_send "❓ Unknown command — <code>/help</code> lists everything." ;;
                 esac
                 fi
             elif [ -n "$cid" ] && [ "$cid" != "$CHAT_ID" ]; then
-                log "bot: ignored update from chat $cid"
+                log "ignored update from chat $cid"
             fi
+            # offset persisted AFTER successful handling; staleness filters replay
+            off=$((uid + 1)); echo "$off" > "$PSTATE/offset"
             i=$((i + 1))
         done
     done
 }
 
-# ---- supervise mode: start bot, cull wedges (stale heartbeat), restart ----
 supervise() {
+    load_conf >/dev/null 2>&1 || true
     while :; do
+        rm -rf "$STATEDIR/lock"
         sh "$SELF" bot >> "$LOGF" 2>&1 &
         bpid=$!
         log "supervisor: bot started pid=$bpid"
@@ -452,7 +505,6 @@ supervise() {
             sleep 20
             [ "$culled" = "1" ] && break
             hbv=$(cat "$HB" 2>/dev/null || echo 0)
-            # empty/just-created hb file = write in progress: skip, never cull
             if [ -z "$hbv" ]; then sleep 5; continue; fi
             now=$(date +%s)
             if [ $((now - hbv)) -gt 180 ]; then
@@ -463,13 +515,15 @@ supervise() {
         done
         wait "$bpid" 2>/dev/null
         rm -f "$STATEDIR/bot.pid"
+        rm -rf "$STATEDIR/lock"
         log "supervisor: bot gone, restarting in 5s"
         sleep 5
     done
 }
 
-case "${1:-supervise}" in
-    bot)      bot ;;
+case "${BOT_MODE:-${1:-supervise}}" in
+    lib)       : ;;                       # sourced for tests — define only
+    bot)       load_conf_or_die; bot ;;
     supervise) supervise ;;
-    *)        echo "usage: x28-bot.sh [bot|supervise]"; exit 2 ;;
+    *)         echo "usage: x28-bot.sh [bot|supervise|lib]"; exit 2 ;;
 esac
