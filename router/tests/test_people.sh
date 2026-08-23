@@ -50,20 +50,21 @@ assert_eq "owners shorthand assign" "Ali" "$(hn_owner_of "aa:bb:cc:dd:ee:ff" "$O
 # Setup USAGE_DIR with owners daily files
 PEOPLE_SH="$HERE/../x28/x28-people.sh"
 USAGE="$TMP/usage"
-mkdir -p "$USAGE/owners"
-# Create owners files for two days inside 1405-05 and one outside
-# 1405-05 range includes 2026-07-24 and 2026-08-22, excludes 2026-07-22 and 2026-08-23
-cat > "$USAGE/owners/2026-07-24" <<'EOF'
-Ali|1073741824|0
-Sara|2147483648|0
+mkdir -p "$USAGE/owners-d"
+# Device-granularity rollups (new format)
+cat > "$USAGE/owners-d/2026-07-24" <<'EOF'
+Ali|aa:bb:cc:dd:ee:01|1073741824|0
+Sara|11:22:33:44:55:66|0|2147483648
 EOF
-cat > "$USAGE/owners/2026-08-22" <<'EOF'
-Ali|536870912|0
-unassigned|1073741824|0
+cat > "$USAGE/owners-d/2026-08-22" <<'EOF'
+Ali|aa:bb:cc:dd:ee:ff|536870912|0
+unassigned|de:ad:be:ef:00:01|1073741824|100
 EOF
 # Outside range
-echo "Ali|1073741824|0" > "$USAGE/owners/2026-07-22"
-echo "Ali|1073741824|0" > "$USAGE/owners/2026-08-23"
+printf 'Ali|aa:bb:cc:dd:ee:ff|1073741824|0
+' > "$USAGE/owners-d/2026-07-22"
+printf 'Ali|aa:bb:cc:dd:ee:ff|1073741824|0
+' > "$USAGE/owners-d/2026-08-23"
 # billing conf
 mkdir -p "$USAGE"
 printf 'RATE_FULL=7700\nRATE_FRIDAY=4620\n' > "$USAGE/billing.conf"
@@ -83,7 +84,7 @@ assert_contains "people unassigned" "unassigned" "$out"
 assert_contains "people total" "TOTAL" "$out"
 # Ensure outside files not counted: 07-22 and 08-23 should not affect total (if they were, total would be 5.5)
 # We already verified total 4.5, so outside not counted
-echo "$out" | grep -q "4.5 GB" || { echo "FAIL - people total GB 4.5"; echo "$out"; FAIL=$((FAIL+1)); }
+echo "$out" | grep -q "4.50 GB" || { echo "FAIL - people total GB 4.5"; echo "$out"; FAIL=$((FAIL+1)); }
 PASS=$((PASS+1))
 # Invalid month
 out=$(USAGE_DIR="$USAGE" sh "$PEOPLE_SH" invalid 2>&1); rc=$?

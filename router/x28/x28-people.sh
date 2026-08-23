@@ -66,13 +66,31 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 RAW="$TMP/raw"
 
-# aggregate across the range: person|mac totals
-cur="$start_d"
-while [ -n "$cur" ]; do
-    [ "$cur" \> "$end_d" ] 2>/dev/null && break
+# aggregate across the range: person|mac totals.
+# Busybox-safe: Jalali day-index -> Gregorian via hnlib, weekday via pure-awk
+# civil-days math (no GNU date -d dependency on the router).
+gday() { hn_jalali_to_greg "$1"; }                       # jalali YYYY-MM-DD -> gregorian
+dow_u() {  # weekday 1..7 (Mon=1) from YYYY-MM-DD, pure awk
+    awk -v d="$1" 'BEGIN{
+        split(d,a,"-"); y=a[1]+0; m=a[2]+0; dd=a[3]+0
+        if(m<=2){y--; m+=12}
+        A=int(y/100); B=int(A/4)
+        E=int(365.25*(y+4716)) + int(30.6001*(m+1)) + dd + B - A - 1524.5 - 2440588
+        w=(int(E)%7+3)%7+1   # 1970-01-01 = Thursday(4)
+        print w
+    }'
+}
+
+jd=1
+[ "$days_in" = "?" ] 2>/dev/null && days_in=31
+while [ "$jd" -le "$days_in" ]; do
+    g=$(hn_jalali_to_greg "$(printf '%04d-%02d-%02d' "$jy" "$jm_n" "$jd")" 2>/dev/null) || { jd=$((jd+1)); continue; }
+    [ -n "$g" ] || { jd=$((jd+1)); continue; }
+    [ "$g" \> "$end_d" ] 2>/dev/null && break
+    cur="$g"
     f="$OWNERS_D/$cur"
     if [ -f "$f" ]; then
-        is_fri=$(date -d "$cur" +%u 2>/dev/null || echo 1)
+        is_fri=$(dow_u "$cur")
         rate=$RATE_FULL; [ "$is_fri" = "5" ] && rate=$RATE_FRIDAY
         while IFS='|' read -r person mac up down; do
             [ -n "$person" ] || continue
@@ -81,9 +99,7 @@ while [ -n "$cur" ]; do
             printf '%s\t%s\t%s\t%s\n' "$person" "$mac" "$bytes" "$cost" >> "$RAW"
         done < "$f"
     fi
-    nxt=$(date -d "$cur +1 day" +%F 2>/dev/null || break)
-    [ -z "$nxt" ] && break; [ "$nxt" = "$cur" ] && break; [ "$nxt" = "$start_d" ] && break
-    cur="$nxt"
+    jd=$((jd + 1))
 done
 
 AGG="$TMP/agg"
