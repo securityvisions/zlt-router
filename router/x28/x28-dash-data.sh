@@ -70,10 +70,10 @@ snap_budget() {
     local out=$(run_script /data/proxy/x28-budget.sh --card)
     if [ -z "$out" ]; then echo '{"error":"no data"}'; return; fi
     # extract key fields from card text
-    remain=$(printf '%s\n' "$out" | grep -oP 'remaining \K[0-9.]+' | head -1)
-    tier=$(printf '%s\n' "$out" | head -1 | grep -oP '— \K\w+' | head -1)
-    drain=$(printf '%s\n' "$out" | grep -oP 'drain \K[0-9.]+' | head -1)
-    proj=$(printf '%s\n' "$out" | grep -oP '→ ~\K[0-9.]+' | head -1)
+    remain=$(printf '%s\n' "$out" | sed -n 's/.*remaining \([0-9.]*\) GB.*/\1/p' | head -1)
+    tier=$(printf '%s\n' "$out" | sed -n 's/.*Budget — \([a-z]*\).*/\1/p' | head -1)
+    drain=$(printf '%s\n' "$out" | sed -n 's/.*drain \([0-9.]*\) GB.*/\1/p' | head -1)
+    proj=$(printf '%s\n' "$out" | sed -n 's/.*→ ~\([0-9.]*\)d.*/\1/p' | head -1)
     "$JQ" -n --arg remain "${remain:-}" --arg tier "${tier:-ok}" --arg drain "${drain:-}" --arg proj "${proj:-}" \
         '{remaining_gb: $remain, tier: $tier, drain_gb_day: $drain, projected_days_left: $proj}'
 }
@@ -101,26 +101,19 @@ snap_devices() {
     local leases="/tmp/dnsmasq.leases"
     local owners="/data/proxy/owners.conf"
     [ -f "$leases" ] || { echo '[]'; return; }
-
-    # build owner lookup
-    local owners_json="{}"
-    if [ -f "$owners" ]; then
-        owners_json=$("$JQ" -R -s '
-            split("\n") | map(select(length > 0)) |
-            map(| split("|") | {(.[0] | ascii_downcase): .[1]}) | add // {}' "$owners" 2>/dev/null || echo '{}')
-    fi
-
     cat "$leases" | while IFS=' ' read -r expiry mac ip hostname clientid; do
         [ -z "$mac" ] && continue
-        owner=$("$JQ" -r --arg mac "${mac,,}" "$owners_json // {} | .[\$mac] // \"unassigned\"" 2>/dev/null || echo "unassigned")
-        rnd=""
+        person="unassigned"
+        if [ -f "$owners" ]; then
+            person=$(grep -i "^${mac}|" "$owners" 2>/dev/null | head -1 | cut -d'|' -f2)
+            [ -z "$person" ] && person="unassigned"
+        fi
+        rnd=false
         c=$(printf '%s' "$mac" | cut -c2)
-        case $c in [26aeAE]) rnd=" 🎲" ;; esac
-        printf '%s\t%s\t%s\t%s%s\n' "${hostname:-?}" "$ip" "$mac" "$owner" "$rnd"
-    done | "$JQ" -R -s '
-        split("\n") | map(select(length > 0)) |
-        map(split("\t")) |
-        map({hostname: .[0], ip: .[1], mac: .[2], owner: .[3], note: .[4]})' 2>/dev/null
+        case $c in [26aeAE]) rnd=true ;; esac
+        printf '{"hostname":"%s","ip":"%s","mac":"%s","owner":"%s","random_mac":%s}\n' \
+            "${hostname:-?}" "$ip" "$mac" "$person" "$rnd"
+    done | "$JQ" -s '.' 2>/dev/null
 }
 
 snap_outages() {
@@ -135,10 +128,10 @@ snap_outages() {
 
 snap_rescue() {
     local out=$(run_script /data/proxy/x28-rescue.sh status)
-    enabled=$(echo "$out" | grep -oP 'enabled=\K\d+' | head -1)
-    world=$(echo "$out" | grep -oP 'world=\K\w+' | head -1)
-    owned=$(echo "$out" | grep -oP 'owned_alive=\K\d+' | head -1)
-    ra=$(echo "$out" | grep -oP 'rescue_alive=\K\d+' | head -1)
+    enabled=$(echo "$out" | grep -oE 'enabled=\K\d+' | head -1)
+    world=$(echo "$out" | grep -oE 'world=\K\w+' | head -1)
+    owned=$(echo "$out" | grep -oE 'owned_alive=\K\d+' | head -1)
+    ra=$(echo "$out" | grep -oE 'rescue_alive=\K\d+' | head -1)
     "$JQ" -n --arg en "${enabled:-1}" --arg w "${world:-auto}" --arg o "${owned:-0}" --arg r "${ra:-0}" \
         '{enabled: ($en == "1"), world: $w, owned_alive: ($o | tonumber), rescue_alive: ($r | tonumber)}'
 }

@@ -238,18 +238,32 @@ async function loadHero(){
 let knownPersons=[];
 async function loadDevicesWithAssign(){
     const d=await fetchJson('devices');if(!Array.isArray(d))return;
-    // get persons list
-    try{const r=await fetch('/cgi-bin/ledger-range.sh');knownPersons=[];}catch(e){}
-    // derive from existing devices + owners.conf via a lightweight approach
-    const owners=[...new Set(d.map(x=>x.owner).filter(o=>o&&o!=='unassigned'&&o!=='⚠️ unassigned'))];
-    knownPersons=owners;
-    $('devices-body').innerHTML=d.map(dev=>{
-        const ownerHtml=`<select onchange="assignDevice('${dev.mac}',this.value)" style="background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:.8rem">
-        <option value="">—</option>${owners.map(o=>`<option ${o===dev.owner?'selected':''}>${o}</option>`).join('')}
-        <option value="">⚠️ unassigned</option></select>`;
-        return `<tr><td>${dev.hostname||'?'}</td><td>${dev.ip}</td><td><code style="font-size:.75rem">${dev.mac}</code></td><td>${ownerHtml}</td></tr>`;
+    // derive persons list from device owner fields
+    const persons=[...new Set(d.map(x=>x.owner).filter(o=>o&&o!=='unassigned'))];
+    window._persons=persons;
+    window._devices=d;
+    $('devices-body').innerHTML=d.map((dev,i)=>{
+        const opts=persons.map(p=>`<option ${p===dev.owner?'selected':''}>${p}</option>`).join('');
+        const unassigned=dev.owner==='unassigned';
+        const ownerCell=unassigned
+            ?`<span style="color:var(--yellow)">⚠️ unassigned</span><br><select onchange="assignDevice('${dev.mac}',this.value)" style="background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:.8rem;margin-top:2px">
+                <option value="">assign to…</option>${opts}<option value="__new__">➕ new person</option></select>`
+            :`<select onchange="assignDevice('${dev.mac}',this.value)" style="background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:.8rem">
+                ${opts}<option value="">⚠️ unassign</option><option value="__new__">➕ new</option></select>`;
+        const rnd=dev.random_mac?' 🎲':'';
+        return `<tr><td>${dev.hostname||'?'}${rnd}</td><td>${dev.ip}</td><td><code style="font-size:.72rem">${dev.mac}</code></td><td>${ownerCell}</td></tr>`;
     }).join('');}
 
+async function assignDevice(mac,person){
+    if(person==='__new__'){
+        const name=prompt('New person name:');
+        if(!name)return;
+        person=name;
+    }
+    if(!person)return;
+    const r=await doAction('assign',{mac,person});
+    if(r&&r.ok)setTimeout(()=>{loadDevicesWithAssign();loadLedger();},500);
+}
 async function assignDevice(mac,person){
     if(!person){await doAction('unassign',{mac});}
     else await doAction('assign',{mac,person});
