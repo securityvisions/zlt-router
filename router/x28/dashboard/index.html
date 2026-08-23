@@ -142,7 +142,27 @@ async function loadBudget(){
 }
 
 async function loadLedger(){
-    const d=await fetchJson('ledger');if(!d||!Array.isArray(d)||!d.length){$('ledger-body').textContent='No data yet';return;}
+    let d=await fetchJson('ledger');
+    if(!d||!Array.isArray(d)||!d.length){
+        // current month empty — try previous month
+        const now=new Date();
+        const prev=new Date(now.getFullYear(),now.getMonth()-1,15);
+        const from=prev.toISOString().split('T')[0];
+        const to=new Date(now.getFullYear(),now.getMonth(),0).toISOString().split('T')[0];
+        try{
+            const r=await fetch(`/cgi-bin/ledger-range.sh?from=${from}&to=${to}`);
+            const rd=await r.json();
+            if(rd.entries&&rd.entries.length){
+                d=rd.entries.map(e=>({person:e.person,bytes:e.bytes,cost:e.cost}));
+                $('ledger-body').innerHTML=`<i style="color:var(--dim);font-size:.75rem">showing ${from} → ${to}</i><br>`+
+                    d.filter(r=>r.bytes>0).map(r=>{
+                    const gb=(r.bytes/1073741824).toFixed(1);
+                    return `<div class="row"><span class="k">${r.person}</span><span class="v">${gb} GB</span></div>`;}).join('');
+                return;
+            }
+        }catch(e){}
+        $('ledger-body').textContent='No data yet';return;
+    }
     const max=Math.max(...d.map(r=>r.bytes),1);
     $('ledger-body').innerHTML=d.filter(r=>r.bytes>0).map(r=>{
         const gb=(r.bytes/1073741824).toFixed(1),pct=Math.round(r.bytes/max*100);
@@ -174,7 +194,7 @@ async function refresh(){
 
 async function doAction(action,params={}){
     try{
-        const r=await fetch('/cgi/x28-dash-actions.sh',{
+        const r=await fetch('/cgi-bin/x28-dash-actions.sh',{
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({action,...params})
@@ -219,7 +239,7 @@ let knownPersons=[];
 async function loadDevicesWithAssign(){
     const d=await fetchJson('devices');if(!Array.isArray(d))return;
     // get persons list
-    try{const r=await fetch('/cgi/ledger-range.sh');knownPersons=[];}catch(e){}
+    try{const r=await fetch('/cgi-bin/ledger-range.sh');knownPersons=[];}catch(e){}
     // derive from existing devices + owners.conf via a lightweight approach
     const owners=[...new Set(d.map(x=>x.owner).filter(o=>o&&o!=='unassigned'&&o!=='⚠️ unassigned'))];
     knownPersons=owners;
@@ -241,7 +261,7 @@ async function loadLedgerRange(){
     const from=$('ledg-from').value,to=$('ledg-to').value;
     if(!from||!to)return alert('pick both dates');
     try{
-        const r=await fetch(`/cgi/ledger-range.sh?from=${from}&to=${to}`);
+        const r=await fetch(`/cgi-bin/ledger-range.sh?from=${from}&to=${to}`);
         const d=await r.json();
         if(!d.entries||!d.entries.length){$('ledger-body').textContent='no data for this range';return;}
         const max=Math.max(...d.entries.map(e=>e.bytes),1);
@@ -261,7 +281,7 @@ function presetLedger(daysBack){
 // ── proxy node manager ──
 async function loadProxies(){
     try{
-        const r=await fetch('/cgi/proxy-mgmt.sh?list');const d=await r.json();if(!d.nodes)return;
+        const r=await fetch('/cgi-bin/proxy-mgmt.sh?list');const d=await r.json();if(!d.nodes)return;
         $('proxy-body').innerHTML=d.nodes.map(n=>{
             const badge=n.alive?'<span class="badge b-green">●</span>':'<span class="badge b-red">○</span>';
             const active=d.active===n.name?' <span class="badge b-blue">ACTIVE</span>':'';
@@ -272,7 +292,7 @@ async function loadProxies(){
 
 async function testNode(name){
     try{
-        const r=await fetch(`/cgi/proxy-mgmt.sh?test=${encodeURIComponent(name)}`);
+        const r=await fetch(`/cgi-bin/proxy-mgmt.sh?test=${encodeURIComponent(name)}`);
         const d=await r.json();
         if(d.delay&&d.delay!=='error')alert(`${name}: ${d.delay} ms ✓`);
         else alert(`${name}: FAILED ✗`);
@@ -290,7 +310,7 @@ async function addProxyNode(){
     const uri=$('add-uri').value.trim();if(!uri)return alert('paste a URI first');
     $('add-status').textContent='adding…';
     try{
-        const r=await fetch('/cgi/proxy-mgmt.sh?add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uri})});
+        const r=await fetch('/cgi-bin/proxy-mgmt.sh?add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uri})});
         const d=await r.json();
         $('add-status').textContent=d.message||(d.ok?'✓ added':'✗ failed');
         if(d.ok)setTimeout(loadProxies,2000);
@@ -304,7 +324,7 @@ async function testAllNodes(){
 // ── trend charts (pure SVG, no library) ──
 async function loadTrends(){
     try{
-        const r=await fetch('/cgi/trend-data.sh');const d=await r.json();
+        const r=await fetch('/cgi-bin/trend-data.sh');const d=await r.json();
         if(d.rsrp&&d.rsrp.length>1)drawLineChart('rsrp-chart',d.rsrp,'RSRP dBm',-110,-60);
         if(d.usage&&d.usage.length>1)drawBarChart('usage-chart',d.usage,'GB');
     }catch(e){console.warn('trends:',e)}}
@@ -352,7 +372,7 @@ function setLedgerMode(mode){
 async function loadYearlyLedger(){
     const year=prompt('Jalali year:','1405');if(!year)return;
     try{
-        const r=await fetch('/cgi/x28-dash-actions.sh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'yearly_ledger',year})});
+        const r=await fetch('/cgi-bin/x28-dash-actions.sh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'yearly_ledger',year})});
         const d=await r.json();
         $('ledger-body').innerHTML=d.ok?`<pre>${d.html}</pre>`:`<i>${d.message||'error'}</i>`;
     }catch(e){$('ledger-body').textContent='error loading yearly ledger'}}
@@ -360,7 +380,7 @@ async function loadYearlyLedger(){
 // ── outage timeline ──
 async function loadOutages(){
     try{
-        const r=await fetch('/cgi/outage-timeline.sh');const d=await r.json();if(!d)return;
+        const r=await fetch('/cgi-bin/outage-timeline.sh');const d=await r.json();if(!d)return;
         if(!d.incidents.length){$('outage-body').innerHTML='<span style="color:var(--green)">✓ No outages recorded</span>';return;}
         const fmt=s=>{const e=new Date(s*1000);return `${String(e.getMonth()+1).padStart(2,'0')}/${String(e.getDate()).padStart(2,'0')} ${String(e.getHours()).padStart(2,'0')}:${String(e.getMinutes()).padStart(2,'0')}`};
         const dur=s=>{const m=Math.round(s/60);return m>=60?`${Math.floor(m/60)}h${m%60}m`:`${m}m`};
@@ -373,7 +393,7 @@ async function loadOutages(){
 let serviceWhitelist=['x28proxy','x28-bot','x28-adblock','x28-rescue','x28-drift','x28-dash-data'];
 async function loadServices(){
     try{
-        const r=await fetch('/cgi/service-status.sh');const d=await r.json();if(!d.services)return;
+        const r=await fetch('/cgi-bin/service-status.sh');const d=await r.json();if(!d.services)return;
         $('services-body').innerHTML='<table style="width:100%">'+d.services.map(s=>{
             const dot=s.status==='running'?'🟢':s.status==='stopped'?'🔴':'⚪';
             const btn=(serviceWhitelist.includes(s.name)||s.name==='mihomo')?`<button class="btn btn-warn" style="padding:2px 6px;font-size:.7rem" onclick="restartService('${s.name}')">↻</button>`:'';

@@ -42,10 +42,13 @@ while [ -n "$cur" ]; do
     fi
     nxt=$("$HN_LIB" hn_jalali_to_greg "$(printf '%s' "$cur" | "$JQ" -rR '"x"' >/dev/null; echo "")" 2>/dev/null || true)
     # use awk to advance one day (busybox-safe)
-    nxt=$(echo "$cur" | awk '{y=substr($0,1,4)+0;m=substr($0,6,2)+0;d=substr($0,9,2)+0;
-        d++; dim[2]=(y%4==0&&(y%100!=0||y%400==0))?29:28; dim[4]=dim[6]=dim[9]=dim[11]=30;
-        if(d>dim[m]){d=1;m++};if(m>12){m=1;y++}
-        printf "%04d-%02d-%02d",y,m,d}')
+    nxt=$(date -d "$cur +1 day" +%F 2>/dev/null)
+    if [ -z "$nxt" ]; then
+        nxt=$(echo "$cur" | awk -F- -v OFS=- '{$3=sprintf("%02d",$3+1);
+            dim[2]=28;dim[4]=30;dim[6]=30;dim[9]=30;dim[11]=30;
+            if($1%4==0&&($1%100!=0||$1%400==0))dim[2]=29;
+            if($3>dim[$2]){$3=1;$2++};if($2>12){$2=1;$1++}}1')
+    fi
     cur="$nxt"
 done
 
