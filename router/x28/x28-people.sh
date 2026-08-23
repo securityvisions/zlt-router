@@ -123,8 +123,8 @@ hdr
 max_bytes=$(cut -f2 "$AGG" | sort -n | tail -1)
 
 render_html() { printf '%s <code>%s</code>  %.1f GB · %s T · %s%%\n' \
-    "$(esc "$1")" "$(bar "$5" 10)" "$(awk -v b="$2" 'BEGIN{printf "%.1f", b/1073741824}')" \
-    "$(printf "%'d" "$3" 2>/dev/null || echo "$3")" "$5"; }
+    "$(esc "$1")" "$(bar "$4" 10)" "$(awk -v b="$2" 'BEGIN{printf "%.1f", b/1073741824}')" \
+    "$(printf "%'d" "$3" 2>/dev/null || echo "$3")" "$4"; }
 render_text() { printf '%-12s %7s GB %9d T\n' "$1" \
     "$(awk -v b="$2" 'BEGIN{printf "%.2f", b/1073741824}')" "$3"; }
 
@@ -140,6 +140,30 @@ if [ "$mode" = "html" ]; then
 else
     total_gb=$(awk -v b="$total_bytes" 'BEGIN{printf "%.2f", b/1073741824}')
     printf '%-12s %7s GB %9d T\n' "TOTAL" "$total_gb" "$total_cost"
+fi
+
+# ---- per-device breakdown (HTML only) ----
+if [ "$mode" = "html" ]; then
+    echo ""
+    echo "<blockquote expandable>"
+    jd=1
+    while [ "$jd" -le "$days_in" ]; do
+        g=$(hn_jalali_to_greg "$(printf '%04d-%02d-%02d' "$jy" "$jm_n" "$jd")" 2>/dev/null) || { jd=$((jd+1)); continue; }
+        [ -n "$g" ] || { jd=$((jd+1)); continue; }
+        [ "$g" \> "$end_d" ] 2>/dev/null && break
+        f="$OWNERS_D/$g"
+        if [ -f "$f" ]; then
+            while IFS='|' read -r person mac up down; do
+                case "$mac" in [0-9A-Fa-f][0-9A-Fa-f]:*) ;; *) continue ;; esac
+                bytes=$(( ${up:-0} + ${down:-0} ))
+                [ "${bytes:-0}" -gt 0 ] || continue
+                gb=$(awk -v b="$bytes" 'BEGIN{printf "%.1f", b/1073741824}')
+                printf '%s · <code>%s</code> · %s GB\n' "$(esc "$person")" "$(esc "$mac")" "$gb"
+            done < "$f"
+        fi
+        jd=$((jd + 1))
+    done
+    echo "</blockquote>"
 fi
 
 exit 0
