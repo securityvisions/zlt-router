@@ -383,12 +383,12 @@ rescue : $(sh /data/proxy/x28-rescue.sh status 2>/dev/null | tr '\n' ' ')" ;;
 $(esc "$(sh /data/proxy/x28-budget.sh --card 2>/dev/null)")" ;;
                         outages) body="<b>📉 Outages</b>
 $(esc "$(sh /data/proxy/x28-outage-ledger.sh report 2>/dev/null)")" ;;
-                        digest)  body="$(sh /data/proxy/x28-digest.sh 2>/dev/null)" ;;
-                        people)  body="$(sh /data/proxy/x28-people.sh 2>/dev/null)" ;;
+                        digest)  body="$(esc "$(sh /data/proxy/x28-digest.sh 2>/dev/null)")" ;;
+                        people)  body="$(esc "$(sh /data/proxy/x28-people.sh 2>/dev/null)")" ;;
                         wifi)
                             if path=$(sh /data/proxy/x28-wifi.sh qr 2>/dev/null); then
                                 cap=$(sh /data/proxy/x28-wifi.sh card 2>/dev/null | head -n 3 | esc)
-                                send_photo "$path" "$cap" || html_send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
+                                send_photo "$path" "$cap" || html_send "$(esc "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)")"
                             else
                                 html_send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
                             fi
@@ -463,7 +463,7 @@ $out" ;;
                     /wifi)
                         if path=$(sh /data/proxy/x28-wifi.sh qr 2>/dev/null); then
                             cap=$(sh /data/proxy/x28-wifi.sh card 2>/dev/null | head -n 3 | esc)
-                            send_photo "$path" "$cap" || html_send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
+                            send_photo "$path" "$cap" || html_send "$(esc "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)")"
                         else
                             html_send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
                         fi
