@@ -4,7 +4,7 @@
 
 **Blocked by:** 05 — needs ledger-rules for the rate/budget logic that lives alongside the aggregation.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] ledger-store.sh exports query/freeze/list/rates
 - [ ] people/budget/digest/outage scripts each lose their private walkers/aggregators
