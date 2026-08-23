@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — needs the granular rollups for device counts.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Callback payloads parsed/validated pure + unit-tested (incl. stale/tampered refs, TTL cleanup of state files)
 - [ ] Full flow works on mobile: /owner → tap device → tap person → confirmation edit, zero typing
