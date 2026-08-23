@@ -401,3 +401,9 @@ DRYRUN=1 HEALTH_AUTO_CMD='echo 0' sh /data/proxy/x28-rescue.sh tick   # would-pr
 /data/proxy/jq -r '.proxies[0:5][]|.type+" "+.server' /data/proxy/mihomo/rescue-pool.yaml
 curl -s http://127.0.0.1:9090/providers/proxies/rescue-pool | jq -r '.proxies|length'
 ```
+
+### Rev 3 addendum — Telegram bot presentation & reliability overhaul
+
+`x28-bot.sh` now renders every card in **Telegram HTML** (verified against Bot API 10.2): bold emoji titles, italic freshness meta, `<pre>` aligned tables, `<blockquote expandable>` for raw dumps, status-verdict emoji mapped from the health gate. Transport is centralized in `tg_post` with response-aware logging (`error_code`/`description` → `hb.log`); `split_chunks` enforces the 4096-char API budget at newline boundaries; failed panel edits fall back to fresh messages so data always lands.
+
+Reliability hardening landed in the same pass: instance lock via atomic `mkdir`; heartbeat keeper self-exits when its parent dies (orphaned keepers could fake liveness forever); callback taps are acked immediately, staleness-guarded via embedded message date, and dispatched after ack; getUpdates offset persists *after* handling with the 600 s staleness filter absorbing replays; user args validated through `safe_arg`; poll errors classified (409 conflict / 401 token / transient); jq absence degrades loudly instead of zombie-looping. Tests source the bot in `lib` mode (no config needed): 18 format asserts, 14 reliability regressions, 19 panel asserts.
