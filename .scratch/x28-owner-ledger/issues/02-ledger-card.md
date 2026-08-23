@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — reads the device-granularity rollups.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Golden-card tests from fixture months: bars, shares, Toman rounding, Persian labels, esc()d names, unassigned row + hint only when non-zero
 - [ ] Per-person filter (`/people <name>`) renders that person's device breakdown
