@@ -43,6 +43,12 @@ select,input[type=text]{background:#0d1117;color:var(--text);border:1px solid va
 .header{text-align:center;margin-bottom:16px}
 .header h1{font-size:1.2rem;font-weight:700}
 .header .sub{color:var(--dim);font-size:.78rem}
+
+.chip{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:999px;font-size:.82rem;font-weight:600;cursor:pointer;transition:.15s;border:1px solid var(--border);background:#21262d;color:var(--text);user-select:none}
+.chip:hover{background:#30363d;transform:scale(1.04)}
+.chip.owner{background:#23863620;color:var(--green);border-color:#23863650}
+.chip-input{background:#0d1117;color:var(--text);border:1px solid #58a6ff;border-radius:999px;padding:4px 12px;font-size:.82rem;outline:none;width:120px}
+
 </style>
 </head>
 <body>
@@ -238,36 +244,56 @@ async function loadHero(){
 let knownPersons=[];
 async function loadDevicesWithAssign(){
     const d=await fetchJson('devices');if(!Array.isArray(d))return;
-    // derive persons list from device owner fields
+    window._devices=d;
     const persons=[...new Set(d.map(x=>x.owner).filter(o=>o&&o!=='unassigned'))];
     window._persons=persons;
-    window._devices=d;
-    $('devices-body').innerHTML=d.map((dev,i)=>{
-        const opts=persons.map(p=>`<option ${p===dev.owner?'selected':''}>${p}</option>`).join('');
-        const unassigned=dev.owner==='unassigned';
-        const ownerCell=unassigned
-            ?`<span style="color:var(--yellow)">⚠️ unassigned</span><br><select onchange="assignDevice('${dev.mac}',this.value)" style="background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:.8rem;margin-top:2px">
-                <option value="">assign to…</option>${opts}<option value="__new__">➕ new person</option></select>`
-            :`<select onchange="assignDevice('${dev.mac}',this.value)" style="background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:.8rem">
-                ${opts}<option value="">⚠️ unassign</option><option value="__new__">➕ new</option></select>`;
-        const rnd=dev.random_mac?' 🎲':'';
-        return `<tr><td>${dev.hostname||'?'}${rnd}</td><td>${dev.ip}</td><td><code style="font-size:.72rem">${dev.mac}</code></td><td>${ownerCell}</td></tr>`;
-    }).join('');}
+    $('devices-body').innerHTML=d.map((dev,i)=>assignRowHTML(dev,i,persons)).join('');
+}
 
-async function assignDevice(mac,person){
-    if(person==='__new__'){
-        const name=prompt('New person name:');
-        if(!name)return;
-        person=name;
-    }
+function assignRowHTML(dev,idx,persons){
+    const rnd=dev.random_mac?' <span style="opacity:.4">🎲</span>':'';
+    const host=`<span style="font-weight:600">${dev.hostname||'?'}${rnd}</span>`;
+    const ip=`<span style="color:var(--dim);font-size:.78rem">${dev.ip}</span>`;
+    const isUn=dev.owner==='unassigned';
+    const chip=isUn
+        ?`<span class="chip" style="color:var(--yellow);border-color:var(--yellow)" onclick="toggleAssignEditor(${idx})">⚠️ unassigned</span>`
+        :`<span class="chip owner" onclick="toggleAssignEditor(${idx})">${esc(dev.owner)}<span style="opacity:.4;font-size:.7rem;margin-left:4px">✎</span></span>`;
+    const editor=`<div id="editor-${idx}" style="display:none;margin-top:6px;padding:8px;background:#0d1117;border-radius:8px;border:1px solid #21262d">
+        <span style="color:var(--dim);font-size:.75rem;margin-right:6px">assign to:</span>
+        ${persons.map(p=>`<span class="chip" onclick="doAssign('${dev.mac}','${p}',${idx})">${esc(p)}</span>`).join('')}
+        <span class="chip" style="border-style:dashed" onclick="showNewPersonInput(${idx})">➕ new</span>
+        <span class="chip" style="border-style:dashed;opacity:.4" onclick="closeEditor(${idx})">✕</span>
+        <input type="text" class="chip-input" id="newperson-${idx}" placeholder="name…" style="display:none"
+            onkeydown="if(event.key==='Enter')doAssign('${dev.mac}',this.value,${idx})"
+            onblur="if(!this.value)closeEditor(${idx})">
+    </div>`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #21262d;flex-wrap:wrap">${host} ${ip} ${mac} ${chip}</div>${editor}`;
+}
+
+function toggleAssignEditor(idx){
+    const ed=document.getElementById('editor-'+idx);
+    if(ed)ed.style.display=ed.style.display==='none'?'block':'none';
+}
+function closeEditor(idx){
+    const ed=document.getElementById('editor-'+idx);
+    if(ed)ed.style.display='none';
+    const inp=document.getElementById('newperson-'+idx);
+    if(inp)inp.style.display='none';
+}
+function showNewPersonInput(idx){
+    const inp=document.getElementById('newperson-'+idx);
+    if(inp){inp.style.display='inline-block';inp.focus();}
+}
+
+async function doAssign(mac,person,idx){
     if(!person)return;
     const r=await doAction('assign',{mac,person});
-    if(r&&r.ok)setTimeout(()=>{loadDevicesWithAssign();loadLedger();},500);
-}
-async function assignDevice(mac,person){
-    if(!person){await doAction('unassign',{mac});}
-    else await doAction('assign',{mac,person});
-    setTimeout(loadDevicesWithAssign,500);
+    if(r&&r.ok){
+        closeEditor(idx);
+        if(window._devices){const dev=window._devices.find(d=>d.mac===mac);if(dev)dev.owner=person;}
+        if(window._persons&&!window._persons.includes(person))window._persons.push(person);
+        setTimeout(()=>{loadDevicesWithAssign();loadLedger();},400);
+    } else alert(r?.message||'assignment failed');
 }
 
 // ── custom date range ledger query ──
