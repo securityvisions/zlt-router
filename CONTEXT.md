@@ -104,3 +104,10 @@ Shared vocabulary for the home-network project. Use these terms exactly; don't d
 - **Admission** — candidate + alive verdict + residency within the churn budget (10 residents). Converter output beyond the budget never reaches the engine.
 - **Promotion / Demotion** — flipping `world` rescue-ward after ~4 min of fully-dead owned nodes, and back after ~10 min of stable owned health. Hysteresis prevents flap during VPS restarts.
 - **Churn budget** — max 10 collected nodes resident in the engine at once.
+
+## Owner & Ledger (x28-owner-ledger)
+
+- **Device assignment** — mapping a device MAC to a person in `/data/proxy/owners.conf` (0600). Done via the bot's tap-to-assign panel or the hostname-aware text fallback; drives per-person usage attribution.
+  _Avoid_: device owner (ambiguous — owner of the router vs owner of a phone)
+- **Ledger page** — an immutable monthly snapshot of the household Ledger card (per-person GB + Toman + bars), frozen at month-end and stored under `usage/ledger/J-<month>.txt`; survives all cache pruning forever.
+  _Avoid_: monthly report (use Ledger page)

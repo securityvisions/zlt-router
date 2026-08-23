@@ -194,3 +194,9 @@ Each piece is independently reversible:
 - `sh /data/proxy/x28-rescue.sh status` — enabled? world? pool aliveness?
 - Pool empty/0 alive for days → sweep found nothing new; check `collect.log` and consider adding channels to `rescue-channels.txt`.
 - Want out instantly: send `/rescue off` (persists across reboots).
+
+### Owner & Ledger quick-reference
+- Assign: `/owner` → tap device → reply with name; or text `/owner assign <hostname|mac> <name>`
+- Rename person: `/owner rename <old> <new>`
+- View ledger: `/people` (current Jalali month) · `/ledger` (frozen history pages)
+- Backfill: `sh /data/proxy/usage/x28-owner-backfill.sh run`

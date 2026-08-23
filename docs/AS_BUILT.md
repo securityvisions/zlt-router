@@ -407,3 +407,11 @@ curl -s http://127.0.0.1:9090/providers/proxies/rescue-pool | jq -r '.proxies|le
 `x28-bot.sh` now renders every card in **Telegram HTML** (verified against Bot API 10.2): bold emoji titles, italic freshness meta, `<pre>` aligned tables, `<blockquote expandable>` for raw dumps, status-verdict emoji mapped from the health gate. Transport is centralized in `tg_post` with response-aware logging (`error_code`/`description` → `hb.log`); `split_chunks` enforces the 4096-char API budget at newline boundaries; failed panel edits fall back to fresh messages so data always lands.
 
 Reliability hardening landed in the same pass: instance lock via atomic `mkdir`; heartbeat keeper self-exits when its parent dies (orphaned keepers could fake liveness forever); callback taps are acked immediately, staleness-guarded via embedded message date, and dispatched after ack; getUpdates offset persists *after* handling with the 600 s staleness filter absorbing replays; user args validated through `safe_arg`; poll errors classified (409 conflict / 401 token / transient); jq absence degrades loudly instead of zombie-looping. Tests source the bot in `lib` mode (no config needed): 18 format asserts, 14 reliability regressions, 19 panel asserts.
+
+### Rev 3 addendum — Owner Panel & Ledger (x28-owner-ledger)
+
+New stores: `usage/owners-d/YYYY-MM-DD` (`person|mac|up|down` — device-granularity rollups written by the nightly roll), `usage/ledger/J-<month>.txt` (immutable frozen pages). New scripts: `x28-owner-backfill.sh` (idempotent one-shot converter), upgraded `x28-owners.sh` (hostname-aware assign, rename subcommand), rewritten `x28-people.sh` (dual-mode: HTML ledger card with share bars / plain text for alerts).
+
+Bot: `/owner` opens an inline-keyboard Owner Panel (unassigned devices as tappable buttons, person rows with counts, utility row); callbacks `own:*` staleness-guarded and acked; `/ledger` lists frozen pages as buttons; `/people`/`/month` render the Persian-first HTML Ledger.
+
+Live: 3 days / 13 rows backfilled from real cache; مرداد ledger renders with parsa 2.0 GB (100% bar) + unassigned breakdown; health gate GREEN.
