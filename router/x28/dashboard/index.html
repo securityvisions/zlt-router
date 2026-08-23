@@ -51,12 +51,33 @@ select,input[type=text]{background:#0d1117;color:var(--text);border:1px solid va
 <div class="sub" id="updated">loading…</div>
 </div>
 
+<div class="card" style="margin:0 auto 16px;max-width:1200px;display:flex;align-items:center;gap:20px;padding:16px 24px">
+<div style="text-align:center"><div style="font-size:2rem;font-weight:700;color:var(--blue)" id="hero-gb">—</div><div style="color:var(--dim);font-size:.72rem">GB REMAINING</div></div>
+<div style="flex:1"><div style="display:flex;gap:8px;flex-wrap:wrap" id="hero-badges"></div>
+<div style="margin-top:6px;font-size:.85rem;color:var(--dim)" id="hero-drain"></div></div></div>
+
 <div class="grid">
 <div class="card"><h2><span class="icon">📡</span> Status <span id="health-badge"></span></h2><div id="status-body">⏳ loading…</div></div>
 <div class="card"><h2><span class="icon">📶</span> Link</h2><div id="link-body">⏳</div></div>
 <div class="card"><h2><span class="icon">💰</span> Budget</h2><div id="budget-body">⏳</div></div>
-<div class="card"><h2><span class="icon">👥</span> Ledger</h2><div id="ledger-body">⏳</div></div>
-<div class="card"><h2><span class="icon">📱</span> Devices</h2><table><thead><tr><th>Host</th><th>IP</th><th>Owner</th></tr></thead><tbody id="devices-body">⏳</tbody></table></div>
+<div class="card"><h2><span class="icon">👥</span> Ledger</h2>
+<div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
+<input type="date" id="ledg-from" style="background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:.82rem">
+<span style="color:var(--dim)">→</span>
+<input type="date" id="ledg-to" style="background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:.82rem">
+<button class="btn btn-blue" onclick="loadLedgerRange()" style="padding:4px 12px">Query</button>
+<button class="btn" onclick="presetLedger(0)" style="padding:4px 8px">This Month</button>
+<button class="btn" onclick="presetLedger(-30)" style="padding:4px 8px">Last 30d</button>
+</div><div id="ledger-body">⏳</div></div>
+<div class="card"><h2><span class="icon">📱</span> Devices</h2><table><thead><tr><th>Host</th><th>IP</th><th>Owner (tap to change)</th></tr></thead><tbody id="devices-body">⏳</tbody></table></div>
+<div class="card"><h2><span class="icon">🛰️</span> Proxy Nodes <button class="btn btn-blue" onclick="testAllNodes()" style="margin-left:auto;padding:4px 12px">Test All</button></h2>
+<table><thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead><tbody id="proxy-body">⏳</tbody></table>
+<div style="margin-top:10px">
+<textarea id="add-uri" placeholder="Paste vless:// vmess:// trojan:// ss:// hy2:// tuic:// juicity:// URI…" rows="2"
+ style="width:100%;background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:.85rem;resize:vertical"></textarea>
+<button class="btn btn-blue" onclick="addProxyNode()" style="margin-top:6px">➕ Add Node</button>
+<span id="add-status" style="margin-left:8px;font-size:.82rem"></span>
+</div></div>
 <div class="card"><h2><span class="icon">🛟</span> Rescue & Actions</h2><div id="rescue-body">⏳</div><div class="actions">
 <button class="btn btn-blue" onclick="doAction('toggle_adblock',{},true)">🛡 Toggle Adblock</button>
 <button class="btn btn-warn" onclick="confirmAction('restart_proxy','Restart proxy engine?')">🔄 Restart Proxy</button>
@@ -137,7 +158,7 @@ async function loadRescue(){
 }
 
 async function refresh(){
-    await Promise.allSettled([loadStatus(),loadLink(),loadBudget(),loadLedger(),loadDevices(),loadRescue()]);
+    await Promise.allSettled([loadStatus(),loadLink(),loadBudget(),loadLedger(),loadDevices(),loadRescue(),loadHero(),loadDevicesWithAssign(),loadProxies()]);
     lastUpdate=new Date();
     $('updated').textContent=`last updated ${lastUpdate.toLocaleTimeString()} · next in 30 s`;
 }
@@ -174,6 +195,101 @@ async function execAction(action,params){
     if(r&&r.ok)setTimeout(refresh,2000);
     else alert(r?.message||'action failed');
 }
+
+
+// ── hero budget widget ──
+async function loadHero(){
+    const d=await fetchJson('budget');if(!d||!d.remaining_gb)return;
+    $('hero-gb').textContent=d.remaining_gb+' GB';
+    const cls=d.tier==='urgent'?'b-red':d.tier==='warn'?'b-yellow':'b-green';
+    $('hero-badges').innerHTML=`<span class="badge ${cls}">${d.tier}</span>`;
+    $('hero-drain').textContent=d.drain_gb_day?`drain ${d.drain_gb_day} GB/day → ~${d.projected_days_left}d left`:'';}
+
+// ── device assignment dropdown ──
+let knownPersons=[];
+async function loadDevicesWithAssign(){
+    const d=await fetchJson('devices');if(!Array.isArray(d))return;
+    // get persons list
+    try{const r=await fetch('/cgi/ledger-range.sh');knownPersons=[];}catch(e){}
+    // derive from existing devices + owners.conf via a lightweight approach
+    const owners=[...new Set(d.map(x=>x.owner).filter(o=>o&&o!=='unassigned'&&o!=='⚠️ unassigned'))];
+    knownPersons=owners;
+    $('devices-body').innerHTML=d.map(dev=>{
+        const ownerHtml=`<select onchange="assignDevice('${dev.mac}',this.value)" style="background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:.8rem">
+        <option value="">—</option>${owners.map(o=>`<option ${o===dev.owner?'selected':''}>${o}</option>`).join('')}
+        <option value="">⚠️ unassigned</option></select>`;
+        return `<tr><td>${dev.hostname||'?'}</td><td>${dev.ip}</td><td><code style="font-size:.75rem">${dev.mac}</code></td><td>${ownerHtml}</td></tr>`;
+    }).join('');}
+
+async function assignDevice(mac,person){
+    if(!person){await doAction('unassign',{mac});}
+    else await doAction('assign',{mac,person});
+    setTimeout(loadDevicesWithAssign,500);
+}
+
+// ── custom date range ledger query ──
+async function loadLedgerRange(){
+    const from=$('ledg-from').value,to=$('ledg-to').value;
+    if(!from||!to)return alert('pick both dates');
+    try{
+        const r=await fetch(`/cgi/ledger-range.sh?from=${from}&to=${to}`);
+        const d=await r.json();
+        if(!d.entries||!d.entries.length){$('ledger-body').textContent='no data for this range';return;}
+        const max=Math.max(...d.entries.map(e=>e.bytes),1);
+        $('ledger-body').innerHTML=d.entries.filter(e=>e.bytes>0).map(e=>{
+            const gb=(e.bytes/1073741824).toFixed(1),pct=Math.round(e.bytes/max*100);
+            const cost=(e.cost||0).toLocaleString();
+            return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between"><b>${e.person}</b><span>${gb} GB · ${cost} T</span></div>
+            <div class="bar"><span style="width:${pct}%"></span></div></div>`;}).join('');
+        $('ledger-body').innerHTML+=`<div class="row"><span class="k">TOTAL</span><span class="v">${(d.entries.reduce((a,e)=>a+e.bytes,0)/1073741824).toFixed(1)} GB · ${(d.entries.reduce((a,e)=>a+e.cost,0)).toLocaleString()} Toman</span></div>`;
+    }catch(e){$('ledger-body').textContent='query failed';}}
+
+function presetLedger(daysBack){
+    const to=new Date().toISOString().split('T')[0];
+    const from=new Date(Date.now()+daysBack*86400000).toISOString().split('T')[0];
+    $('ledg-from').value=from;$('ledg-to').value=to;loadLedgerRange();}
+
+// ── proxy node manager ──
+async function loadProxies(){
+    try{
+        const r=await fetch('/cgi/proxy-mgmt.sh?list');const d=await r.json();if(!d.nodes)return;
+        $('proxy-body').innerHTML=d.nodes.map(n=>{
+            const badge=n.alive?'<span class="badge b-green">●</span>':'<span class="badge b-red">○</span>';
+            const active=d.active===n.name?' <span class="badge b-blue">ACTIVE</span>':'';
+            return `<tr><td>${n.name}${active}</td><td>${n.type}</td><td>${badge}</td>
+            <td><button class="btn btn-blue" style="padding:2px 8px;font-size:.75rem" onclick="testNode('${n.name}')">Test</button>
+            ${d.active!==n.name?`<button class="btn btn-warn" style="padding:2px 8px;font-size:.75rem;margin-left:4px" onclick="switchTo('${n.name}')">Activate</button>`:''}</td></tr>`;}).join('');
+    }catch(e){console.warn('proxy load:',e)}}
+
+async function testNode(name){
+    try{
+        const r=await fetch(`/cgi/proxy-mgmt.sh?test=${encodeURIComponent(name)}`);
+        const d=await r.json();
+        if(d.delay&&d.delay!=='error')alert(`${name}: ${d.delay} ms ✓`);
+        else alert(`${name}: FAILED ✗`);
+    }catch(e){alert('test failed')}}
+
+async function switchTo(name){
+    const r=await doProxyAction('switch',{name});
+    setTimeout(()=>{loadProxies();refresh()},1000);}
+
+async function doProxyAction(action,params){
+    const r=await fetch(`/cgi/proxy-mgmt.sh?${action}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(params)});
+    return await r.json()}
+
+async function addProxyNode(){
+    const uri=$('add-uri').value.trim();if(!uri)return alert('paste a URI first');
+    $('add-status').textContent='adding…';
+    try{
+        const r=await fetch('/cgi/proxy-mgmt.sh?add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uri})});
+        const d=await r.json();
+        $('add-status').textContent=d.message||(d.ok?'✓ added':'✗ failed');
+        if(d.ok)setTimeout(loadProxies,2000);
+    }catch(e){$('add-status').textContent='error: '+e.message}}
+
+async function testAllNodes(){
+    const d=await fetchJson('rescue');
+    loadProxies();setTimeout(loadProxies,8000);}
 
 refresh();
 setInterval(refresh,30000);
