@@ -131,3 +131,7 @@ rm "$ROLL_TMP/day/2026-08-22"
 if [ -f "$ROLL_TMP/owners/2026-08-22" ]; then PASS=$((PASS+1)); else echo "FAIL - owners persists after day delete"; FAIL=$((FAIL+1)); fi
 
 summary
+
+# ── hostname-aware assign + rename ──────────────────────────────────────────
+sh "$OWN_SH" rename Ali AliReza >/dev/null 2>&1
+assert_eq "rename person" "AliReza" "$(hn_owner_of "aa:bb:cc:dd:ee:ff" "$OWNERS")"

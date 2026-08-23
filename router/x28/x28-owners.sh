@@ -27,11 +27,17 @@ case "$cmd" in
         ;;
     assign)
         mac="${2:-}"; person="${3:-}"
-        # join ALL remaining words as the person name ("/owner assign <mac> Ali Reza")
         if [ -n "$mac" ] && [ $# -ge 3 ]; then
             shift 2
             person="$*"
         fi
+        # hostname-aware: resolve friendly name -> MAC via current leases
+        case "$mac" in
+            *:*) ;; # already a MAC
+            *)  resolved=$(grep -iF "$mac" /tmp/dnsmasq.leases 2>/dev/null | awk '{print $2}' | head -1)
+                [ -n "$resolved" ] && mac="$resolved" || { echo "Unknown device: $mac"; exit 1; }
+                ;;
+        esac
         if [ -z "$mac" ] || [ -z "$person" ]; then
             echo "Usage: /owner assign <mac> <person>"
             exit 1
@@ -64,6 +70,18 @@ case "$cmd" in
         cat "$tmp" > "$OWNERS_FILE" 2>/dev/null
         rm -f "$tmp"
         echo "🗑️ $mac unassigned"
+        ;;
+    rename)
+        old_name="${2:-}"; new_name="${3:-}"
+        if [ -n "$old_name" ] && [ $# -ge 3 ]; then shift 2; new_name="$*"; fi
+        [ -f "$OWNERS_FILE" ] || { echo "No owners file"; exit 0; }
+        tmp=$(mktemp)
+        while IFS='|' read -r mac person; do
+            if [ "$person" = "$old_name" ]; then printf '%s|%s\n' "$mac" "$new_name"
+            else printf '%s|%s\n' "$mac" "$person"; fi
+        done < "$OWNERS_FILE" > "$tmp"
+        mv "$tmp" "$OWNERS_FILE"
+        echo "✏️ $old_name → $new_name ($(grep -c "$new_name" "$OWNERS_FILE") devices)"
         ;;
     get)
         mac="${2:-}"

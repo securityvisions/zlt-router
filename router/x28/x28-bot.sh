@@ -326,6 +326,75 @@ Everything lives in the Panel too: /panel
 EOF
 }
 
+
+# html_send_owner_panel — Owner Panel Card with inline keyboard for tap-to-assign.
+html_send_owner_panel() {
+    local owners_f="/data/proxy/owners.conf"
+    local leases="/tmp/dnsmasq.leases"
+    local kb='{"inline_keyboard":['
+    local first=1 row=""
+    local unassigned="" p pcount
+
+    # collect persons and their device counts from owners.conf
+    declare -A persons
+    if [ -f "$owners_f" ]; then
+        while IFS='|' read -r mac person; do
+            [ -z "$mac" ] && continue
+            persons[$person]=$(( ${persons[$person]:-0} + 1 ))
+        done < "$owners_f"
+    fi
+
+    # find unassigned devices: leases whose MAC is not in owners.conf
+    if [ -f "$leases" ]; then
+        while IFS=' ' read -r _ _ mac host; do
+            [ -z "$mac" ] && continue
+            assigned=0
+            if [ -f "$owners_f" ]; then
+                grep -qiF "^$mac|" "$owners_f" 2>/dev/null && assigned=1
+            fi
+            if [ "$assigned" = "0" ]; then
+                unassigned="$unassigned{"text":"$host","callback_data":"ownd:$mac"},"
+            fi
+        done < "$leases"
+    fi
+
+    # unassigned device buttons (one per row, up to 4)
+    if [ -n "$unassigned" ]; then
+        local old_ifs=$IFS; IFS=','
+        for btn in $unassigned; do
+            [ -n "$btn" ] || continue
+            [ "$first" = "0" ] && kb="$kb,"
+            kb="$kb[$btn]"; first=0
+        done
+        IFS=$old_ifs
+    fi
+
+    # person buttons (two per row): own:p:<b64(name)>
+    if [ -f "$owners_f" ]; then
+        row=""
+        for p in "${!persons[@]}"; do
+            b64=$(printf '%s' "$p" | base64 -w0 2>/dev/null || printf '%s' "$p")
+            btn="{\"text\":\"$p (${persons[$p]})\",\"callback_data\":\"ownp:$b64\"}"
+            if [ -z "$row" ]; then row="$btn"
+            else kb="$kb,[$row,$btn]"; row=""; first=0
+            fi
+        done
+        [ -n "$row" ] && { [ "$first" = "0" ] && kb="$kb,"; kb="$kb[$row]"; first=0; }
+    fi
+
+    # utility row
+    [ "$first" = "0" ] && kb="$kb,"
+    kb="${kb}[{"text":"📋 List all","callback_data":"ownl:x"},{"text":"🔄 Refresh","callback_data":"ownr:x"}]]}"
+
+    local body="<b>👤 Owners</b> · $(now_hm)"
+    if [ -n "$unassigned" ]; then
+        body="$body
+⚠️ Tap an unassigned device above to assign it."
+    fi
+
+    timeout 20 curl -s -m 18 -x "$PROXY" "$API/sendMessage"         --data-urlencode "chat_id=${CHAT_ID:-}"         --data-urlencode "text=$body"         --data-urlencode "parse_mode=HTML"         --data-urlencode "reply_markup=$kb"         --data-urlencode 'link_preview_options={"is_disabled":true}' >/dev/null 2>&1 || true
+}
+
 # ---- bot mode ----
 bot() {
     load_conf_or_die
@@ -418,6 +487,26 @@ $(esc "$(sh /data/proxy/x28-outage-ledger.sh report 2>/dev/null)")" ;;
                         ledg:*)
                             lf=${action#ledg:}
                             if [ -f "$lf" ]; then body=$(cat "$lf"); else body="page not found"; fi ;;
+                        ownd:*)
+                            mac=${action#ownd:}
+                            body="<b>👤 Assign device</b>
+Device: <code>$(esc "$mac")</code>
+
+Reply with: <code>/owner assign $mac &lt;name&gt;</code>"
+                            kb='{"inline_keyboard":[[{"text":"⬜ Unassigned","callback_data":"ownu:'"$mac"'"}]]}'
+                            answer_cbq "$cbid"
+                            timeout 20 curl -s -m 18 -x "$PROXY" "$API/sendMessage"                                 --data-urlencode "chat_id=$CHAT_ID"                                 --data-urlencode "text=$body"                                 --data-urlencode "parse_mode=HTML"                                 --data-urlencode "reply_markup=$kb" >/dev/null 2>&1 || true
+                            body="" ;;
+                        ownp:*)
+                            pname=$(printf '%s' "${action#ownp:}" | base64 -d 2>/dev/null)
+                            body="<b>👤 $pname's devices</b> · $(now_hm)
+$(grep -i "|$pname\$" /data/proxy/owners.conf 2>/dev/null | while IFS='|' read -r mac person; do
+    host=$(grep "$mac" /tmp/dnsmasq.leases 2>/dev/null | awk '{print \$4}')
+    printf '• %s <code>%s</code>\n' "\${host:-?}" "\$mac"
+done)" ;;
+                        ownl:*) body="<b>👤 All assignments</b>
+\$(sh /data/proxy/x28-owners.sh list 2>/dev/null | esc)" ;;
+                        ownr:*) html_send_owner_panel; body="" ;;
                         help)    body="$(help_text)" ;;
                         panel|start) body="$(help_text)" ;;
                         *)       body="unknown tap" ;;
@@ -470,21 +559,30 @@ $(esc "$(sh /data/proxy/x28-outage-ledger.sh report $arg 2>/dev/null)")" ;;
                         arg=$(safe_arg "$(printf '%s' "$text" | awk '{print $2}')")
                         html_send "$(sh /data/proxy/x28-people.sh $arg 2>/dev/null)" ;;
                     /owner)
-                        sub=$(safe_arg "$(printf '%s' "$text" | awk '{print $2}')")
+                        sub=$(printf '%s' "$text" | awk '{print $2}')
                         rest=$(printf '%s' "$text" | cut -s -d' ' -f3-)
                         case "$sub" in
-                            assign) mac=$(safe_arg "$(printf '%s' "$rest" | awk '{print $1}')"); person=$(printf '%s' "$rest" | cut -s -d' ' -f2-)
-                                    [ -n "$mac" ] && [ -n "$person" ] || { html_send "👤 <b>Usage</b>: <code>/owner assign &lt;mac&gt; &lt;name&gt;</code>"; continue; }
-                                    out=$(sh /data/proxy/x28-owners.sh assign "$mac" "$person" 2>&1 | esc) ;;
-                            unassign) mac=$(safe_arg "$(printf '%s' "$rest" | awk '{print $1}')")
-                                    [ -n "$mac" ] || { html_send "👤 <b>Usage</b>: <code>/owner unassign &lt;mac&gt;</code>"; continue; }
-                                    out=$(sh /data/proxy/x28-owners.sh unassign "$mac" 2>&1 | esc) ;;
-                            list|"") out=$(sh /data/proxy/x28-owners.sh list 2>&1 | esc) ;;
-                            get) out=$(sh /data/proxy/x28-owners.sh get "$(safe_arg "$rest")" 2>&1 | esc) ;;
-                            *) out=$(esc "unknown subcommand: $sub") ;;
+                            assign)
+                                mac=$(safe_arg "$(printf '%s' "$rest" | awk '{print $1}')")
+                                person=$(printf '%s' "$rest" | cut -s -d' ' -f2-)
+                                [ -n "$mac" ] || { html_send "👤 Usage: <code>/owner assign &lt;mac|hostname&gt; &lt;name&gt;</code>"; continue; }
+                                out=$(sh /data/proxy/x28-owners.sh assign "$mac" "$person" 2>&1 | esc) ;;
+                            unassign)
+                                mac=$(safe_arg "$(printf '%s' "$rest" | awk '{print $1}')")
+                                out=$(sh /data/proxy/x28-owners.sh unassign "$mac" 2>&1 | esc) ;;
+                            rename)
+                                old_n=$(safe_arg "$(printf '%s' "$text" | awk '{print $3}')")
+                                new_n=$(printf '%s' "$text" | cut -s -d' ' -f4-)
+                                out=$(sh /data/proxy/x28-owners.sh rename "$old_n" "$new_n" 2>&1 | esc) ;;
+                            list|"")
+                                html_send_owner_panel ;;
+                            *) out=$(sh /data/proxy/x28-owners.sh "$sub" $(printf '%s' "$text" | cut -s -d' ' -f2-) 2>&1 | esc) ;;
                         esac
-                        html_send "👤 Owner
+                        case "$sub" in
+                            assign|unassign|rename|"") : ;; # panel/confirmation already sent or handled
+                            *) html_send "👤 Owner
 $out" ;;
+                        esac ;;
                     /wifi)
                         if path=$(sh /data/proxy/x28-wifi.sh qr 2>/dev/null); then
                             cap=$(sh /data/proxy/x28-wifi.sh card 2>/dev/null | head -n 3 | esc)
