@@ -79,6 +79,34 @@ case "$action" in
         reboot
         ;;
 
+    daily_ledger)
+        date=$(printf '%s' "$body" | jq -r '.date // ""')
+        case "$date" in ??????????) ;; *) respond false "date required (YYYY-MM-DD)"; exit 0 ;; esac
+        result=$(sh /data/proxy/usage/x28-people.sh --daily "$date" 2>/dev/null)
+        printf '{"ok":true,"html":"%s"}' "$(echo "$result" | sed 's/"/\\"/g;s/$/\\n/' | tr -d '\n')"
+        ;;
+
+    yearly_ledger)
+        year=$(printf '%s' "$body" | jq -r '.year // ""')
+        case "$year" in 20[0-9][0-9]) ;; *) respond false "Jalali year required (e.g. 1405)"; exit 0 ;; esac
+        result=$(sh /data/proxy/usage/x28-people.sh --yearly "$year" 2>/dev/null)
+        printf '{"ok":true,"html":"%s"}' "$(echo "$result" | sed 's/"/\\"/g;s/$/\\n/' | tr -d '\n')"
+        ;;
+
+    restart_service)
+        svc=$(printf '%s' "$body" | jq -r '.service // ""')
+        # whitelist: only these services can be restarted
+        case "$svc" in
+            x28proxy|x28-bot|x28-adblock|x28-rescue|x28-drift|x28-dash-data)
+                /etc/init.d/"$svc" restart >/dev/null 2>&1
+                respond true "restarted $svc"
+                ;;
+            *)
+                respond false "service not in restart whitelist"
+                ;;
+        esac
+        ;;
+
     restart_proxy)
         if [ "$confirm" != "true" ]; then respond false "confirmation required"; exit 0; fi
         /etc/init.d/x28proxy restart >/dev/null 2>&1
