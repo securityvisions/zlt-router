@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Nightly roll writes device-granularity rows (person resolved at roll time, MAC preserved)
 - [ ] Backfill converts every existing day-file ≤35 days old; skips dates already backfilled (marker); rerun changes nothing
