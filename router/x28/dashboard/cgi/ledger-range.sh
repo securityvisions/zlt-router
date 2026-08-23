@@ -56,6 +56,15 @@ if [ ! -s "$tmpf" ]; then rm -f "$tmpf"; echo '[]'; exit 0; fi
 
 # aggregate per person
 sort "$tmpf" | awk -F'\t' '{u[$1]+=$3;c[$1]+=$4}
-    END{for(p in u) printf "{\"person\":\"%s\",\"bytes\":%d,\"cost\":%d}\n",p,u[p],c[p]}' "$tmpf" | \
-"$JQ" -s '{entries:.}'
-rm -f "$tmpf"
+    END{for(p in u) printf "{\"person\":\"%s\",\"bytes\":%d,\"cost\":%d}\n",p,u[p],c[p]}' "$tmpf" > "${tmpf}.agg"
+
+# per-device breakdown
+sort "$tmpf" | awk -F'\t' '{u[$1 "\t" $2]+=$3}
+    END{for(k in u){split(k,a,"\t"); printf "{\"person\":\"%s\",\"mac\":\"%s\",\"bytes\":%d}\n",a[1],a[2],u[k]}}' "$tmpf" > "${tmpf}.dev"
+
+# combine into single JSON
+entries_json=$("$JQ" -sc '.' "${tmpf}.agg" 2>/dev/null)
+dev_json=$("$JQ" -sc '.' "${tmpf}.dev" 2>/dev/null)
+"$JQ" -n --argjson entries "${entries_json:-[]}" --argjson breakdown "${dev_json:-[]}" \
+    '{entries: $entries, breakdown: $breakdown}'
+rm -f "$tmpf" "${tmpf}.agg" "${tmpf}.dev"

@@ -61,6 +61,21 @@ case "$cmd" in
         sort -u "$tmp" > "$OWNERS_FILE" 2>/dev/null
         rm -f "$tmp"
         echo "✅ $mac → $person"
+        # auto-reattribute: update historical owners-d data for this MAC
+        od="${USAGE_DIR:-/data/proxy/usage}/owners-d"
+        if [ -d "$od" ]; then
+            for f in "$od"/20*; do
+                [ -f "$f" ] || continue
+                if grep -q "|$mac|" "$f" 2>/dev/null || grep -q "|$mac$" "$f" 2>/dev/null; then
+                    tmp2="$f.reattr"
+                    while IFS='|' read -r p m u d; do
+                        if [ "$m" = "$mac" ]; then printf '%s|%s|%s|%s\n' "$person" "$m" "$u" "$d"
+                        else printf '%s|%s|%s|%s\n' "$p" "$m" "$u" "$d"; fi
+                    done < "$f" > "$tmp2"
+                    mv "$tmp2" "$f"
+                fi
+            done
+        fi
         ;;
     unassign)
         mac="${2:-}"
@@ -72,6 +87,21 @@ case "$cmd" in
         cat "$tmp" > "$OWNERS_FILE" 2>/dev/null
         rm -f "$tmp"
         echo "🗑️ $mac unassigned"
+        # auto-reattribute: mark historical data as unassigned
+        od="${USAGE_DIR:-/data/proxy/usage}/owners-d"
+        if [ -d "$od" ]; then
+            for f in "$od"/20*; do
+                [ -f "$f" ] || continue
+                if grep -q "|$mac|" "$f" 2>/dev/null || grep -q "|$mac$" "$f" 2>/dev/null; then
+                    tmp2="$f.reattr"
+                    while IFS='|' read -r p m u d; do
+                        if [ "$m" = "$mac" ]; then printf 'unassigned|%s|%s|%s\n' "$m" "$u" "$d"
+                        else printf '%s|%s|%s|%s\n' "$p" "$m" "$u" "$d"; fi
+                    done < "$f" > "$tmp2"
+                    mv "$tmp2" "$f"
+                fi
+            done
+        fi
         ;;
     rename)
         old_name="${2:-}"; new_name="${3:-}"

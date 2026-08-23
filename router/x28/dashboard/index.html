@@ -284,7 +284,7 @@ async function loadLedger(){
     $('ledger-body').innerHTML=d.filter(r=>r.bytes>0).map(r=>{
         const gb=(r.bytes/1073741824).toFixed(1),pct=Math.round(r.bytes/max*100);
         return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-weight:500">${r.person}</span><span class="num">${gb} GB</span></div>
-        <div class="bar"><span style="width:${pct}%;background:var(--accent)"></span></div>
+        <div class="bar"><span style="width:${pct}%;background:#7b8cde"></span></div>
         <div style="text-align:right;font-size:.75rem;color:var(--dim)" class="num">${(r.cost||0).toLocaleString()} T</div></div>`;}).join('');
 }
 
@@ -422,7 +422,7 @@ async function loadTrends(){
         const r=await fetch('/cgi-bin/trend-data.sh');const d=await r.json();
         if(d.rsrp&&d.rsrp.length>1)drawLineChart('rsrp-chart',d.rsrp,-110,-60);
         if(d.usage&&d.usage.length>1)drawBarChart('usage-chart',d.usage);
-    }catch(e){console.warn('trends:',e)}}
+    }catch(e){console.warn('trends:',e);$("rsrp-chart").textContent="chart error: "+e.message;$("usage-chart").textContent="chart error"}}
 
 function drawLineChart(id,data,min,max){
     const el=document.getElementById(id);if(!el||!data.length)return;
@@ -433,13 +433,13 @@ function drawLineChart(id,data,min,max){
         const x=p+(w-2*p)*i/(data.length-1);
         const y=h-p-(h-2*p)*(d.v-min)/(max-min||1);
         return `${x},${y}`;}).join(' ');
-    svg+=`<polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/>`;
+    svg+=`<polyline points="${pts}" fill="none" stroke="#7b8cde" stroke-width="1.5" stroke-linejoin="round"/>`;
     if(data.length){const last=data[data.length-1];
         const lx=p+(w-2*p);const ly=h-p-(h-2*p)*(last.v-min)/(max-min||1);
-        svg+=`<circle cx="${lx}" cy="${ly}" r="3.5" fill="var(--accent)"/>`;
-        svg+=`<text x="${lx-24}" y="${ly-8}" fill="var(--text)" font-size="11" font-family="inherit" class="num">${last.v}</text>`;}
-    svg+=`<text x="${p}" y="${h-4}" fill="var(--faint)" font-size="9">${min}</text>`;
-    svg+=`<text x="${p}" y="${p-4}" fill="var(--faint)" font-size="9">${max}</text>`;
+        svg+=`<circle cx="${lx}" cy="${ly}" r="3.5" fill="#7b8cde"/>`;
+        svg+=`<text x="${lx-24}" y="${ly-8}" fill="#dce1e8" font-size="11" font-family="inherit" class="num">${last.v}</text>`;}
+    svg+=`<text x="${p}" y="${h-4}" fill="#3a4356" font-size="9">${min}</text>`;
+    svg+=`<text x="${p}" y="${p-4}" fill="#3a4356" font-size="9">${max}</text>`;
     svg+='</svg>';
     el.innerHTML=svg;}
 
@@ -448,7 +448,7 @@ function drawBarChart(id,data){
     el.innerHTML=data.map(d=>{
         const pct=Math.min(100,Math.round(d.gb/5*100));
         return `<div class="chart-bar-row"><div class="lbl"><span>${d.date}</span><span class="num">${d.gb} GB</span></div>
-        <div class="bar-track"><div class="bar-fill" style="width:${Math.max(pct,2)}%;background:var(--accent)"></div></div></div>`;}).join('');}
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.max(pct,2)}%;background:#7b8cde"></div></div></div>`;}).join('');}
 
 // ── ledger range ──
 async function loadLedgerRange(){
@@ -459,12 +459,19 @@ async function loadLedgerRange(){
         const d=await r.json();
         if(!d.entries||!d.entries.length){$('ledger-body').innerHTML='<span style="color:var(--dim)">no data for this range</span>';return;}
         const max=Math.max(...d.entries.map(e=>e.bytes),1);
-        $('ledger-body').innerHTML=d.entries.filter(e=>e.bytes>0).map(e=>{
+        let html=d.entries.filter(e=>e.bytes>0).map(e=>{
             const gb=(e.bytes/1073741824).toFixed(1),pct=Math.round(e.bytes/max*100);
             const cost=(e.cost||0).toLocaleString();
             return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-weight:500">${e.person}</span><span class="num">${gb} GB · ${cost} T</span></div>
-            <div class="bar"><span style="width:${pct}%;background:var(--accent)"></span></div></div>`;}).join('')+
-            `<div class="row" style="border:none"><span class="k"><b>total</b></span><span class="v num"><b>${(d.entries.reduce((a,e)=>a+e.bytes,0)/1073741824).toFixed(1)} GB · ${(d.entries.reduce((a,e)=>a+e.cost,0)).toLocaleString()} T</b></span></div>`;
+            <div class="bar"><span style="width:${pct}%;background:#7b8cde"></span></div></div>`;}).join('');
+        if(d.breakdown&&d.breakdown.length){
+            html+='<blockquote expandable><span style="color:var(--dim);font-size:.75rem">per device:</span><br>';
+            html+=d.breakdown.filter(b=>b.bytes>0).map(b=>
+                `<span style="color:var(--dim);font-size:.78rem">${b.person} · <code>${b.mac}</code> · ${(b.bytes/1073741824).toFixed(2)} GB</span><br>`).join('');
+            html+='</blockquote>';
+        }
+        html+=`<div class="row" style="border:none"><span class="k"><b>total</b></span><span class="v num"><b>${(d.entries.reduce((a,e)=>a+e.bytes,0)/1073741824).toFixed(1)} GB · ${(d.entries.reduce((a,e)=>a+e.cost,0)).toLocaleString()} T</b></span></div>`;
+        $('ledger-body').innerHTML=html;
     }catch(e){$('ledger-body').textContent='query failed'}}
 
 function presetLedger(daysBack){
