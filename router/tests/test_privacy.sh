@@ -39,4 +39,18 @@ assert_eq "toggle default -> on" "on" "$out"
 out=$(PRIVACY_CONF="$TMP/conf2" HN_OWNERS_FILE="$TMP/owners.conf" HN_LEASES="$TMP/leases" sh -c '. "$1"; privacy_toggle; privacy_state' sh "$PL")
 assert_eq "toggle again -> off" "off" "$out"
 
+# ── privacy_set: explicit on/off ────────────────────────────────────────────
+printf 'PRIVACY=0\n' > "$TMP/conf3"
+out=$(PRIVACY_CONF="$TMP/conf3" HN_OWNERS_FILE="$TMP/owners.conf" HN_LEASES="$TMP/leases" sh -c '. "$1"; privacy_set on; privacy_state' sh "$PL")
+assert_eq "set on -> on" "on" "$out"
+out=$(PRIVACY_CONF="$TMP/conf3" HN_OWNERS_FILE="$TMP/owners.conf" HN_LEASES="$TMP/leases" sh -c '. "$1"; privacy_set off; privacy_state' sh "$PL")
+assert_eq "set off -> off" "off" "$out"
+out=$(PRIVACY_CONF="$TMP/conf3" HN_OWNERS_FILE="$TMP/owners.conf" HN_LEASES="$TMP/leases" sh -c '. "$1"; privacy_set bogus; privacy_state' sh "$PL")
+assert_eq "set bogus unchanged" "off" "$out"
+
+# reply-path regression: the state read right after a set is what a card would
+# say — privacy_toggle/set must not swallow the state (the /privacy bug)
+out=$(PRIVACY_CONF="$TMP/conf3" HN_OWNERS_FILE="$TMP/owners.conf" HN_LEASES="$TMP/leases" sh -c '. "$1"; privacy_set on; s=$(privacy_state); [ "$s" = "on" ] && echo ON || echo OFF' sh "$PL")
+assert_eq "reply-path after set on" "ON" "$out"
+
 summary

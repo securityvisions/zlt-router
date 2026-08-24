@@ -529,7 +529,9 @@ done)" ;;
                     /start|/help) html_send "$(help_text)"; send_panel ;;
                     /panel)       send_panel ;;
                     /privacy)
-                        st=$(privacy_toggle)
+                        arg=$(printf '%s' "$text" | awk '{print $2}' | tr 'A-Z' 'a-z')
+                        privacy_set "$arg" || :   # on/off set; bare/bogus = no state change
+                        st=$(privacy_state)
                         if [ "$st" = "on" ]; then
                             html_send "🔒 <b>privacy mode ON</b> — sensitive data (names, MACs, IPs, device names) is masked in every card."
                         else

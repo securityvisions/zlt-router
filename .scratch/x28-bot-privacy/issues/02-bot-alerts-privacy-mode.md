@@ -11,3 +11,7 @@
 - [x] Alerts path (digest, monthly people report, alerts) applies the scrub when on
 - [x] Interactive panels keep working while masked (callback data untouched)
 - [x] Live verification: privacy on → real cards masked on the phone
+  - _Fix note (2026-08-24):_ `st=$(privacy_toggle)` always captured an empty
+    string (toggle writes the file but prints nothing) → every /privacy reply
+    said OFF even when the state really flipped. Fixed: reply now reads
+    privacy_state; added privacy_set on|off; bare /privacy reports state only.

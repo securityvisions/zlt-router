@@ -8,7 +8,8 @@
 #
 # Exports:
 #   privacy_on            — true when privacy mode is active
-#   privacy_toggle        — flip the state file, 0600
+#   privacy_set on|off    — set the state explicitly, 0600
+#   privacy_toggle        — flip the state
 #   privacy_state         — "on" | "off"
 #   privacy_scrub <text>  — mask sensitive values when on; else echo unchanged
 #
@@ -21,13 +22,18 @@ privacy_on() {
     grep -q '^PRIVACY=1' "$PRIVACY_CONF" 2>/dev/null
 }
 
-privacy_toggle() {
-    if privacy_on; then
-        printf 'PRIVACY=0\n' > "$PRIVACY_CONF" 2>/dev/null
-    else
-        printf 'PRIVACY=1\n' > "$PRIVACY_CONF" 2>/dev/null
-    fi
+privacy_set() {
+    case "${1:-}" in
+        on)  printf 'PRIVACY=1\n' > "$PRIVACY_CONF" 2>/dev/null || return 1 ;;
+        off) printf 'PRIVACY=0\n' > "$PRIVACY_CONF" 2>/dev/null || return 1 ;;
+        *) return 1 ;;
+    esac
     chmod 600 "$PRIVACY_CONF" 2>/dev/null
+    return 0
+}
+
+privacy_toggle() {
+    if privacy_on; then privacy_set off; else privacy_set on; fi
 }
 
 privacy_state() { if privacy_on; then echo on; else echo off; fi; }
@@ -69,8 +75,9 @@ privacy_scrub() {
 if [ "${0##*/}" = "privacy-lib.sh" ]; then
 case "${1:-}" in
     state) privacy_state ;;
+    set) shift; case "${1:-}" in on|off) privacy_set "$1" ;; *) echo "usage: privacy-lib.sh set on|off" >&2; exit 2 ;; esac ;;
     toggle) privacy_toggle; privacy_state ;;
     scrub) shift; privacy_scrub "${1:-}" ;;
-    *) echo "usage: privacy-lib.sh [state|toggle|scrub <text>]" >&2; exit 2 ;;
+    *) echo "usage: privacy-lib.sh [state|set on|off|toggle|scrub <text>]" >&2; exit 2 ;;
 esac
 fi
