@@ -38,6 +38,10 @@ mkdir -p "$STATEDIR"
 TGLIB="$(dirname "$0")/tg-lib.sh"
 [ -f "$TGLIB" ] || TGLIB="/data/proxy/tg-lib.sh"
 [ -f "$TGLIB" ] && . "$TGLIB"
+# privacy scrub module (masks MACs/names/IPs at the send funnel when on)
+PLIB="$(dirname "$0")/privacy-lib.sh"
+[ -f "$PLIB" ] || PLIB="/data/proxy/privacy-lib.sh"
+[ -f "$PLIB" ] && . "$PLIB"
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOGF"; tail -c 8192 "$LOGF" > "$LOGF.t" 2>/dev/null && mv "$LOGF.t" "$LOGF"; return 0; }
 hb()  { echo $(date +%s) > "$HB.w"; mv "$HB.w" "$HB"; }
@@ -123,9 +127,10 @@ tg_post() {  # tg_post <method> <args…> — response-aware logging
 }
 
 send_one() {  # send_one <html-text> — exactly one sendMessage call
+    _txt=$(privacy_scrub "$1")
     tg_post sendMessage \
         --data-urlencode "chat_id=${CHAT_ID:-}" \
-        --data-urlencode "text=$1" \
+        --data-urlencode "text=$_txt" \
         --data-urlencode "parse_mode=HTML"         --data-urlencode 'link_preview_options={"is_disabled":true}' >/dev/null 2>&1 || true
 }
 
@@ -149,7 +154,8 @@ edit_html() {  # edit_html <mid> <html-text> — edit in place, fall back to sen
             *)         part=$rest;             rest="" ;;
         esac
         [ -n "$part" ] || continue
-        _resp=$(tg_post editMessageText             --data-urlencode "chat_id=${CHAT_ID:-}"             --data-urlencode "message_id=$_mid"             --data-urlencode "text=$part"             --data-urlencode "parse_mode=HTML"             --data-urlencode 'link_preview_options={"is_disabled":true}')
+        _ptxt=$(privacy_scrub "$part")
+        _resp=$(tg_post editMessageText             --data-urlencode "chat_id=${CHAT_ID:-}"             --data-urlencode "message_id=$_mid"             --data-urlencode "text=$_ptxt"             --data-urlencode "parse_mode=HTML"             --data-urlencode 'link_preview_options={"is_disabled":true}')
         _ok=$(printf '%s' "$_resp" | "$JQ" -r '.ok // "false"' 2>/dev/null)
         if [ "$_ok" != "true" ]; then
             _desc=$(printf '%s' "$_resp" | "$JQ" -r '.description // ""' 2>/dev/null)
@@ -522,6 +528,13 @@ done)" ;;
                 case "$cmd" in
                     /start|/help) html_send "$(help_text)"; send_panel ;;
                     /panel)       send_panel ;;
+                    /privacy)
+                        st=$(privacy_toggle)
+                        if [ "$st" = "on" ]; then
+                            html_send "🔒 <b>privacy mode ON</b> — sensitive data (names, MACs, IPs, device names) is masked in every card."
+                        else
+                            html_send "👁 <b>privacy mode OFF</b> — cards show real data again."
+                        fi ;;
                     /status)
                         hv=$(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)
                         html_send "<b>📊 Status</b> · $(now_hm)

@@ -16,8 +16,16 @@ CONF=/etc/tg.conf
 [ -n "${TOKEN:-}" ] || exit 0
 case "${CHAT_ID:-}" in ""|__*|0) exit 0 ;; esac
 
+# privacy scrub module — masks names/MACs/IPs at the send funnel when on
+PLIB=/data/proxy/privacy-lib.sh
+[ -f "$PLIB" ] && . "$PLIB"
+
 title="${1:-X28}"
 body="${2:-}"
+if command -v privacy_scrub >/dev/null 2>&1; then
+    title=$(privacy_scrub "$title")
+    body=$(privacy_scrub "$body")
+fi
 
 timeout 20 curl -s -m 18 -x socks5h://192.168.70.1:1080 \
     "https://api.telegram.org/bot$TOKEN/sendMessage" \
