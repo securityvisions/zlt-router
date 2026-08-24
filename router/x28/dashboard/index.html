@@ -288,13 +288,7 @@ async function loadLedger(){
         <div style="text-align:right;font-size:.75rem;color:var(--dim)" class="num">${(r.cost||0).toLocaleString()} T</div></div>`;}).join('');
 }
 
-async function loadDevices(){
-    const d=await fetchJson('devices');if(!Array.isArray(d))return;
-    window._devices=d;
-    const persons=[...new Set(d.map(x=>x.owner).filter(o=>o&&o!=='unassigned'))];
-    window._persons=persons;
-    $('devices-body').innerHTML=d.map((dev,i)=>assignRowHTML(dev,i,persons)).join('');
-}
+
 
 function assignRowHTML(dev,idx,persons){
     const rnd=dev.random_mac?' <span style="opacity:.3;font-size:.7rem">⌘</span>':'';
@@ -546,7 +540,7 @@ async function loadWifiQR(){
 
 // ── init ──
 async function refresh(){
-    await Promise.allSettled([loadStatus(),loadLink(),loadBudget(),loadHero(),loadLedger(),loadDevices(),loadRescue(),loadProxies(),loadTrends(),loadOutages(),loadServices()]);
+    await Promise.allSettled([loadStatus(),loadLink(),loadBudget(),loadHero(),loadLedger(),loadDevicesWithAssign(),loadRescue(),loadProxies(),loadTrends(),loadOutages(),loadServices()]);
     lastUpdate=new Date();
     $('updated').textContent=`updated ${lastUpdate.toLocaleTimeString()} · refreshing in 30 s`;
 }
