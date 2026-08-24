@@ -10,8 +10,7 @@ JQ=/data/proxy/jq
 # --- RSRP from thermal rows (last 72h) ---
 rsrp_json=$(tail -4320 "$TELEM" | grep 'rsrp=' | tail -72 | while IFS='|' read -r ts temp load rsrp; do
     t=$(echo "$ts" | awk '{print $2}' | cut -d: -f1,2)
-    r=$(echo "$rsrp" | sed 's/^rsrp=//' | grep -oE -- '-?[0-9]+' 2>/dev/null || \
-        echo "$rsrp" | sed "s/rsrp=//" | tr -d ' ')
+    r=$(echo "$rsrp" | sed 's/^rsrp=//' | tr -cd '0-9-')
     [ -n "$r" ] && printf '{"t":"%s","v":%s}\n' "$t" "$r"
 done | "$JQ" -s '.' 2>/dev/null)
 

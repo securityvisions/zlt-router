@@ -147,3 +147,10 @@ send_photo() {
         -F "chat_id=${CHAT_ID:-}" -F "photo=@$1" -F "caption=${2:-}" \
         -F "parse_mode=HTML" >/dev/null 2>&1 || true
 }
+
+send_document() {
+    [ -f "${1:-}" ] || return 1
+    timeout 60 curl -s -m 55 -x "$PROXY" "$API/sendDocument" \
+        -F "chat_id=${CHAT_ID:-}" -F "document=@$1" -F "caption=${2:-}" \
+        -F "parse_mode=HTML" >/dev/null 2>&1 || true
+}

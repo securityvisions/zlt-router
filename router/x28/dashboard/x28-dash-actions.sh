@@ -37,6 +37,7 @@ case "$action" in
         if ! valid_name "$person"; then respond false "invalid person name"; exit 0; fi
         if [ "$person" = "__new__" ]; then respond false "invalid person name"; exit 0; fi
         result=$(sh /data/proxy/x28-owners.sh assign "$mac" "$person" 2>&1)
+        sh /data/proxy/x28-dash-data.sh tick >/dev/null 2>&1
         respond true "$result"
         ;;
 
@@ -44,6 +45,7 @@ case "$action" in
         mac=$(printf '%s' "$body" | jq -r '.mac // ""')
         if ! valid_mac "$mac"; then respond false "invalid MAC"; exit 0; fi
         result=$(sh /data/proxy/x28-owners.sh unassign "$mac" 2>&1)
+        sh /data/proxy/x28-dash-data.sh tick >/dev/null 2>&1
         respond true "$result"
         ;;
 

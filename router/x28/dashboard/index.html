@@ -187,6 +187,7 @@ select option{background:var(--surface)}
 <span style="color:var(--faint)">→</span>
 <input type="date" id="ledg-to" style="flex:1;min-width:120px">
 <button class="btn btn-blue" onclick="loadLedgerRange()" style="padding:4px 10px">go</button>
+<button class="btn" onclick="exportLedgerCsv()" style="padding:4px 10px" title="download CSV">⬇</button>
 </div><div id="ledger-body">···</div></div>
 <div class="card"><h2><span class="icon">◌</span> devices</h2><div id="devices-body">···</div></div>
 <div class="card"><h2><span class="icon">◍</span> proxy nodes
@@ -217,6 +218,7 @@ select option{background:var(--surface)}
 
 <script>
 const $=id=>document.getElementById(id);
+window.onerror=function(msg,url,line,col){const d=document.createElement('div');d.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#da3630;color:#fff;padding:8px;font-size:11px;z-index:9999;font-family:monospace';d.textContent='JS Error: '+msg+' (line '+line+')';document.body.appendChild(d)};
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML};
 let lastUpdate=0;
 
@@ -296,6 +298,7 @@ function assignRowHTML(dev,idx,persons){
         ?'<span class="dot dot-green"></span>'
         :'<span class="dot" style="background:var(--faint)"></span>';
     const host=`<span style="font-weight:500;font-size:.9rem">${dev.hostname||'?'}${rnd}</span>`;
+    const mac=`<span style="color:var(--faint);font-size:.72rem" class="num">${dev.mac||''}</span>`;
     const ip=`<span style="color:var(--dim);font-size:.8rem" class="num">${dev.ip}</span>`;
     const traffic=dev.today_gb>0
         ?`<span class="num" style="font-size:.85rem">${dev.today_gb} GB</span>`
@@ -303,15 +306,18 @@ function assignRowHTML(dev,idx,persons){
     const isUn=!dev.owner||dev.owner==='unassigned'||dev.owner==='__new__';
     const chip=isUn
         ?`<span class="chip" style="color:var(--yellow);border-color:var(--yellow-dim)" onclick="toggleAssignEditor(${idx})">unassigned</span>`
-        :`<span class="chip owner" onclick="toggleAssignEditor(${idx})">${esc(dev.owner)}<span style="opacity:.3;font-size:.65rem;margin-left:4px">✎</span></span>`;
+        :`<span class="chip owner" onclick="toggleAssignEditor(${idx})">${esc(dev.owner)}<span style="opacity:.3;font-size:.65rem;margin-left:4px">✎</span></span>
+        <span class="chip" style="color:var(--red);border-color:var(--red-dim);opacity:.75;padding:2px 7px" title="unassign" onclick="unassignDevice('${dev.mac}','${esc(dev.owner)}',${idx})">✕</span>`;
     const editor=`<div id="editor-${idx}" style="display:none;margin-top:8px;padding:10px;background:var(--bg);border-radius:var(--r-sm);flex-wrap:wrap;gap:6px;align-items:center;width:100%">
         <span style="color:var(--dim);font-size:.72rem;margin-right:4px">assign to</span>
         ${persons.map(p=>`<span class="chip" onclick="doAssign('${dev.mac}','${p}',${idx})">${esc(p)}</span>`).join('')}
         <span class="chip" style="border-style:dashed" onclick="showNewPersonInput(${idx})">new</span>
         <span class="chip" style="opacity:.3" onclick="closeEditor(${idx})">✕</span>
-        <input type="text" class="chip-input" id="newperson-${idx}" placeholder="name…" style="display:none"
-            onkeydown="if(event.key==='Enter')doAssign('${dev.mac}',this.value,${idx})"
+        <input type="text" class="chip-input" id="newperson-${idx}" placeholder="name…" style="display:none" autocomplete="off" name="person-name-${idx}"
+            onkeydown="if(event.key==='Enter')submitNewPerson(${idx})"
             onblur="if(!this.value)closeEditor(${idx})">
+        <button type="button" class="btn btn-warn" id="newperson-btn-${idx}" style="display:none;padding:2px 10px;font-size:.72rem"
+            onclick="submitNewPerson(${idx})">add</button>
     </div>`;
     return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${online} ${host} ${ip} ${mac}</div>
@@ -330,10 +336,51 @@ function closeEditor(idx){
     if(ed)ed.style.display='none';
     const inp=document.getElementById('newperson-'+idx);
     if(inp)inp.style.display='none';
+    const btn=document.getElementById('newperson-btn-'+idx);
+    if(btn)btn.style.display='none';
 }
 function showNewPersonInput(idx){
     const inp=document.getElementById('newperson-'+idx);
+    const btn=document.getElementById('newperson-btn-'+idx);
     if(inp){inp.style.display='inline-block';inp.focus();}
+    if(btn)btn.style.display='inline-block';
+}
+
+async function loadDevicesWithAssign(){
+    try{
+        const d=await fetchJson('devices');
+        if(!Array.isArray(d)){console.warn('devices: not array',d);return;}
+        window._devices=d;
+        const persons=[...new Set(d.map(x=>x.owner).filter(o=>o&&o!=='unassigned'))];
+        window._persons=persons;
+        $('devices-body').innerHTML=d.length
+            ?d.map((dev,i)=>assignRowHTML(dev,i,persons)).join('')
+            :'<span style="color:var(--dim)">no devices seen yet</span>';
+    }catch(e){console.warn('devices:',e);$('devices-body').innerHTML='<span style="color:var(--red);font-size:.8rem">error: '+e.message+'</span>'}
+}
+
+function renderDevices(){
+    if(!window._devices)return;
+    $('devices-body').innerHTML=window._devices.map((dev,i)=>assignRowHTML(dev,i,window._persons||[])).join('');
+}
+
+function submitNewPerson(idx){
+    const inp=document.getElementById('newperson-'+idx);
+    const v=inp?inp.value.trim():'';
+    if(!v)return;
+    const dev=(window._devices||[])[idx];
+    if(dev)doAssign(dev.mac,v,idx);
+}
+
+function unassignDevice(mac,person,idx){
+    if(!confirm(`remove "${person}" from this device?`))return;
+    doAction('unassign',{mac}).then(r=>{
+        if(r&&r.ok){
+            if(window._devices){const dev=window._devices.find(d=>d.mac===mac);if(dev)dev.owner='unassigned';}
+            renderDevices();
+            setTimeout(loadDevicesWithAssign,3000);
+        } else alert(r?.message||'unassign failed');
+    });
 }
 
 async function doAssign(mac,person,idx){
@@ -343,7 +390,8 @@ async function doAssign(mac,person,idx){
         closeEditor(idx);
         if(window._devices){const dev=window._devices.find(d=>d.mac===mac);if(dev)dev.owner=person;}
         if(window._persons&&!window._persons.includes(person))window._persons.push(person);
-        setTimeout(()=>{loadDevicesWithAssign();loadLedger();},400);
+        renderDevices();
+        setTimeout(loadDevicesWithAssign,3000);
     } else alert(r?.message||'assignment failed');
 }
 
@@ -462,7 +510,10 @@ async function loadLedgerRange(){
     try{
         const r=await fetch(`/cgi-bin/ledger-range.sh?from=${from}&to=${to}`);
         const d=await r.json();
-        if(!d.entries||!d.entries.length){$('ledger-body').innerHTML='<span style="color:var(--dim)">no data for this range</span>';return;}
+        const jhdr=(d.jalali_from||d.jalali_to)
+            ?`<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:6px"><span style="font-size:.8rem;color:var(--dim)">${d.jalali_from||''} → ${d.jalali_to||''}</span><span class="num" style="font-size:.62rem;color:var(--faint)">${from} → ${to}</span></div>`
+            :'';
+        if(!d.entries||!d.entries.length){$('ledger-body').innerHTML=jhdr+'<span style="color:var(--dim)">no data for this range</span>';return;}
         const max=Math.max(...d.entries.map(e=>e.bytes),1);
         let html=d.entries.filter(e=>e.bytes>0).map(e=>{
             const gb=(e.bytes/1073741824).toFixed(1),pct=Math.round(e.bytes/max*100);
@@ -476,13 +527,19 @@ async function loadLedgerRange(){
             html+='</blockquote>';
         }
         html+=`<div class="row" style="border:none"><span class="k"><b>total</b></span><span class="v num"><b>${(d.entries.reduce((a,e)=>a+e.bytes,0)/1073741824).toFixed(1)} GB · ${(d.entries.reduce((a,e)=>a+e.cost,0)).toLocaleString()} T</b></span></div>`;
-        $('ledger-body').innerHTML=html;
+        $('ledger-body').innerHTML=jhdr+html;
     }catch(e){$('ledger-body').textContent='query failed'}}
 
 function presetLedger(daysBack){
     const to=new Date().toISOString().split('T')[0];
     const from=new Date(Date.now()+daysBack*86400000).toISOString().split('T')[0];
     $('ledg-from').value=from;$('ledg-to').value=to;loadLedgerRange();}
+
+function exportLedgerCsv(){
+    const from=$('ledg-from').value,to=$('ledg-to').value;
+    if(!from||!to)return alert('pick a date range first');
+    window.location=`/cgi-bin/ledger-range.sh?from=${from}&to=${to}&format=csv`;
+}
 
 function setLedgerMode(mode){
     if(mode==='daily'){
@@ -492,13 +549,29 @@ function setLedgerMode(mode){
         loadYearlyLedger();
     } else { loadLedgerRange(); }}
 
-async function loadYearlyLedger(){
-    const year=prompt('Jalali year:','1405');if(!year)return;
+async function loadYearlyLedger(year){
+    $('ledger-body').innerHTML='<span style="color:var(--dim)">loading year…</span>';
     try{
-        const r=await fetch('/cgi-bin/x28-dash-actions.sh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'yearly_ledger',year})});
+        const r=await fetch(`/cgi-bin/ledger-year.sh${year?`?year=${year}`:''}`);
         const d=await r.json();
-        $('ledger-body').innerHTML=d.ok?`<pre style="font-family:inherit;white-space:pre-wrap">${d.html}</pre>`:`<i>${d.message||'error'}</i>`;
-    }catch(e){$('ledger-body').textContent='error loading yearly ledger'}}
+        if(d.error){$('ledger-body').innerHTML=`<i style="color:var(--red)">${d.error}</i>`;return;}
+        const maxgb=Math.max(...d.months.map(m=>m.total_gb),1);
+        let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:6px">
+        <span style="font-size:.85rem;color:var(--dim)">سال <b>${d.year}</b></span>
+        <span><button class="btn" style="padding:2px 9px;font-size:.7rem" onclick="loadYearlyLedger(${Number(d.year)-1})">←</button>
+        <button class="btn" style="padding:2px 9px;font-size:.7rem;margin-left:4px" onclick="loadYearlyLedger(${Number(d.year)+1})">→</button></span></div>`;
+        html+=d.months.map(m=>{
+            if(m.total_gb<=0)return `<div class="chart-bar-row" style="opacity:.35"><div class="lbl"><span>${m.label}</span><span class="num">—</span></div><div class="bar-track"></div></div>`;
+            const pct=Math.max(2,Math.min(100,Math.round(m.total_gb/maxgb*100)));
+            const per=Object.entries(m.persons||{}).sort((a,b)=>b[1]-a[1]).map(([p,g])=>`${p} ${g.toFixed(1)}`).join(' · ');
+            return `<div class="chart-bar-row"><div class="lbl"><span>${m.label}${per?` <span style="color:var(--faint);font-size:.68rem">${per}</span>`:''}</span><span class="num">${m.total_gb.toFixed(1)} GB</span></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:#7b8cde"></div></div></div>`;}).join('');
+        const yp=Object.entries(d.persons||{}).sort((a,b)=>b[1]-a[1]);
+        if(yp.length)html+=`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
+        <div class="row" style="border:none"><span class="k"><b>total</b></span><span class="v num"><b>${yp.reduce((a,[,g])=>a+g,0).toFixed(1)} GB</b></span></div>`+
+        yp.map(([p,g])=>`<div class="row"><span class="k">${p}</span><span class="v num">${g.toFixed(1)} GB</span></div>`).join('')+'</div>';
+        $('ledger-body').innerHTML=html;
+    }catch(e){$('ledger-body').innerHTML='<span style="color:var(--red);font-size:.8rem">year load failed</span>'}}
 
 // ── actions ──
 async function doAction(action,params={}){

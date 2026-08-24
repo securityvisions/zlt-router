@@ -34,8 +34,7 @@ RIGHTEL=43220
 MAXMSG=4000
 
 mkdir -p "$STATEDIR"
-
-# Telegram transport module (provides esc/split/join/send/edit/photo/ack)
+# Telegram transport module (provides esc/split/join/send/edit/photo/ack/document)
 TGLIB="$(dirname "$0")/tg-lib.sh"
 [ -f "$TGLIB" ] || TGLIB="/data/proxy/tg-lib.sh"
 [ -f "$TGLIB" ] && . "$TGLIB"
@@ -340,13 +339,10 @@ html_send_owner_panel() {
     local first=1 row=""
     local unassigned="" p pcount
 
-    # collect persons and their device counts from owners.conf
-    declare -A persons
+    # collect persons + counts via temp file (POSIX-safe, no bash arrays)
+    local tmpf=$(mktemp 2>/dev/null)
     if [ -f "$owners_f" ]; then
-        while IFS='|' read -r mac person; do
-            [ -z "$mac" ] && continue
-            persons[$person]=$(( ${persons[$person]:-0} + 1 ))
-        done < "$owners_f"
+        cut -d'|' -f2 "$owners_f" | sort | uniq -c | sort -rn > "$tmpf"
     fi
 
     # find unassigned devices: leases whose MAC is not in owners.conf
@@ -374,18 +370,17 @@ html_send_owner_panel() {
         IFS=$old_ifs
     fi
 
-    # person buttons (two per row): own:p:<b64(name)>
-    if [ -f "$owners_f" ]; then
-        row=""
-        for p in "${!persons[@]}"; do
-            b64=$(printf '%s' "$p" | base64 -w0 2>/dev/null || printf '%s' "$p")
-            btn="{\"text\":\"$p (${persons[$p]})\",\"callback_data\":\"ownp:$b64\"}"
-            if [ -z "$row" ]; then row="$btn"
-            else kb="$kb,[$row,$btn]"; row=""; first=0
-            fi
-        done
-        [ -n "$row" ] && { [ "$first" = "0" ] && kb="$kb,"; kb="$kb[$row]"; first=0; }
+    # person buttons (one per row): own:p:<b64(name)>
+    if [ -s "$tmpf" ]; then
+        while IFS=' ' read -r count pname; do
+            [ -z "$pname" ] && continue
+            local b64=$(printf '%s' "$pname" | base64 -w0 2>/dev/null || printf '%s' "$pname")
+            [ "$first" = "0" ] && kb="$kb,"
+            kb="$kb[{\"text\":\"$pname ($count)\",\"callback_data\":\"ownp:$b64\"}]"
+            first=0
+        done < "$tmpf"
     fi
+    rm -f "$tmpf"
 
     # utility row
     [ "$first" = "0" ] && kb="$kb,"

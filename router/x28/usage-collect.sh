@@ -21,12 +21,23 @@
 #
 # Canonical copy: router/x28/usage-collect.sh — deploys to /data/proxy/usage/.
 
-DIR=/data/proxy/usage
+DIR="${USAGE_DIR:-/data/proxy/usage}"
 
 mkdir -p "$DIR/day" "$DIR/month"
 
 now_day()  { date +%F; }
 now_week() { date +%G-W%V; }
+
+# prev_day — the day before today (busybox-safe; no date -d)
+prev_day() {
+    printf '%s' "$(date +%F)" | awk -F- '{
+        y=$1+0; m=$2+0; d=$3-1
+        dim[1]=31;dim[2]=28;dim[3]=31;dim[4]=30;dim[5]=31;dim[6]=30
+        dim[7]=31;dim[8]=31;dim[9]=30;dim[10]=31;dim[11]=30;dim[12]=31
+        if(y%4==0&&(y%100!=0||y%400==0))dim[2]=29
+        if(d<1){m--;if(m<1){m=12;y--};d=dim[m]}
+        printf "%04d-%02d-%02d\n",y,m,d }'
+}
 
 # modem WAN totals since boot (exact — used for calibration display)
 wan_totals() {
@@ -111,14 +122,17 @@ cycle() {
     return 0
 }
 
-# roll — day summary into monthly log + Friday weekly bill card.
+# roll — close out the COMPLETED day: day summary into monthly log, per-owner
+# daily roll (owners/ + owners-d/), Jalali month rollup. Defaults to yesterday
+# (the day that just ended when the loop calls this at the midnight change);
+# pass the date explicitly for backfill/testing.
 roll() {
-    day=$(now_day)
+    day="${1:-$(prev_day)}"
     dayf="$DIR/day/$day"
     if [ -f "$dayf" ] && [ ! -f "$DIR/month/.rolled-$day" ]; then
         tot_up=$(awk -F"|" '!/^#/ {s+=$4} END{print s+0}' "$dayf")
         tot_down=$(awk -F"|" '!/^#/ {s+=$5} END{print s+0}' "$dayf")
-        echo "$day total_up=$tot_up total_down=$tot_down" >> "$DIR/month/$(date +%Y-%m).log"
+        echo "$day total_up=$tot_up total_down=$tot_down" >> "$DIR/month/$(printf '%s' "$day" | cut -c1-7).log"
         # per-owner daily roll (before prune, so Jalali months stay computable).
         # Two stores: owners/ (aggregated, legacy readers) and owners-d/
         # (device-granularity: person|mac|up|down — powers ledger breakdowns).
@@ -149,6 +163,11 @@ roll() {
                 printf '%s|%s|%s|%s\n' "$person" "$mac" "$up" "$down" >> "$DIR/.persond.tmp"
             done < "$dayf"
             [ -f "$DIR/.persond.tmp" ] && mv "$DIR/.persond.tmp" "$OWNER_D_DIR/$day" 2>/dev/null               || : > "$OWNER_D_DIR/$day"
+            # regenerate the Jalali-month rollup for the closed day
+            # (full-month recompute via the ledger-store seam — idempotent)
+            sh "${LEDGER_STORE:-/data/proxy/ledger-store.sh}" rollup "$day" >/dev/null 2>&1
+            # weekly off-router ledger backup (own marker; once per ISO week)
+            sh "${LEDGER_BACKUP:-/data/proxy/ledger-backup.sh}" run >/dev/null 2>&1 &
             if [ -s "$DIR/.person.tmp" ]; then
                 awk -F'|' '{ up[$1]+=$2; down[$1]+=$3 } END { for(p in up) print p"|"up[p]"|"down[p] }' "$DIR/.person.tmp" > "$OWNER_DIR/$day.tmp" 2>/dev/null
                 mv "$OWNER_DIR/$day.tmp" "$OWNER_DIR/$day" 2>/dev/null
@@ -159,10 +178,18 @@ roll() {
             touch "$OWNER_DIR/.rolled-$day"
         fi
         touch "$DIR/month/.rolled-$day"
-        find "$DIR/day" -type f -mtime +35 -name "20*" -delete 2>/dev/null
+        # prune raw day files ONLY — owners-d/, owners/, rollups/, ledger/ are
+        # the permanent Ledger history and are never pruned (ledger-guard.sh
+        # trips if the history ever shrinks)
+        find "$DIR/day" -type f -mtime +35 -name "20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]" -delete 2>/dev/null
+        # monthly Ledger retention tripwire (marker-gated inside the guard)
+        sh "${LEDGER_GUARD:-/data/proxy/ledger-guard.sh}" run >/dev/null 2>&1 &
         # keep owners history forever (no prune)
     fi
-    if [ "$(date +%u)" = "5" ] && [ "$(date +%H)" -ge 20 ]; then
+    # clock seams for tests: ROLL_DOW / ROLL_HOUR override the real clock
+    roll_dow="${ROLL_DOW:-$(date +%u)}"
+    roll_hour="${ROLL_HOUR:-$(date +%H)}"
+    if [ "$roll_dow" = "5" ] && [ "$roll_hour" -ge 20 ]; then
         wk=$(now_week)
         if [ "$(cat "$DIR/week-marker" 2>/dev/null)" != "$wk" ]; then
             echo "$wk" > "$DIR/week-marker"
@@ -214,12 +241,12 @@ roll() {
 
 case "${1:-loop}" in
     snap)  cycle ;;
-    roll)  roll ;;
+    roll)  shift; roll "${1:-}" ;;
     loop)
         lastday=$(now_day)
         while :; do
             cycle
-            [ "$(now_day)" != "$lastday" ] && { roll; lastday=$(now_day); }
+            [ "$(now_day)" != "$lastday" ] && { roll "$lastday"; lastday=$(now_day); }
             sleep 5
         done ;;
 esac

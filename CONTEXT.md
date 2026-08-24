@@ -111,3 +111,7 @@ Shared vocabulary for the home-network project. Use these terms exactly; don't d
   _Avoid_: device owner (ambiguous — owner of the router vs owner of a phone)
 - **Ledger page** — an immutable monthly snapshot of the household Ledger card (per-person GB + Toman + bars), frozen at month-end and stored under `usage/ledger/J-<month>.txt`; survives all cache pruning forever.
   _Avoid_: monthly report (use Ledger page)
+- **Rollup store** — the compact per-date per-person monthly files (`usage/rollups/<jalali-YYYY-MM>.tsv`, rows `date|person|bytes|cost`, Friday rates applied), regenerated idempotently at each day-roll; powers the year chart and rides along in the weekly Telegram backup.
+  _Avoid_: aggregate cache (it is a permanent, self-healing history store)
+- **Ledger history** — the append-forever stores that make up the household Ledger's source of truth: `owners-d/` daily files, the Rollup store, and frozen Ledger pages. Never pruned; `ledger-guard.sh` alerts if the span ever shrinks, `ledger-backup.sh` ships it off-router weekly.
+  _Avoid_: usage history (ambiguous — raw `day/` files ARE pruned after 35 days)
