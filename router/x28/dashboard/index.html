@@ -156,9 +156,20 @@ select option{background:var(--surface)}
 /* ── updated footer ── */
 .updated{color:var(--faint);font-size:.7rem;text-align:center;margin-top:16px;
   font-variant-numeric:tabular-nums}
+
+/* ── privacy eye toggle (demo blur) ── */
+body.privacy .p-secret{filter:blur(6px)}
+.eye-btn{position:fixed;top:12px;right:12px;z-index:99;display:flex;align-items:center;gap:6px;
+  background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:6px 12px;
+  font-size:.8rem;cursor:pointer;color:var(--text);box-shadow:0 4px 14px #00000055}
+body.privacy .eye-btn{border-color:var(--yellow-dim);background:var(--yellow-dim)}
+.eye-btn .pill{display:none;color:var(--yellow);font-size:.62rem;text-transform:uppercase;letter-spacing:.05em}
+body.privacy .eye-btn .pill{display:inline}
 </style>
 </head>
 <body>
+<button class="eye-btn" id="eye-btn" onclick="togglePrivacy()" title="blur sensitive data (demo mode)">
+<span id="eye-ico">👁</span><span class="pill">privacy on</span></button>
 <div class="header wrap">
 <h1>X28</h1>
 <div class="sub" id="updated">connecting…</div>
@@ -276,7 +287,7 @@ async function loadLedger(){
                 $('ledger-body').innerHTML=`<i style="color:var(--dim);font-size:.72rem">${from} → ${to}</i><br>`+
                     d.filter(r=>r.bytes>0).map(r=>{
                     const gb=(r.bytes/1073741824).toFixed(1);
-                    return `<div class="row"><span class="k">${r.person}</span><span class="v num">${gb} GB</span></div>`;}).join('');
+                    return `<div class="row"><span class="k"><span class="p-secret">${r.person}</span></span><span class="v num">${gb} GB</span></div>`;}).join('');
                 return;
             }
         }catch(e){}
@@ -285,7 +296,7 @@ async function loadLedger(){
     const max=Math.max(...d.map(r=>r.bytes),1);
     $('ledger-body').innerHTML=d.filter(r=>r.bytes>0).map(r=>{
         const gb=(r.bytes/1073741824).toFixed(1),pct=Math.round(r.bytes/max*100);
-        return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-weight:500">${r.person}</span><span class="num">${gb} GB</span></div>
+        return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-weight:500"><span class="p-secret">${r.person}</span></span><span class="num">${gb} GB</span></div>
         <div class="bar"><span style="width:${pct}%;background:#7b8cde"></span></div>
         <div style="text-align:right;font-size:.75rem;color:var(--dim)" class="num">${(r.cost||0).toLocaleString()} T</div></div>`;}).join('');
 }
@@ -297,23 +308,23 @@ function assignRowHTML(dev,idx,persons){
     const online=dev.online
         ?'<span class="dot dot-green"></span>'
         :'<span class="dot" style="background:var(--faint)"></span>';
-    const host=`<span style="font-weight:500;font-size:.9rem">${dev.hostname||'?'}${rnd}</span>`;
-    const mac=`<span style="color:var(--faint);font-size:.72rem" class="num">${dev.mac||''}</span>`;
-    const ip=`<span style="color:var(--dim);font-size:.8rem" class="num">${dev.ip}</span>`;
+    const host=`<span style="font-weight:500;font-size:.9rem"><span class="p-secret">${dev.hostname||'?'}</span>${rnd}</span>`;
+    const mac=`<span style="color:var(--faint);font-size:.72rem" class="num p-secret">${dev.mac||''}</span>`;
+    const ip=`<span style="color:var(--dim);font-size:.8rem" class="num p-secret">${dev.ip}</span>`;
     const traffic=dev.today_gb>0
         ?`<span class="num" style="font-size:.85rem">${dev.today_gb} GB</span>`
         :'<span style="color:var(--faint);font-size:.8rem">—</span>';
     const isUn=!dev.owner||dev.owner==='unassigned'||dev.owner==='__new__';
     const chip=isUn
         ?`<span class="chip" style="color:var(--yellow);border-color:var(--yellow-dim)" onclick="toggleAssignEditor(${idx})">unassigned</span>`
-        :`<span class="chip owner" onclick="toggleAssignEditor(${idx})">${esc(dev.owner)}<span style="opacity:.3;font-size:.65rem;margin-left:4px">✎</span></span>
+        :`<span class="chip owner" onclick="toggleAssignEditor(${idx})"><span class="p-secret">${esc(dev.owner)}</span><span style="opacity:.3;font-size:.65rem;margin-left:4px">✎</span></span>
         <span class="chip" style="color:var(--red);border-color:var(--red-dim);opacity:.75;padding:2px 7px" title="unassign" onclick="unassignDevice('${dev.mac}','${esc(dev.owner)}',${idx})">✕</span>`;
     const editor=`<div id="editor-${idx}" style="display:none;margin-top:8px;padding:10px;background:var(--bg);border-radius:var(--r-sm);flex-wrap:wrap;gap:6px;align-items:center;width:100%">
         <span style="color:var(--dim);font-size:.72rem;margin-right:4px">assign to</span>
-        ${persons.map(p=>`<span class="chip" onclick="doAssign('${dev.mac}','${p}',${idx})">${esc(p)}</span>`).join('')}
+        ${persons.map(p=>`<span class="chip" onclick="doAssign('${dev.mac}','${p}',${idx})"><span class="p-secret">${esc(p)}</span></span>`).join('')}
         <span class="chip" style="border-style:dashed" onclick="showNewPersonInput(${idx})">new</span>
         <span class="chip" style="opacity:.3" onclick="closeEditor(${idx})">✕</span>
-        <input type="text" class="chip-input" id="newperson-${idx}" placeholder="name…" style="display:none" autocomplete="off" name="person-name-${idx}"
+        <input type="text" class="chip-input p-secret" id="newperson-${idx}" placeholder="name…" style="display:none" autocomplete="off" name="person-name-${idx}"
             onkeydown="if(event.key==='Enter')submitNewPerson(${idx})"
             onblur="if(!this.value)closeEditor(${idx})">
         <button type="button" class="btn btn-warn" id="newperson-btn-${idx}" style="display:none;padding:2px 10px;font-size:.72rem"
@@ -540,12 +551,12 @@ async function loadLedgerRange(){
         let html=d.entries.filter(e=>e.bytes>0).map(e=>{
             const gb=(e.bytes/1073741824).toFixed(1),pct=Math.round(e.bytes/max*100);
             const cost=(e.cost||0).toLocaleString();
-            return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-weight:500">${e.person}</span><span class="num">${gb} GB · ${cost} T</span></div>
+            return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-weight:500"><span class="p-secret">${e.person}</span></span><span class="num">${gb} GB · ${cost} T</span></div>
             <div class="bar"><span style="width:${pct}%;background:#7b8cde"></span></div></div>`;}).join('');
         if(d.breakdown&&d.breakdown.length){
             html+='<blockquote expandable><span style="color:var(--dim);font-size:.75rem">per device:</span><br>';
             html+=d.breakdown.filter(b=>b.bytes>0).map(b=>
-                `<span style="color:var(--dim);font-size:.78rem">${b.person} · <code>${b.mac}</code> · ${(b.bytes/1073741824).toFixed(2)} GB</span><br>`).join('');
+                `<span style="color:var(--dim);font-size:.78rem"><span class="p-secret">${b.person}</span> · <code class="p-secret">${b.mac}</code> · ${(b.bytes/1073741824).toFixed(2)} GB</span><br>`).join('');
             html+='</blockquote>';
         }
         html+=`<div class="row" style="border:none"><span class="k"><b>total</b></span><span class="v num"><b>${(d.entries.reduce((a,e)=>a+e.bytes,0)/1073741824).toFixed(1)} GB · ${(d.entries.reduce((a,e)=>a+e.cost,0)).toLocaleString()} T</b></span></div>`;
@@ -585,13 +596,13 @@ async function loadYearlyLedger(year){
         html+=d.months.map(m=>{
             if(m.total_gb<=0)return `<div class="chart-bar-row" style="opacity:.35"><div class="lbl"><span>${m.label}</span><span class="num">—</span></div><div class="bar-track"></div></div>`;
             const pct=Math.max(2,Math.min(100,Math.round(m.total_gb/maxgb*100)));
-            const per=Object.entries(m.persons||{}).sort((a,b)=>b[1]-a[1]).map(([p,g])=>`${p} ${g.toFixed(1)}`).join(' · ');
+            const per=Object.entries(m.persons||{}).sort((a,b)=>b[1]-a[1]).map(([p,g])=>`<span class="p-secret">${p}</span> ${g.toFixed(1)}`).join(' · ');
             return `<div class="chart-bar-row"><div class="lbl"><span>${m.label}${per?` <span style="color:var(--faint);font-size:.68rem">${per}</span>`:''}</span><span class="num">${m.total_gb.toFixed(1)} GB</span></div>
             <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:#7b8cde"></div></div></div>`;}).join('');
         const yp=Object.entries(d.persons||{}).sort((a,b)=>b[1]-a[1]);
         if(yp.length)html+=`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
         <div class="row" style="border:none"><span class="k"><b>total</b></span><span class="v num"><b>${yp.reduce((a,[,g])=>a+g,0).toFixed(1)} GB</b></span></div>`+
-        yp.map(([p,g])=>`<div class="row"><span class="k">${p}</span><span class="v num">${g.toFixed(1)} GB</span></div>`).join('')+'</div>';
+        yp.map(([p,g])=>`<div class="row"><span class="k"><span class="p-secret">${p}</span></span><span class="v num">${g.toFixed(1)} GB</span></div>`).join('')+'</div>';
         $('ledger-body').innerHTML=html;
     }catch(e){$('ledger-body').innerHTML='<span style="color:var(--red);font-size:.8rem">year load failed</span>'}}
 
@@ -632,6 +643,18 @@ async function loadWifiQR(){
         const r=await fetch('/cgi-bin/x28-dash-actions.sh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'wifi_qr'})});
         const d=await r.json();
     }catch(e){}}
+
+// ── privacy eye toggle (demo blur) ──
+function togglePrivacy(){
+    const on=document.body.classList.toggle('privacy');
+    $('eye-ico').textContent=on?'🙈':'👁';
+    try{localStorage.setItem('privacy',on?'1':'0')}catch(e){}
+}
+(function(){
+    let saved=false;
+    try{saved=localStorage.getItem('privacy')==='1'}catch(e){}
+    if(saved){document.body.classList.add('privacy');$('eye-ico').textContent='🙈';}
+})();
 
 // ── init ──
 async function refresh(){
