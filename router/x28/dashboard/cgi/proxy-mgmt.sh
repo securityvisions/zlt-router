@@ -3,8 +3,8 @@ echo "Content-Type: application/json"
 echo "Access-Control-Allow-Origin: *"
 echo ""
 
-JQ=/data/proxy/jq
-CTRL="http://127.0.0.1:9090"
+JQ="${JQ_BIN:-/data/proxy/jq}"
+CTRL="${MIHOMO_CTRL:-http://127.0.0.1:9090}"
 action="${QUERY_STRING:-}"
 
 case "$action" in
@@ -30,14 +30,44 @@ case "$action" in
         url_encoded="https%3A%2F%2Fwww.gstatic.com%2Fgenerate_204"
         result=$(curl -s -m 12 "$CTRL/proxies/$(printf '%s' "$node" | sed 's/ /%20/g')/delay?url=$url_encoded&timeout=8000" 2>/dev/null)
         delay=$(printf '%s' "$result" | "$JQ" -r '.delay // "error"' 2>/dev/null)
-        printf '{"node":"%s","delay":%s}' "$node" "$delay"
+        if [ "$delay" = "error" ]; then
+            printf '{"node":"%s","delay":"error"}' "$node"
+        else
+            printf '{"node":"%s","delay":%s}' "$node" "$delay"
+        fi
+        ;;
+    ping*)
+        # GET /api/proxy-mgmt.sh?ping=all → fire a delay probe on every
+        # auto-group member in parallel; one round-trip for the whole set.
+        auto=$(curl -s -m 6 "$CTRL/proxies/auto" 2>/dev/null)
+        members=$(printf '%s' "$auto" | "$JQ" -r '.all // [] | .[]' 2>/dev/null)
+        url_encoded="https%3A%2F%2Fwww.gstatic.com%2Fgenerate_204"
+        tmpd=$(mktemp -d 2>/dev/null)
+        for m in $members; do
+            (
+                r=$(curl -s -m 12 "$CTRL/proxies/$m/delay?url=$url_encoded&timeout=8000" 2>/dev/null)
+                d=$(printf '%s' "$r" | "$JQ" -r '.delay // "error"' 2>/dev/null)
+                if [ "$d" = "error" ]; then printf '{"name":"%s","delay":"error"}' "$m"
+                else printf '{"name":"%s","delay":%s}' "$m" "$d"; fi
+            ) > "$tmpd/$m" &
+        done
+        wait
+        printf '{"nodes":['
+        first=1
+        for m in $members; do
+            [ "$first" = "0" ] && printf ','
+            cat "$tmpd/$m" 2>/dev/null
+            first=0
+        done
+        printf ']}'
+        rm -rf "$tmpd"
         ;;
     switch*)
         # POST body: {"name":"<node>"} → switch auto group to this node
         body=$(cat)
         node=$(printf '%s' "$body" | "$JQ" -r '.name // ""' 2>/dev/null)
         [ -z "$node" ] && { echo '{"error":"no node specified"}'; exit 0; }
-        resp=$(curl -s -m 10 -X PUT "$CTL/proxies/auto" \
+        resp=$(curl -s -m 10 -X PUT "$CTRL/proxies/auto" \
             -H 'Content-Type: application/json' \
             -d "{\"name\":\"$node\"}" 2>/dev/null)
         printf '{"ok":true,"switched_to":"%s"}' "$node"

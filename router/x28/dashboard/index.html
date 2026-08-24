@@ -192,7 +192,7 @@ select option{background:var(--surface)}
 <div class="card"><h2><span class="icon">◌</span> devices</h2><div id="devices-body">···</div></div>
 <div class="card"><h2><span class="icon">◍</span> proxy nodes
 <button class="btn btn-blue" style="padding:2px 8px;font-size:.68rem;margin-left:auto" onclick="testAllNodes()">test all</button></h2>
-<table><thead><tr><th>node</th><th>type</th><th>status</th><th></th></tr></thead><tbody id="proxy-body">···</tbody></table>
+<table><thead><tr><th>node</th><th>type</th><th>status</th><th>latency</th><th></th></tr></thead><tbody id="proxy-body">···</tbody></table>
 <div style="margin-top:12px">
 <textarea id="add-uri" placeholder="paste vless:// vmess:// trojan:// ss:// hy2:// tuic:// juicity://…" rows="2"
  style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;font-size:.82rem;resize:vertical;font-family:inherit"></textarea>
@@ -401,17 +401,31 @@ async function loadProxies(){
         $('proxy-body').innerHTML=d.nodes.map(n=>{
             const dot=n.alive?'<span class="dot dot-green"></span>':'<span class="dot dot-red"></span>';
             const active=d.active===n.name?' <span class="badge b-blue">active</span>':'';
-            const btns=d.active!==n.name?`<button class="btn btn-warn" style="padding:2px 8px;font-size:.7rem" onclick="switchTo('${n.name}')">use</button>`:'';
-            return `<tr><td>${n.name}${active}</td><td style="color:var(--dim)">${n.type}</td><td>${dot}</td><td style="text-align:right">${btns}</td></tr>`;}).join('');
+            const lat=(window._proxyDelay||{})[n.name];
+            const latCell=lat!==undefined
+                ?(lat==='✗'?`<span style="color:var(--red);font-size:.78rem">✗</span>`:`<span class="num" style="font-size:.78rem">${lat} ms</span>`)
+                :'<span style="color:var(--faint);font-size:.78rem">—</span>';
+            let btns=`<button class="btn" style="padding:2px 8px;font-size:.7rem" onclick="pingNode('${n.name}')">ping</button>`;
+            if(d.active!==n.name)btns+=` <button class="btn btn-warn" style="padding:2px 8px;font-size:.7rem" onclick="switchTo('${n.name}')">use</button>`;
+            return `<tr><td>${n.name}${active}</td><td style="color:var(--dim)">${n.type}</td><td>${dot}</td><td>${latCell}</td><td style="text-align:right">${btns}</td></tr>`;}).join('');
     }catch(e){console.warn('proxy:',e)}}
 
-async function testNode(name){
+function pingCell(name,val){
+    if(!window._proxyDelay)window._proxyDelay={};
+    window._proxyDelay[name]=val;
+    const rows=$('proxy-body').querySelectorAll('tr');
+    const idx=Array.from(rows).findIndex(r=>r.cells[0].textContent.startsWith(name));
+    if(idx<0)return;
+    rows[idx].cells[3].innerHTML=val==='✗'?`<span style="color:var(--red);font-size:.78rem">✗</span>`:`<span class="num" style="font-size:.78rem">${val} ms</span>`;
+}
+
+async function pingNode(name){
+    pingCell(name,'…');
     try{
         const r=await fetch(`/cgi-bin/proxy-mgmt.sh?test=${encodeURIComponent(name)}`);
         const d=await r.json();
-        if(d.delay&&d.delay!=='error')alert(`${name}: ${d.delay} ms`);
-        else alert(`${name}: failed`);
-    }catch(e){alert('test failed')}}
+        pingCell(name,(d.delay&&d.delay!=='error')?d.delay:'✗');
+    }catch(e){pingCell(name,'✗')}}
 
 async function switchTo(name){
     await doProxyAction('switch',{name});
@@ -432,7 +446,15 @@ async function addProxyNode(){
     }catch(e){$('add-status').textContent='error'}}
 
 async function testAllNodes(){
-    loadProxies();setTimeout(loadProxies,8000);}
+    try{
+        const r=await fetch('/cgi-bin/proxy-mgmt.sh?ping=all');
+        const d=await r.json();
+        (d.nodes||[]).forEach(n=>{
+            if(!window._proxyDelay)window._proxyDelay={};
+            window._proxyDelay[n.name]=(n.delay&&n.delay!=='error')?n.delay:'✗';
+        });
+    }catch(e){}
+    loadProxies()}
 
 async function loadRescue(){
     const d=await fetchJson('rescue');if(!d)return;
