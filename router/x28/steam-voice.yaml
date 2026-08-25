@@ -3,7 +3,7 @@
 # to the chosen node. Deployed to /data/proxy/mihomo/steam-voice.yaml.
 payload:
   - IP-CIDR,162.254.192.0/18
-  - IP-CIDR,155.133.240.0/20
+  - IP-CIDR,155.133.128.0/17
   - IP-CIDR,146.66.152.0/21
   - IP-CIDR,208.64.200.0/22
   - IP-CIDR,185.25.182.0/23

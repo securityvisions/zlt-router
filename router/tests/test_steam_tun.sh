@@ -29,8 +29,10 @@ case "$1" in
     route)
         case "$2" in
             show)
-                # replay recorded adds, minus any CIDR the test hides via FAKE_MISSING
-                sed -n 's/^ip route add //p' "$RECORD" 2>/dev/null \
+                # replay recorded adds for the requested table only, minus
+                # any CIDR the test hides via FAKE_MISSING
+                tbl="${4:-main}"
+                sed -n "s/^ip route add \(.*\) table $tbl\$/\1/p" "$RECORD" 2>/dev/null \
                     | grep -vF "${FAKE_MISSING:-__none__}"
                 exit 0 ;;
             *) exit 0 ;;
@@ -43,29 +45,28 @@ chmod +x "$STUB/ip"
 export RECORD="$TMP/enable.log"
 IP_BIN="$STUB/ip" sh "$EN" >/dev/null 2>&1
 
-# ── enable routes each Valve CIDR through utun ──────────────────────────────
-assert_contains "valve 162.254.192.0/18" "ip route add 162.254.192.0/18 dev utun" "$RECORD"
-assert_contains "valve 155.133.240.0/20" "ip route add 155.133.240.0/20 dev utun" "$RECORD"
-assert_contains "valve 146.66.152.0/21" "ip route add 146.66.152.0/21 dev utun" "$RECORD"
-assert_contains "valve 208.64.200.0/22" "ip route add 208.64.200.0/22 dev utun" "$RECORD"
-assert_contains "valve 185.25.182.0/23" "ip route add 185.25.182.0/23 dev utun" "$RECORD"
+# ── enable routes each Valve CIDR through utun in BOTH routing tables ────────
+for cidr in "162.254.192.0/18" "155.133.128.0/17" "146.66.152.0/21" "208.64.200.0/22" "185.25.182.0/23"; do
+    assert_contains "valve $cidr main"  "ip route add $cidr dev utun table main"  "$RECORD"
+    assert_contains "valve $cidr 17000" "ip route add $cidr dev utun table 17000" "$RECORD"
+done
 
 # ── idempotent: second enable adds no new routes ────────────────────────────
 IP_BIN="$STUB/ip" sh "$EN" >/dev/null 2>&1
-[ "$(count_of "ip route add" "$RECORD")" = "5" ] && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - enable not idempotent ($(count_of "ip route add" "$RECORD") adds)"; }
+[ "$(count_of "ip route add" "$RECORD")" = "10" ] && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - enable not idempotent ($(count_of "ip route add" "$RECORD") adds)"; }
 
-# ── disable removes exactly those routes ─────────────────────────────────────
+# ── disable removes exactly those routes from both tables ────────────────────
 export RECORD="$TMP/disable.log"
 IP_BIN="$STUB/ip" sh "$DIS" >/dev/null 2>&1
-[ "$(count_of "ip route del" "$RECORD")" = "5" ] && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - disable did not remove all routes ($(count_of "ip route del" "$RECORD"))"; }
-assert_contains "del 162.254.192.0/18" "ip route del 162.254.192.0/18 dev utun" "$RECORD"
+[ "$(count_of "ip route del" "$RECORD")" = "10" ] && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - disable did not remove all routes ($(count_of "ip route del" "$RECORD"))"; }
+assert_contains "del in vendor table" "ip route del 162.254.192.0/18 dev utun table 17000" "$RECORD"
 
 # ── boot race: device appears late → wait, then add ─────────────────────────
 export RECORD="$TMP/delayed.log" TUN_STATE="$TMP/tun_state" STEAM_TUN_WAIT=10
 echo 3 > "$TUN_STATE"
 IP_BIN="$STUB/ip" sh "$EN" >/dev/null 2>&1; rc=$?
 assert_eq "delayed device: exit 0"        "0" "$rc"
-assert_eq "delayed device: routes added"  "5" "$(count_of "ip route add" "$RECORD")"
+assert_eq "delayed device: routes added"  "10"    "$(count_of "ip route add" "$RECORD")"
 probes=$(count_of "ip link show" "$RECORD")
 [ "$probes" -ge 3 ] && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - expected ≥3 link probes before success, got $probes"; }
 
@@ -96,8 +97,9 @@ cidrs_of() {
     if [ "$1" = "yaml" ]; then
         sed -n 's/^  - IP-CIDR,\([0-9./]*\)$/\1/p' "$HERE/../x28/steam-voice.yaml" | sort
     else
-        grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+' \
-            "$HERE/../x28/steam-tun-$1.sh" | sort -u
+        # only the STEAM_CIDRS assignment — comments mention other addresses
+        sed -n 's/^STEAM_CIDRS="\(.*\)"/\1/p' \
+            "$HERE/../x28/steam-tun-$1.sh" | grep -oE '[0-9./]+' | sort -u
     fi
 }
 a=$(cidrs_of enable); b=$(cidrs_of disable); c=$(cidrs_of yaml)

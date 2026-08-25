@@ -11,9 +11,14 @@
 # Env seams for tests: IP_BIN, X28_TUN_DEV.
 # Canonical copy: router/x28/steam-tun-enable.sh — deploys to /data/proxy/.
 
-STEAM_CIDRS="162.254.192.0/18 155.133.240.0/20 146.66.152.0/21 208.64.200.0/22 185.25.182.0/23"
+STEAM_CIDRS="162.254.192.0/18 155.133.128.0/17 146.66.152.0/21 208.64.200.0/22 185.25.182.0/23"
 DEV="${X28_TUN_DEV:-utun}"
 IPC="${IP_BIN:-ip}"
+# LAN traffic is policy-routed by the vendor into table 17000
+# (from 192.168.70.0/24 lookup 17000) — main-table routes alone are invisible
+# to forwarded clients. Routes must live in BOTH tables or voice UDP silently
+# keeps egressing the carrier (found live 2026-08-26).
+TABLES="${STEAM_TUN_TABLES:-main 17000}"
 WAIT="${STEAM_TUN_WAIT:-30}"   # seconds to wait for the tun at boot (rc.local
                                # can beat the engine's tun creation)
 
@@ -31,15 +36,19 @@ while ! $IPC link show dev "$DEV" >/dev/null 2>&1; do
 done
 
 for c in $STEAM_CIDRS; do
-    $IPC route show 2>/dev/null | grep -qF "$c dev $DEV" || $IPC route add "$c" dev "$DEV"
+    for t in $TABLES; do
+        $IPC route show table "$t" 2>/dev/null | grep -qF "$c dev $DEV" || $IPC route add "$c" dev "$DEV" table "$t"
+    done
 done
 
-# Verify every route actually landed; partial success is failure
+# Verify every route actually landed in every table; partial success is failure
 for c in $STEAM_CIDRS; do
-    if ! $IPC route show 2>/dev/null | grep -qF "$c dev $DEV"; then
-        echo "ERROR: route for $c via $DEV missing after add." >&2
-        exit 1
-    fi
+    for t in $TABLES; do
+        if ! $IPC route show table "$t" 2>/dev/null | grep -qF "$c dev $DEV"; then
+            echo "ERROR: route for $c via $DEV missing in table $t after add." >&2
+            exit 1
+        fi
+    done
 done
 
 if [ "${1:-}" = "--persist" ]; then
