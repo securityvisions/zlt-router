@@ -1,0 +1,13 @@
+{
+  "operator": "IR - MCI Wap (43211) - 5G(NSA)",
+  "signal": "RSRP -76 dBm - NR -100 dBm",
+  "data": "OK (direct probe)",
+  "proxy": "OK (VPS egress)",
+  "devices": "3 online",
+  "uptime": "9h 11m - load 3.72 3.67 3.72",
+  "ram": "183 MB free - /data 121 MB free",
+  "temp": "61C",
+  "services": "XRAY-DOWN watchdog dns",
+  "health_verdict": "green",
+  "timestamp": 1787676072
+}

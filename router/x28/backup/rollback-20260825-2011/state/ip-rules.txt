@@ -1,0 +1,10 @@
+default dev ccmni1 scope link 
+22.76.166.200/29 dev ccmni2 proto kernel scope link src 22.76.166.202 
+22.77.21.184/29 dev ccmni1 proto kernel scope link src 22.77.21.190 
+192.168.70.0/24 dev br0 proto kernel scope link src 192.168.70.1 
+198.18.0.0/30 dev utun proto kernel scope link src 198.18.0.1 
+0:	from all lookup local 
+17000:	from 192.168.70.0/24 lookup 17000 
+17000:	from all to 192.168.70.0/24 lookup 17000 
+32766:	from all lookup main 
+32767:	from all lookup default 

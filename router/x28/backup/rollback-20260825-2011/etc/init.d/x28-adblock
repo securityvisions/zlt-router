@@ -1,0 +1,18 @@
+#!/bin/sh /etc/rc.common
+# x28-adblock — weekly ad/tracker blocklist refresh (procd service).
+# The blocklist itself is attached to dnsmasq by dns-fix.sh; this service
+# only keeps the list fresh (loop daemon, no cron on this firmware).
+#
+# Canonical copy: router/x28/x28-adblock.init — deploys to /etc/init.d/x28-adblock.
+
+START=97
+USE_PROCD=1
+
+start_service() {
+    procd_open_instance
+    procd_set_param command /bin/sh /data/proxy/adblock/adblock-loop.sh
+    procd_set_param respawn 3600 5 0
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_close_instance
+}

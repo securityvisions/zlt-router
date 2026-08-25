@@ -1,0 +1,11 @@
+{
+  "operator": "IR - MCI Wap",
+  "tech": "5G(NSA)",
+  "signal": "2",
+  "rsrp": "-76",
+  "rsrp_5g": "-100",
+  "band": "",
+  "flow_dl": "4371.05",
+  "flow_ul": "298.31",
+  "plmn": "43211"
+}

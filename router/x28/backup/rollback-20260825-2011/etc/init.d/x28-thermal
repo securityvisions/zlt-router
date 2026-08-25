@@ -1,0 +1,12 @@
+#!/bin/sh /etc/rc.common
+# x28-thermal — thermal guard + overheat Telegram alert (procd).
+# Samples thermal_read every 60s, appends to telemetry, alerts once per episode >75°C.
+START=95
+USE_PROCD=1
+
+start_service() {
+    procd_open_instance
+    procd_set_param command /bin/sh /data/proxy/x28-thermal-loop.sh
+    procd_set_param respawn 3600 5 0
+    procd_close_instance
+}

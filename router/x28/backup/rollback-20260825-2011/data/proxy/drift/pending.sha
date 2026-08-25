@@ -1,0 +1,10 @@
+381b1827fdf20466346376bbf3b3fe648570ee2887f45a10bd6697572ccfff55  /data/proxy/mihomo/config.yaml
+92aca2c0cacebccd6725b89856807225e83bbe3c029ef415cdf39df94b0f0de7  /etc/rc.local
+4133c04a16f8727a268d56070be2f00db631512ecca3fee38af2528b2a986562  /etc/hotplug.d/net/30-x28-proxy.sh
+f95e538fc2a1f803524b76902cbd01d12dc37fda87d927ff29dc90049209cd1f  /data/proxy/tproxy-fixed-enable.sh
+24401a544761e9612fa7cf5cbd00f108ffdbfee2584685f1be398a5eead0ff1f  /data/proxy/tproxy-fixed-disable.sh
+8da75f9ffd703123e0cf08087ef5e6d54efda4cf7bb9f35acc9e0ac2f3b738d8  /data/proxy/dns-fix.sh
+af7cca70b1f633c3c65e1ba1271de582d5e8a9b5aa37e16f1b811bfe324b0bda  /data/proxy/harden.sh
+e0eebcf36a534b89bdce5e0b8b06b8c655f9025dff91fd357b3dc2a8ccfe8723  /data/proxy/owners.conf
+7908d9aa6a4d52424ac5ae6998e729ccb823dc3b8763397e196472e8a5a7683a  /data/proxy/x28-bot.sh
+d09f28cdcfd4961eba076d3883c7a7178ee87243bdb3af962c5357560cb2509c  /data/proxy/operator-watchdog.sh

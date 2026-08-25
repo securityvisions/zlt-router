@@ -1,0 +1,18 @@
+#!/bin/sh /etc/rc.common
+# x28-vps-heal — VPS auto-heal watchdog (procd).
+# Restarts sing-box via s-ui panel when mihomo auto has no alive node for 10 min.
+# Panel creds live only in /etc/sui-heal.conf (600) on device, never in repo.
+START=96
+USE_PROCD=1
+
+start_service() {
+    # creds from /etc/sui-heal.conf if present, else from /etc/tunnel.conf fallback
+    if [ -f /etc/sui-heal.conf ]; then
+        . /etc/sui-heal.conf 2>/dev/null
+        export PANEL_PASS PANEL_USER PANEL_HOST PANEL_PORT
+    fi
+    procd_open_instance
+    procd_set_param command /bin/sh /data/proxy/x28-vps-heal.sh loop
+    procd_set_param respawn 3600 5 0
+    procd_close_instance
+}

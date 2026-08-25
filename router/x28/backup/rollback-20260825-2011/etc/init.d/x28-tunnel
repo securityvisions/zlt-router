@@ -1,0 +1,12 @@
+#!/bin/sh /etc/rc.common
+# x28-tunnel — Cloudflare Tunnel for remote Xirouter app access (procd).
+# Token lives only in /etc/tunnel.conf (600) on device, never in repo.
+# If no token is configured, the service sleeps (no tunnel, no error).
+START=97
+USE_PROCD=1
+start_service() {
+    procd_open_instance
+    procd_set_param command /bin/sh -c 'while :; do if [ -f /etc/tunnel.conf ] && [ -x /data/proxy/cloudflared ]; then /data/proxy/cloudflared tunnel run --token "$(cat /etc/tunnel.conf)" 2>&1 | logger -t cloudflared; else sleep 60; fi; done'
+    procd_set_param respawn 3600 5 0
+    procd_close_instance
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "hostname": "Samsung",
+    "ip": "192.168.70.155",
+    "mac": "c8:12:0b:32:7c:f2",
+    "owner": "baba",
+    "random_mac": false,
+    "today_gb": 0,
+    "online": false,
+    "last_seen": 1787744917
+  },
+  {
+    "hostname": "Nothing-Phone-2",
+    "ip": "192.168.70.106",
+    "mac": "3a:7e:c0:54:29:d9",
+    "owner": "parsa",
+    "random_mac": true,
+    "today_gb": 0,
+    "online": true,
+    "last_seen": 1787751514
+  },
+  {
+    "hostname": "parsavisions",
+    "ip": "192.168.70.141",
+    "mac": "f4:28:9d:60:61:cb",
+    "owner": "parsa",
+    "random_mac": false,
+    "today_gb": 0,
+    "online": true,
+    "last_seen": 1787737181
+  }
+]

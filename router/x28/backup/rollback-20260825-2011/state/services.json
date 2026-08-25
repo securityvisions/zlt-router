@@ -1,0 +1,1257 @@
+{
+	"1nvram_daemon": {
+		"instances": {
+			"nvram_daemon": {
+				"running": false,
+				"command": [
+					"/usr/bin/nvram_daemon"
+				],
+				"term_timeout": 5
+			}
+		}
+	},
+	"2ccci_fsd": {
+		"instances": {
+			"ccci_fsd": {
+				"running": true,
+				"pid": 3493,
+				"command": [
+					"/usr/bin/ccci_fsd",
+					"0",
+					"2",
+					"0"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 1,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"3ccci_mdinit": {
+		"instances": {
+			"ccci_mdinit": {
+				"running": true,
+				"pid": 3517,
+				"command": [
+					"/usr/bin/ccci_mdinit",
+					"0"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"aee_aed": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 5556,
+				"command": [
+					"/sbin/aee_aed"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"atci_service": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 7112,
+				"command": [
+					"/usr/bin/atci_service"
+				],
+				"term_timeout": 5,
+				"limits": {
+					"core": "unlimited"
+				},
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"atcid": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 7157,
+				"command": [
+					"/usr/bin/atcid"
+				],
+				"term_timeout": 5,
+				"limits": {
+					"core": "unlimited"
+				},
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"atcmd_daemon": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 8466,
+				"command": [
+					"/usr/bin/atcmd_daemon"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"audio-ctrl-service": {
+		"instances": {
+			"echo": {
+				"running": true,
+				"pid": 5240,
+				"command": [
+					"/usr/bin/audio-ctrl-service"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 5,
+					"timeout": 5,
+					"retry": 1
+				}
+			}
+		}
+	},
+	"collectd": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 5270,
+				"command": [
+					"/usr/sbin/collectd",
+					"-C",
+					"/tmp/collectd.conf",
+					"-f"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"cron_controller": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 8351,
+				"command": [
+					"/usr/bin/cron_controller"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"cron_master": {
+		"instances": {
+			"instance1": {
+				"running": false,
+				"command": [
+					"/usr/bin/cron_master"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"dialer": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 9809,
+				"command": [
+					"/usr/bin/dialer"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"dropbear": {
+		
+	},
+	"firewalltools": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 8076,
+				"command": [
+					"/usr/bin/firewalltools"
+				],
+				"term_timeout": 5
+			}
+		}
+	},
+	"firmware.sh": {
+		
+	},
+	"flagd": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 7935,
+				"command": [
+					"/usr/bin/flagd"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"flow_control": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 8221,
+				"command": [
+					"/usr/bin/flow_control"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"fota": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 10741,
+				"command": [
+					"/usr/bin/fota"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"gpio_switch": {
+		
+	},
+	"gpiod": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 8104,
+				"command": [
+					"/usr/bin/gpiod"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"lan_mgr": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 8155,
+				"command": [
+					"/usr/bin/lan_mgr"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"lanrecord": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 9864,
+				"command": [
+					"/usr/bin/lanrecord"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"libmodem_afe_service": {
+		"instances": {
+			"echo": {
+				"running": true,
+				"pid": 5221,
+				"command": [
+					"/usr/bin/libmodem-afe-ctrl-server-bin"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 5,
+					"timeout": 5,
+					"retry": 1
+				}
+			}
+		}
+	},
+	"log": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 4438,
+				"command": [
+					"/sbin/logd",
+					"-S",
+					"10240"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 5,
+					"timeout": 1,
+					"retry": -1
+				}
+			}
+		}
+	},
+	"log_backup_daemon": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 8032,
+				"command": [
+					"/usr/bin/log_backup_daemon"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"log_controld": {
+		"instances": {
+			"log_controld": {
+				"running": true,
+				"pid": 7786,
+				"command": [
+					"/usr/bin/log_controld"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"lppe_service": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 5096,
+				"command": [
+					"/usr/bin/lppe_service"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"macwriter": {
+		
+	},
+	"mdlcfgd": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 7917,
+				"command": [
+					"/usr/bin/mdlcfgd"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"meta_tst": {
+		"instances": {
+			"instance1": {
+				"running": false,
+				"command": [
+					"/usr/bin/meta_tst"
+				],
+				"term_timeout": 5
+			}
+		}
+	},
+	"mipc_submonitor.init": {
+		"instances": {
+			"mipc_submonitor": {
+				"running": true,
+				"pid": 7822,
+				"command": [
+					"/usr/bin/mipc_submonitor"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"mnld": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 5126,
+				"command": [
+					"/usr/bin/mnld"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"mtk_agpsd": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 5177,
+				"command": [
+					"/usr/bin/mtk_agpsd"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"mtk_netagent": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 4621,
+				"command": [
+					"/usr/bin/mtk_netagent"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"net_monitor": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 8266,
+				"command": [
+					"/usr/bin/net_monitor_v2"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"netcwmpd": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 31671,
+				"command": [
+					"/usr/bin/netcwmpd"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"network": {
+		
+	},
+	"omcproxy": {
+		
+	},
+	"ql_netd.init": {
+		"instances": {
+			"ql_netd": {
+				"running": true,
+				"pid": 5438,
+				"command": [
+					"/usr/bin/ql_netd"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"ql_ril_service": {
+		"instances": {
+			"ql_ril_service": {
+				"running": true,
+				"pid": 5472,
+				"command": [
+					"/usr/bin/ql_ril_service"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"ql_sms_over_ip_on": {
+		"instances": {
+			"ql_sms_over_ip_on": {
+				"running": false,
+				"command": [
+					"mipc_wan_cli",
+					"--at_cmd",
+					"AT+ECFGSET=\"sms_over_ip\",\"1\""
+				],
+				"term_timeout": 5
+			}
+		}
+	},
+	"qos": {
+		
+	},
+	"rpcd": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 4471,
+				"command": [
+					"/sbin/rpcd",
+					"-s",
+					"/var/run/ubus/ubus.sock",
+					"-t",
+					"30"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"scd": {
+		"instances": {
+			"scd": {
+				"running": true,
+				"pid": 5151,
+				"command": [
+					"/usr/bin/scd",
+					"1",
+					"1",
+					"1"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"slic_server": {
+		"instances": {
+			"instance1": {
+				"running": false,
+				"command": [
+					"/usr/bin/slic_server"
+				],
+				"term_timeout": 5,
+				"user": "root"
+			}
+		}
+	},
+	"sms_mgr": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 9839,
+				"command": [
+					"/usr/bin/sms_mgr"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"speech_daemon": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 5203,
+				"command": [
+					"/usr/bin/speech_daemon"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"switch_otg_daemon": {
+		"instances": {
+			"switch_otg_daemon": {
+				"running": true,
+				"pid": 4522,
+				"command": [
+					"/usr/bin/switch_otg_daemon"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"sysntpd": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 17427,
+				"command": [
+					"/usr/sbin/ntpd",
+					"-n",
+					"-N",
+					"-S",
+					"/usr/sbin/ntpd-hotplug",
+					"-p",
+					"cn.pool.ntp.org",
+					"-p",
+					"0.openwrt.pool.ntp.org",
+					"-p",
+					"1.openwrt.pool.ntp.org",
+					"-p",
+					"2.openwrt.pool.ntp.org"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"system": {
+		
+	},
+	"telnetd": {
+		
+	},
+	"thermal_core": {
+		"instances": {
+			"thermal_core": {
+				"running": false,
+				"command": [
+					"/usr/bin/thermal_core"
+				],
+				"term_timeout": 5
+			}
+		}
+	},
+	"tz_phone": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 10089,
+				"command": [
+					"/usr/bin/tz_phone"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"tzphonebook": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 8430,
+				"command": [
+					"/usr/bin/tzphonebook"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"ubus": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 3121,
+				"command": [
+					"/sbin/ubusd"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 1,
+					"retry": 0
+				},
+				"user": "ubus",
+				"group": "ubus"
+			}
+		}
+	},
+	"ucitrack": {
+		
+	},
+	"urandom_seed": {
+		"instances": {
+			"urandom_seed": {
+				"running": false,
+				"command": [
+					"/sbin/urandom_seed"
+				],
+				"term_timeout": 5
+			}
+		}
+	},
+	"urngd": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 3542,
+				"command": [
+					"/sbin/urngd"
+				],
+				"term_timeout": 5
+			}
+		}
+	},
+	"usp": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 10790,
+				"command": [
+					"/usr/bin/uspad"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"v2raya": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 11230,
+				"command": [
+					"/data/proxy/v2raya",
+					"--config",
+					"/etc/v2raya",
+					"--v2ray-bin",
+					"/data/proxy/xray",
+					"--core-type",
+					"xray",
+					"--v2ray-assetsdir",
+					"/data/proxy",
+					"--log-file",
+					"/tmp/v2raya.log",
+					"--log-level",
+					"info"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"vnstat": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 11537,
+				"command": [
+					"/usr/sbin/vnstatd",
+					"--nodaemon"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"vpn_mgr": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 8201,
+				"command": [
+					"/usr/bin/vpn_mgr"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"vpnbypass": {
+		
+	},
+	"wan_mgr": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 9791,
+				"command": [
+					"/usr/bin/wan_mgr"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				},
+				"user": "root"
+			}
+		}
+	},
+	"x28-adblock": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 7395,
+				"command": [
+					"/bin/sh",
+					"/data/proxy/adblock/adblock-loop.sh"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				}
+			}
+		}
+	},
+	"x28-boot-doctor": {
+		"instances": {
+			"instance1": {
+				"running": false,
+				"command": [
+					"/bin/sh",
+					"/data/proxy/x28-boot-doctor.sh",
+					"run"
+				],
+				"term_timeout": 5
+			}
+		}
+	},
+	"x28-bot": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 7180,
+				"command": [
+					"/bin/sh",
+					"/data/proxy/x28-bot.sh",
+					"supervise"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				}
+			}
+		}
+	},
+	"x28-budget-refresh": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 6963,
+				"command": [
+					"/bin/sh",
+					"-c",
+					"\n        while :; do\n            sleep 900\n            sh /root/balance.sh --report >/dev/null 2>&1 || true\n        done"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				}
+			}
+		}
+	},
+	"x28-dash-data": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 26127,
+				"command": [
+					"/bin/sh",
+					"/data/proxy/x28-dash-data.sh",
+					"loop"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				}
+			}
+		}
+	},
+	"x28-dashboard": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 22784,
+				"command": [
+					"/usr/bin/mini_httpd",
+					"-D",
+					"-C",
+					"/tmp/mini_dash.conf"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				}
+			}
+		}
+	},
+	"x28-drift": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 7517,
+				"command": [
+					"/bin/sh",
+					"/data/proxy/x28-drift.sh",
+					"loop"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				}
+			}
+		}
+	},
+	"x28-maint": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 7568,
+				"command": [
+					"/bin/sh",
+					"/data/proxy/x28-maint.sh",
+					"loop"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				}
+			}
+		}
+	},
+	"x28-rescue": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 7618,
+				"command": [
+					"/bin/sh",
+					"/data/proxy/x28-rescue.sh",
+					"loop"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				}
+			}
+		}
+	},
+	"x28-telemetry": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 7264,
+				"command": [
+					"/bin/sh",
+					"-c",
+					"while :; do sh /data/proxy/x28-telemetry.sh >/dev/null 2>&1; sleep 3600; done"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				}
+			}
+		}
+	},
+	"x28-thermal": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 6982,
+				"command": [
+					"/bin/sh",
+					"/data/proxy/x28-thermal-loop.sh"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				}
+			}
+		}
+	},
+	"x28-tunnel": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 7668,
+				"command": [
+					"/bin/sh",
+					"-c",
+					"while :; do if [ -f /etc/tunnel.conf ] && [ -x /data/proxy/cloudflared ]; then /data/proxy/cloudflared tunnel run --token \"$(cat /etc/tunnel.conf)\" 2>&1 | logger -t cloudflared; else sleep 60; fi; done"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				}
+			}
+		}
+	},
+	"x28-usage": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 7025,
+				"command": [
+					"/bin/sh",
+					"/data/proxy/usage/usage-collect.sh",
+					"loop"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				}
+			}
+		}
+	},
+	"x28-vps-heal": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 7323,
+				"command": [
+					"/bin/sh",
+					"/data/proxy/x28-vps-heal.sh",
+					"loop"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 0
+				}
+			}
+		}
+	},
+	"x28-watchdog": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 11581,
+				"command": [
+					"/bin/sh",
+					"/data/proxy/operator-watchdog.sh"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 10,
+					"retry": 5
+				}
+			}
+		}
+	},
+	"x28proxy": {
+		"instances": {
+			"instance1": {
+				"running": true,
+				"pid": 7744,
+				"command": [
+					"/data/proxy/mihomo/mihomo",
+					"-d",
+					"/data/proxy/mihomo"
+				],
+				"term_timeout": 5,
+				"respawn": {
+					"threshold": 3600,
+					"timeout": 5,
+					"retry": 5
+				}
+			}
+		}
+	}
+}
