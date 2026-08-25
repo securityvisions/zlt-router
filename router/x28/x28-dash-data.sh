@@ -79,13 +79,24 @@ snap_budget() {
 }
 
 snap_ledger() {
-    local jmonth
-    local greg_today=$(date +%F 2>/dev/null)
-    jmonth=$("$HN_LIB" hn_greg_to_jalali "$greg_today" 2>/dev/null | true)
-    jmonth=$(hn_greg_to_jalali "$greg_today" 2>/dev/null | cut -d- -f1,2 || true)
-    [ -z "$jmonth" ] && echo '[]' && return
+    # single Ledger seam: env override > beside this script > canonical device paths
+    local store="" cand
+    [ -n "${LEDGER_STORE:-}" ] && [ -f "$LEDGER_STORE" ] && store="$LEDGER_STORE"
+    if [ -z "$store" ]; then
+        for cand in "$(dirname "$0")/ledger-store.sh" \
+                    /data/proxy/ledger-store.sh \
+                    /data/proxy/usage/ledger-store.sh; do
+            [ -f "$cand" ] && { store="$cand"; break; }
+        done
+    fi
+    [ -z "$store" ] && { echo '{"error":"ledger store unavailable"}'; return; }
 
-    sh "$(dirname "$0")/../usage/ledger-store.sh" query "$jmonth" 2>/dev/null | \
+    local jmonth
+    local greg_today="${DASH_TODAY:-$(date +%F 2>/dev/null)}"
+    jmonth=$(hn_greg_to_jalali "$greg_today" 2>/dev/null | cut -d- -f1,2 || true)
+    [ -z "$jmonth" ] && { echo '{"error":"jalali date unavailable"}'; return; }
+
+    sh "$store" query "$jmonth" 2>/dev/null | \
     "$JQ" -R -s '
         split("\n") |
         map(select(length > 0)) |

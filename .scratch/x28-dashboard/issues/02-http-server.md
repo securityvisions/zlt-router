@@ -1,14 +1,20 @@
-# 02 — busybox httpd on :8080 (LAN-only)
+# 02 — LAN-only web server on :8080 (mini_httpd)
 
-**What to build:** A busybox httpd instance bound to 192.168.70.1:8080 serving static files from `/data/proxy/dashboard/www/` and CGI scripts from `/data/proxy/dashboard/cgi/`. Runs as a procd service (`x28-dashboard`). The vendor mini_httpd on :80/:443 is completely untouched. LAN-only enforced by binding + firewall rule addition.
+**What to build:** A second mini_httpd instance bound to 192.168.70.1:8080 serving static files from `/data/proxy/dashboard/www/` and CGI scripts from `/data/proxy/dashboard/cgi/`. Runs as a procd service (`x28-dashboard`). The vendor mini_httpd on :80/:443 is completely untouched. LAN-only enforced by binding + firewall rule addition.
 
-**Blocked by:** None — can start immediately.
+**Note — busybox httpd is NOT available on this device:** the vendor busybox build has no `httpd` applet compiled in (`busybox httpd` → `httpd: applet not found`, exit 127). The repo's canonical `router/x28/x28-dashboard.init` therefore reuses the proven `/usr/bin/mini_httpd`. A live-config drift to `busybox httpd` broke the dashboard (crash-loop, no :8080 listener) and was reverted 2026-08-25.
+
+**Blocked by:** None — mini_httpd binary already present (vendor uses it).
 
 **Status:** resolved
 
-- [ ] busybox httpd running on 192.168.70.1:8080 via procd init script
-- [ ] Serves static files from document root; CGI enabled for action endpoints
-- [ ] harden.sh extended: port 8080 added to X28_MGMT firewall chain (WAN drops)
-- [ ] Vendor mini_httpd on :80/:443 confirmed still working after deployment
-- [ ] Dashboard reachable from workstation browser at http://192.168.70.1:8080
+- [x] mini_httpd running on 192.168.70.1:8080 via procd init script
+- [x] Serves static files from document root; CGI enabled for action endpoints
+- [x] harden.sh extended: port 8080 added to X28_MGMT firewall chain (WAN drops)
+- [x] Vendor mini_httpd on :80/:443 confirmed still working after deployment
+- [x] Dashboard reachable from workstation browser at http://192.168.70.1:8080
 - [ ] Rollback verified: stop service + remove init = zero trace
+
+## Comments
+
+> 2026-08-25 (outage fix): the busybox-httpd drift was reverted to the canonical mini_httpd init and all boxes above re-verified live **except rollback**, which was not re-exercised — left unticked until the next rollback drill.

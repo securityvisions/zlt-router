@@ -79,6 +79,40 @@ ssh_x28 "[ -f /data/proxy/usage/billing.conf ] || printf 'RATE_FULL=7700\nRATE_F
 push_x28 "$HERE/x28-usage.init" /etc/init.d/x28-usage
 ssh_x28 "chmod +x /etc/init.d/x28-usage && /etc/init.d/x28-usage enable && /etc/init.d/x28-usage restart"
 
+echo "== X28: ledger store (single aggregation seam) =="
+push_x28 "$HERE/ledger-store.sh" /data/proxy/ledger-store.sh
+ssh_x28 "chmod +x /data/proxy/ledger-store.sh"
+
+echo "== X28: dashboard (LAN web UI + snapshot generator) =="
+ssh_x28 "mkdir -p /data/proxy/dashboard/www /data/proxy/dashboard/cgi /data/proxy/dashboard/data"
+push_x28 "$HERE/dashboard/index.html" /data/proxy/dashboard/www/index.html
+# served CGI lives in the doc root's real cgi-bin dir (mini_httpd cgipat=cgi-bin/*).
+# www/cgi-bin sits on persistent /data, so pushed scripts survive reboots; the
+# dashboard/cgi/ copy is the staging original the bot-era tooling references.
+for base in x28-dash-actions.sh ledger-range.sh ledger-year.sh outage-timeline.sh proxy-mgmt.sh service-status.sh trend-data.sh; do
+  push_x28 "$HERE/dashboard/cgi/$base" "/data/proxy/dashboard/cgi/$base"
+  push_x28 "$HERE/dashboard/cgi/$base" "/data/proxy/dashboard/www/cgi-bin/$base"
+  ssh_x28 "chmod +x /data/proxy/dashboard/cgi/$base /data/proxy/dashboard/www/cgi-bin/$base"
+done
+# snapshots dir is served to the page as www/api
+ssh_x28 "ln -sfn /data/proxy/dashboard/data /data/proxy/dashboard/www/api"
+# snapshot generator + its procd service
+push_x28 "$HERE/x28-dash-data.sh" /data/proxy/x28-dash-data.sh
+ssh_x28 "chmod +x /data/proxy/x28-dash-data.sh"
+push_x28 "$HERE/x28-dash-data.init" /etc/init.d/x28-dash-data
+ssh_x28 "chmod +x /etc/init.d/x28-dash-data && /etc/init.d/x28-dash-data enable && /etc/init.d/x28-dash-data restart"
+# LAN web server (second mini_httpd instance on :8080)
+push_x28 "$HERE/x28-dashboard.init" /etc/init.d/x28-dashboard
+ssh_x28 "chmod +x /etc/init.d/x28-dashboard && /etc/init.d/x28-dashboard enable && /etc/init.d/x28-dashboard restart"
+
+echo "== X28: dashboard post-deploy smoke =="
+ssh_x28 'sleep 2
+  p=$(curl -s -m 5 -o /dev/null -w "%{http_code}" http://192.168.70.1:8080/)
+  a=$(curl -s -m 5 -o /dev/null -w "%{http_code}" http://192.168.70.1:8080/api/status.json)
+  v=$(curl -s -m 5 -o /dev/null -w "%{http_code}" http://192.168.70.1/)
+  echo "smoke: page=$p api=$a vendor80=$v"
+  [ "$p" = "200" ] && [ "$a" = "200" ] || { echo "SMOKE FAILED"; exit 1; }'
+
 echo "== X28: harden at boot =="
 ssh_x28 "grep -q '/data/proxy/harden.sh' /etc/rc.local || sed -i 's|^exit 0$|sh /data/proxy/harden.sh\nexit 0|' /etc/rc.local"
 ssh_x28 "sh /data/proxy/harden.sh"

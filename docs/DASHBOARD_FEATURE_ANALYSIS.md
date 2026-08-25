@@ -64,7 +64,7 @@ Give the owner a single web page where they can see everything about their netwo
 | Budget feature working reliably | User ("budget feature not working") | ✅ Fixed (grep -oP → sed, cache repopulated) |
 | Nothing breaks the router | User (repeated emphasis) | ✅ Enforced (additive-only architecture) |
 | Data survives reboot | User (implied) | ✅ owners-d + ledger persist |
-| Dashboard always available when home | User (implied) | ✅ LAN-only busybox httpd |
+| Dashboard always available when home | User (implied) | ✅ LAN-only mini_httpd (:8080; busybox httpd applet unavailable on device) |
 
 ### Theme: Polish & UX
 

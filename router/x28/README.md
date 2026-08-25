@@ -20,6 +20,12 @@ smart edge while keeping the AX3000T as the policy/DNS/monitoring brain.
 | `x28/deploy.sh` | repo | — | push the whole subsystem to both routers |
 | `x28/tproxy-enable.sh` / `tproxy-disable.sh` | X28 | `/data/proxy/` | **opt-in** transparent proxy for the backup/guest network (excludes the AX3000T) |
 | `x28/split-proxy.json`, `stage2-enable.sh` / `stage2-disable.sh` | X28 | `/data/proxy/` | **opt-in** Stage-2: X28 as primary proxy edge with domestic/international split |
+| `x28/ledger-store.sh` | X28 | `/data/proxy/ledger-store.sh` | single Ledger aggregation seam (query/day-rows/rollup) |
+| `x28/x28-dash-data.sh` + `x28-dash-data.init` | X28 | `/data/proxy/x28-dash-data.sh`, `/etc/init.d/x28-dash-data` | dashboard JSON snapshot generator (procd, 60 s loop) |
+| `x28/x28-dashboard.init` | X28 | `/etc/init.d/x28-dashboard` | LAN-only web UI: second mini_httpd on 192.168.70.1:8080 |
+| `x28/dashboard/index.html` | X28 | `/data/proxy/dashboard/www/index.html` | dashboard frontend (vanilla HTML/CSS/JS) |
+| `x28/dashboard/cgi/*.sh` | X28 | `/data/proxy/dashboard/{cgi,www/cgi-bin}/` | CGI actions + range/year/trend endpoints (pushed to both targets) |
+| `x28/x28-health.sh` | X28 | `/data/proxy/x28-health.sh` | one-command health gate (DNS/proxy/chains/services/dashboard) |
 
 ## How it fits together
 
