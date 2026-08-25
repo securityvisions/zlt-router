@@ -13,6 +13,17 @@ geodata-loader: standard
 geo-auto-update: false
 external-controller: 127.0.0.1:9090
 
+# transparent userspace path for Steam/Valve traffic (no xt_TPROXY on this
+# kernel): steam-tun-enable.sh routes the Valve CIDRs via this device; the
+# engine's rules proxy them. Scoped — everything else keeps its normal path.
+tun:
+  enable: true
+  stack: gvisor
+  auto-route: false
+  auto-detect-interface: true
+  device: utun
+  dns-hijack: []
+
 dns:
   enable: true
   listen: 127.0.0.1:5353
@@ -101,6 +112,15 @@ proxy-groups:
     proxies:
       - auto        # owned nodes — default, pinned by supervisor
       - rescue      # admitted collected nodes (rescue-pool)
+
+rule-providers:
+  # Valve/Steam server ranges — pins Steam voice (UDP via the tun path) to a
+  # chosen node; steam-node.sh switches the target below.
+  steam-voice:
+    type: file
+    behavior: classical
+    path: /data/proxy/mihomo/steam-voice.yaml
+
 rules:
   # Iranian academic portals (SRBIAU/IAU family) — pinned DIRECT by domain:
   # foreign CDN fronting defeats GEOIP,IR, and university SSO rejects
@@ -119,4 +139,5 @@ rules:
   - GEOSITE,google,auto
   - GEOSITE,instagram,auto
   - GEOSITE,facebook,auto
+  - RULE-SET,steam-voice,hy2
   - MATCH,world
