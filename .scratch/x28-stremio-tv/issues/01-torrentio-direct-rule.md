@@ -15,7 +15,7 @@ general rules so *.strem.fun egresses direct.
 - [x] `DOMAIN-SUFFIX,strem.fun,DIRECT` inserted in live config above GEOSITE rules + hot-reload (HTTP 204, no engine restart)
 - [x] Verified: same stream-API request through the LAN path now 200 (~1.2 s)
 - [x] Rule mirrored in repo config template for rebuild parity
-- [ ] Human test on TV: stream list appears, playback works (P2P/uTP is a separate follow-up if playback stalls)
+- [x] Human test on TV: stream list appears (user clicks qualities) — playback is a separate failure, see 02
 
 ## Answer
 
@@ -26,3 +26,7 @@ GEOIP,IR rule. BitTorrent TCP peers from the TV were observed healthy via the
 tunnel during diagnosis (port 6881 flows); if the list appears but playback
 stalls, the follow-up options are per-device tunnel routing or a debrid
 service.
+
+## Comments
+
+> 2026-08-26 — playback phase diagnosed: TV clicks a quality → "can't stream". Evidence: zero payload bytes on every TV peer flow (all ~5-packet dead handshakes via tunnel); differential probes against the exact peers ambiguous but pointless — peers refuse the VPS datacenter IP and uTP/DHT rides the carrier raw (known-filtered international UDP). Conclusion: P2P is structurally unworkable on this network shape; routing tricks (per-device UDP tunnel) would still fail and endanger the VPS (copyright abuse). Recommendation: Real-Debrid/AllDebrid + Torrentio debrid mode — verified both services answer 200 on tunnel AND direct paths. Steps handed to user.
