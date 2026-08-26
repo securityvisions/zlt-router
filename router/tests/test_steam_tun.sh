@@ -110,4 +110,13 @@ else
     printf '  enable:  %s\n  disable: %s\n  yaml:    %s\n' "$a" "$b" "$c"
 fi
 
+# ── keeper: loop + init exist and wire the enable script continuously ────────
+LOOP="$HERE/../x28/steam-tun-loop.sh"
+INIT="$HERE/../x28/x28-steam-routes.init"
+[ -f "$LOOP" ] && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - keeper loop script missing"; }
+grep -qF "steam-tun-enable.sh" "$LOOP" 2>/dev/null && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - loop does not invoke enable script"; }
+grep -qF "STEAM_TUN_KEEPALIVE" "$LOOP" 2>/dev/null && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - loop lacks interval seam"; }
+[ -f "$INIT" ] && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - keeper init missing"; }
+grep -qF "steam-tun-loop.sh" "$INIT" 2>/dev/null && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - init does not run the loop"; }
+
 summary

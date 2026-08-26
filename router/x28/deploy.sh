@@ -33,7 +33,7 @@ push_ax()   { sshpass -p "$AX3T_PASS" ssh $SSH_OPTS -o PubkeyAuthentication=no "
 echo "== X28: scripts =="
 for f in x28lib.sh linkstate.sh harden.sh reselect.sh x28-health.sh dns-fix.sh \
          tg-notify.sh x28-status.sh x28-boot-alert.sh operator-watchdog.sh x28-bot.sh probe-service.sh telemetry-store.sh x28-budget.sh x28-outage-ledger.sh x28-people.sh x28-owners.sh x28-digest.sh x28-wifi.sh \
-         steam-node.sh steam-tun-enable.sh steam-tun-disable.sh udp-diag.sh; do
+         steam-node.sh steam-tun-enable.sh steam-tun-disable.sh steam-tun-loop.sh udp-diag.sh; do
   push_x28 "$HERE/$f" "/data/proxy/$f"; ssh_x28 "chmod +x /data/proxy/$f"
 done
 # hnlib is shared (AX + X28)
@@ -105,6 +105,10 @@ ssh_x28 "chmod +x /etc/init.d/x28-dash-data && /etc/init.d/x28-dash-data enable 
 # LAN web server (second mini_httpd instance on :8080)
 push_x28 "$HERE/x28-dashboard.init" /etc/init.d/x28-dashboard
 ssh_x28 "chmod +x /etc/init.d/x28-dashboard && /etc/init.d/x28-dashboard enable && /etc/init.d/x28-dashboard restart"
+# Steam tun-route keeper: vendor WAN events rebuild policy table 17000 and
+# wipe the Valve routes; the loop re-asserts them (see steam-tun-loop.sh)
+push_x28 "$HERE/x28-steam-routes.init" /etc/init.d/x28-steam-routes
+ssh_x28 "chmod +x /etc/init.d/x28-steam-routes && /etc/init.d/x28-steam-routes enable && /etc/init.d/x28-steam-routes restart"
 
 echo "== X28: dashboard post-deploy smoke =="
 ssh_x28 'sleep 2
