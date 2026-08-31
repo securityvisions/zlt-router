@@ -10,7 +10,7 @@
 One cellular CPE acts as the entire home network's WAN edge, LAN gateway, WiFi AP, transparent-proxy engine, DNS/DHCP server, monitoring plane, and Telegram control plane:
 
 - **ZLT X28** (`192.168.70.1`) — MediaTek MT6890 5G CPE running vendor-built **OpenWrt 19.07-SNAPSHOT** (`r0-aefbe500`, target `mt6890/evb6890v1_64_cpe_nand`, arch `aarch64_cortex-a55_neon-vfpv4`, kernel `4.19.205`, BusyBox 1.30.1). Holds the **Samantel SIM**, camps on **MCI 5G NSA (PLMN 43211)**, falls back to **Rightel (43220)**. Boot slot `a` of an A/B layout (`bootslot=a` on kernel cmdline).
-- A second router, **Xiaomi AX3000T** (`192.168.1.1`), is **bricked / offline** (ping from workstation: unreachable). All former AX3000T duties (WiFi, PassWall, nlbwmon, cron watchers, Router API) are dormant; the X28 absorbed them.
+- A second router, **Xiaomi AX3000T** (`192.168.1.1`), was **bricked** (kernel-stage boot loop; no failsafe reachable). Unbricked 2026-08-31 via stock-bootloader TFTP recovery → stock firmware 1.0.98 (RD03) at `192.168.31.1`; OpenWrt 25.12.5 + automation **not yet reinstalled**. All former AX3000T duties (WiFi, PassWall, nlbwmon, cron watchers, Router API) remain dormant; the X28 absorbed them.
 - A **VPS** (`85.121.124.158`) terminates the censorship-bypass tunnel: sing-box core behind the **s-ui** panel (`:2095`), inbound **VLESS+Reality :443** and **Hysteria2 :31800**.
 
 Everything custom lives under `/data/proxy` on the X28 and mirrors to `~/home-network/router/x28/` in git (branch `main`, HEAD `66690e4` at inspection).
