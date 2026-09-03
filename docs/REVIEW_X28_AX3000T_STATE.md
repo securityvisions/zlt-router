@@ -182,3 +182,22 @@ own spec — including fixing the original brick's cause (the auto-reboot logic)
 
 **Leave alone:** the X28's mihomo/bot/ledger/telemetry/rescue/thermal/adblock stack; the
 AX3000T's clean base (no packages until a concrete need).
+
+## FINAL STATE (2026-09-03, complete)
+
+Two additional root-causes found and fixed on the AX3000T during bring-up:
+1. **Regulatory domain unset** (country 00) — modern OpenWrt refuses to create AP
+   interfaces without a country. Fix: `uci set wireless.radio{0,1}.country='IR'`.
+2. **The wifi-iface `disabled='1'` flags** — enabling the *radios* is not enough; each
+   *interface* (`default_radio0/1`) carries its own disabled flag that was never cleared.
+   Fix: `uci set wireless.default_radio{0,1}.disabled=0`.
+
+**Final verified state:** OpenWrt 25.12.5; LAN 192.168.1.1/24 (br-lan = lan2+lan3+lan4+
+wan-port+WiFi); WAN = lan4 → X28 (192.168.70.171, DHCP, internet verified); WiFi
+**XI-2G** (2.4G ch1) + **XI-5G** (5G ch36/80MHz), WPA2 `xirouter123`, both broadcasting
+and confirmed visible from a client; SSH root@192.168.1.1 / `xirouter123`; LuCI on :80.
+
+X28 note: the operator-watchdog is resumed and the dns-fix.sh HUP patch is deployed
+(backup: /data/proxy/dns-fix.sh.pre-hup.bak). The router-bridge temp IP
+(192.168.1.254 on the X28's br0) and the fw4 rule (Allow-X28-HTTP, WAN:80 from
+192.168.1.0/24) were left in place for remote maintenance — review before hardening.

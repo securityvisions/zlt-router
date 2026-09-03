@@ -96,11 +96,18 @@ fi
 
 after=$(md5sum "$CONF" 2>/dev/null | cut -d' ' -f1)
 if [ "$before" != "$after" ]; then
-    pkill -9 dnsmasq 2>/dev/null || true
-    sleep 1
-    dnsmasq -C "$CONF" -x /tmp/dnsmasq.pid >/dev/null 2>&1 &
-    sleep 2
-    echo "dns-fix: mode=$mode (dnsmasq restarted)"
+    # HUP instead of pkill+relaunch: dnsmasq re-reads the config seamlessly
+    # (DHCP leases and the listening socket survive). The vendor's lan_mgr
+    # rewrites $CONF every ~60 s, so a full restart here would churn DHCP
+    # once a minute. Only cold-start when no dnsmasq is running.
+    p=$(pidof dnsmasq 2>/dev/null)
+    if [ -n "$p" ]; then
+        kill -HUP $p 2>/dev/null || true
+        echo "dns-fix: mode=$mode (dnsmasq HUP re-read)"
+    else
+        dnsmasq -C "$CONF" -x /tmp/dnsmasq.pid >/dev/null 2>&1 &
+        echo "dns-fix: mode=$mode (dnsmasq launched)"
+    fi
 else
     echo "dns-fix: mode=$mode (no change)"
 fi
