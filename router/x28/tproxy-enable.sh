@@ -12,10 +12,9 @@
 
 set -eu
 
-EXCLUDE="${X28_EXCLUDE:-}"                         # set only for hosts running their OWN proxy
-                                                   # (2026-09: the AX3000T is a clean OpenWrt router and
-                                                   # MUST NOT be excluded — the house's circumvention rides
-                                                   # the X28 tproxy via the AX3000T's WAN IP)
+EXCLUDE="${X28_EXCLUDE:-192.168.70.2}"          # the AX3000T's WAN IP (runs its own independent sing-box)
+                                                   # Excluded from X28 tproxy to avoid double-proxying;
+                                                   # AX3000T terminates its own VLESS/Reality/Hy2 directly to VPS.
 LAN="${X28_LAN_SUBNET:-192.168.70.0/24}"
 TPROXY_PORT="${X28_TPROXY_PORT:-12345}"
 XRAY_CONF="${XRAY_CONF:-/data/proxy/sing-box/xray-proxy.json}"
