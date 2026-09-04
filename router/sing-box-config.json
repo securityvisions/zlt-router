@@ -6,6 +6,17 @@
       { "type": "https", "tag": "dns-proxy", "server": "8.8.8.8", "detour": "auto" }
     ],
     "rules": [
+      {
+        "domain_suffix": [
+          "ra3battle.net",
+          "ra3battle.cn",
+          "cor-games.com",
+          "gamespy.com",
+          "gamestats.com",
+          "cnc-online.net"
+        ],
+        "server": "dns-proxy"
+      },
       { "rule_set": ["geosite-ir"], "server": "dns-direct" }
     ],
     "final": "dns-proxy",
@@ -23,6 +34,13 @@
       "tag": "redir-in",
       "listen": "0.0.0.0",
       "listen_port": 12345
+    },
+    {
+      "type": "tproxy",
+      "tag": "tproxy-in",
+      "listen": "0.0.0.0",
+      "listen_port": 12346,
+      "network": "udp"
     }
   ],
   "outbounds": [
@@ -72,6 +90,21 @@
       { "protocol": "dns", "action": "hijack-dns" },
       { "ip_is_private": true, "outbound": "direct" },
       { "ip_cidr": ["85.121.124.158/32", "188.114.98.0/24", "216.45.52.132/32"], "outbound": "direct" },
+      {
+        "domain_suffix": [
+          "ra3battle.net",
+          "ra3battle.cn",
+          "cor-games.com",
+          "gamespy.com",
+          "gamestats.com",
+          "cnc-online.net"
+        ],
+        "outbound": "auto"
+      },
+      {
+        "port": [6667, 28910, 29900, 29901, 27900, 27901, 6500, 8086, 8087, 13139],
+        "outbound": "auto"
+      },
       { "rule_set": ["geosite-ir"], "outbound": "direct" },
       { "rule_set": ["geoip-ir"], "outbound": "direct" },
       { "domain_suffix": ["saymyname.website", "strem.fun", "pirategames.ir"], "outbound": "direct" },
