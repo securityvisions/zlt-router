@@ -1,0 +1,100 @@
+{
+  "log": { "level": "warn", "timestamp": true },
+  "dns": {
+    "servers": [
+      { "type": "udp", "tag": "dns-direct", "server": "192.168.70.1" },
+      { "type": "https", "tag": "dns-proxy", "server": "8.8.8.8", "detour": "auto" }
+    ],
+    "rules": [
+      { "rule_set": ["geosite-ir"], "server": "dns-direct" }
+    ],
+    "final": "dns-proxy",
+    "strategy": "ipv4_only"
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "interface_name": "singtun",
+      "address": ["172.19.0.1/30"],
+      "mtu": 1400,
+      "auto_route": true,
+      "auto_redirect": true,
+      "strict_route": false,
+      "stack": "mixed"
+    }
+  ],
+  "outbounds": [
+    { "type": "urltest", "tag": "auto", "outbounds": ["vps-reality", "cdn-ws", "hy2", "babaii"], "url": "https://www.gstatic.com/generate_204", "interval": "1m", "tolerance": 100 },
+    {
+      "type": "vless",
+      "tag": "vps-reality",
+      "server": "85.121.124.158",
+      "server_port": 443,
+      "uuid": "5ee543a7-9a11-4d0d-b3e6-153945539f60",
+      "packet_encoding": "xudp",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.bing.com",
+        "utls": { "enabled": true, "fingerprint": "chrome" },
+        "reality": {
+          "enabled": true,
+          "public_key": "fIZg5mhL-DlLT03aBciQw94x6hPOe2_T6ivsRHRyMWA",
+          "short_id": "7fa7e3ce4165cba3"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "cdn-ws",
+      "server": "188.114.98.0",
+      "server_port": 443,
+      "uuid": "5ee543a7-9a11-4d0d-b3e6-153945539f60",
+      "tls": { "enabled": true, "server_name": "cdn.dmbz.ir" },
+      "transport": { "type": "ws", "path": "/v1/status", "headers": { "Host": "cdn.dmbz.ir" } }
+    },
+    {
+      "type": "hysteria2",
+      "tag": "hy2",
+      "server": "85.121.124.158",
+      "server_port": 31800,
+      "password": "p4DyJIAuyp",
+      "obfs": { "type": "salamander", "password": "bwne4pabf0tzt00f" },
+      "tls": { "enabled": true, "insecure": true }
+    },
+    {
+      "type": "vless",
+      "tag": "babaii",
+      "server": "216.45.52.132",
+      "server_port": 23993,
+      "uuid": "c5716edc-2be0-40d8-cb8a-866f5ce785b6",
+      "flow": "xtls-rprx-vision",
+      "tls": { "enabled": true, "utls": { "enabled": true, "fingerprint": "chrome" } }
+    },
+    { "type": "direct", "tag": "direct" }
+  ],
+  "route": {
+    "default_domain_resolver": { "server": "dns-direct" },
+    "rules": [
+      { "action": "sniff" },
+      { "protocol": "dns", "action": "hijack-dns" },
+      { "ip_is_private": true, "outbound": "direct" },
+      { "rule_set": ["geosite-ir"], "outbound": "direct" },
+      { "rule_set": ["geoip-ir"], "outbound": "direct" },
+      { "domain_suffix": ["saymyname.website", "strem.fun", "pirategames.ir"], "outbound": "direct" },
+      { "ip_cidr": ["185.137.27.122/32"], "outbound": "direct" },
+      { "rule_set": ["geosite-youtube", "geosite-google", "geosite-instagram", "geosite-facebook"], "outbound": "auto" }
+    ],
+    "rule_set": [
+      { "type": "local", "tag": "geosite-ir", "format": "binary", "path": "/etc/sing-box/geosite-ir.srs" },
+      { "type": "local", "tag": "geoip-ir", "format": "binary", "path": "/etc/sing-box/geoip-ir.srs" },
+      { "type": "local", "tag": "geosite-youtube", "format": "binary", "path": "/etc/sing-box/geosite-youtube.srs" },
+      { "type": "local", "tag": "geosite-google", "format": "binary", "path": "/etc/sing-box/geosite-google.srs" },
+      { "type": "local", "tag": "geosite-instagram", "format": "binary", "path": "/etc/sing-box/geosite-instagram.srs" },
+      { "type": "local", "tag": "geosite-facebook", "format": "binary", "path": "/etc/sing-box/geosite-facebook.srs" }
+    ],
+    "final": "auto",
+    "auto_detect_interface": true
+  },
+  "experimental": { "cache_file": { "enabled": true, "path": "/etc/sing-box/cache.db" } }
+}
