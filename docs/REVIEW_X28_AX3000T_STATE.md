@@ -213,3 +213,90 @@ X28 note: the operator-watchdog is resumed and the dns-fix.sh HUP patch is deplo
   sizing: 61 Mbps down through the AX3000T→X28→cellular.
 - X28 dns-fix HUP patch validation: dnsmasq PID unchanged (10933) across the post-patch
   watchdog cycles; zero restart lines. The 24 h passive watch continues.
+
+---
+
+# CAPABILITY ANALYSIS: what lives where, what should migrate (2026-09-03)
+
+## The two devices' actual capabilities today
+
+**X28 (ZLT) — verified running:** cellular WAN (MCI 5G, the only internet path);
+mihomo proxy (SOCKS 1080 + transparent tproxy interception — the house's circumvention,
+verified working from XI WiFi); Telegram bot (alive); dashboards + telemetry + ledgers +
+budget/owner stack; 10 service loops (thermal, usage, dash-data, vps-heal, adblock,
+drift, maint, rescue, bot-supervise, +the resumed operator-watchdog); dnsmasq
+(DHCP+DNS+adblock+anti-poisoning for 192.168.70.0/24); its own WiFi (ZL-5G/ZL-2.4G);
+operator stickiness + outage ledger + bearer bounce; hardening; legacy v2raya + sing-box
+trees (~120 MB, unused). RAM 107 MB free / 643 MB; /data 57 %; 66-68 °C.
+
+**AX3000T — verified running:** clean OpenWrt 25.12.5; LAN br-lan 192.168.1.1/24
+(wired lan2-4 + WiFi XI-2G/XI-5G, WPA2); WAN lan4 → X28 (192.168.70.171, DHCP);
+SQM cake 50/15 on the WAN; firewall (default, one fw4 hole pending removal);
+NTP+timezone fixed; LuCI + dropbear; zero automation packages. RAM 139 MB free /
+239 MB; overlay 57.5 MB free; 58 °C; load 0.00.
+
+## Capability-by-capability: where it belongs, migrate or not
+
+| Capability | Runs on | Best home | Migrate? | Why |
+|---|---|---|---|---|
+| Cellular WAN + operator stickiness + outage ledger | X28 | X28 (hardware) | **no** | the modem is in the X28; the watchdog knows its quirks |
+| Circumvention (mihomo/tproxy) | X28 | X28 | **no (now)** | working today, verified from XI; zero-migration = zero-outage. Revisit as PassWall-on-AX3000T only after the brick-cause fix, as its own project |
+| House WiFi (XI-2G/XI-5G) | AX3000T | AX3000T (WiFi 6 radios) | **done** | the AX3000T's radios are the house's best |
+| House NAT/DHCP/DNS | AX3000T (NAT+DHCP, DNS forwards to X28) | AX3000T | **done** | clean; adblock+anti-poisoning inherited via forwarding to the X28's dnsmasq |
+| SQM/bufferbloat | AX3000T (cake on lan4) | AX3000T | **done** | shapes the house↔X28 hop — the right hop |
+| Per-device usage count | AX3000T (to add: nlbwmon) | AX3000T | **add now** | data accumulates from day one; feeds the household ledgers later |
+| Telegram bot (control plane) | X28 | X28 | **no** | it grew into the X28's feature set (budget/people/ledger); migrating risks the control plane for zero gain |
+| Dashboards/telemetry/ledgers | X28 | X28 | **no** | the household data lives there; moving it breaks history |
+| AX3000T health/usage visibility | — | X28 (as a feed) | **add later** | alerting-only monitor + usage feed into the X28's dashboards |
+| Ad blocking | X28 (dnsmasq, inherited by forwarding) | X28 | **no** | already applies to AX3000T clients through the DNS chain |
+| Rescue/proxy-origin pool (collected nodes) | X28 | X28 | **no** | tied to the tunnel stack |
+| Legacy cleanup (v2raya, sing-box/xray trees ~120 MB) | X28 | X28 | **optional, later** | frees /data; only after confirming nothing references them |
+
+## DECISION: no brain migration. The clean architecture is:
+
+    X28  = WAN edge + control plane
+           (cellular, circumvention proxy, DNS/adblock, bot, dashboards,
+            ledgers, watchdogs — the "services box")
+    AX3000T = house network appliance
+           (WiFi XI-2G/XI-5G, switching, NAT, SQM, per-device usage — the "house box")
+
+    Interface between them: one cable (AX3000T lan4 → X28 LAN), one DHCP lease,
+    one dependency (the X28's tproxy intercepts the AX3000T's WAN IP — the house's
+    circumvention). Everything else is independent.
+
+**Why this beats migrating the brain back:** the control plane (bot/dash/ledgers) is
+deeply integrated with the X28's stack and is the household's critical infrastructure —
+migrating it risks outages for zero functional gain. The AX3000T's clean base is a
+feature: new house-facing features are additive packages on a known-clean system, and
+the X28's services remain untouched by anything the AX3000T does.
+
+## THE PLAN (zero-outage, each step verified before the next)
+
+**Phase A — AX3000T: per-device usage (15 min, no outage)**
+1. `apk add nlbwmon` → configure on br-lan → verify per-MAC counters accumulate.
+2. Config snapshot refresh → `backup/` folder.
+
+**Phase B — X28: leftover cleanup (2 min, no outage):**
+3. Remove the temp br0 alias `192.168.1.254/24` if it reappeared (was re-added for the
+   file transfer).
+
+**Phase C — X28: dns-fix validation window (passive, 24-48 h):**
+4. Watch: dnsmasq PID stable, watchdog.log advancing, HUP re-reads instead of restarts.
+   The patch is deployed and holding so far (PID 10933 unchanged across cycles).
+
+**Phase D — household cutover (user-paced):**
+5. Move devices to XI-5G/XI-2G as convenient.
+6. Optional once stable: disable the X28's own WiFi (less RF interference).
+
+**Phase E — alerting-only health monitor (30 min, no outage):**
+7. Small script on the X28: probe the AX3000T + its internet every 5 min → Telegram
+   alert on failure. NEVER auto-act (the original brick's lesson).
+
+**Phase F — deferred projects (each its own spec first):**
+8. PassWall-on-AX3000T migration (precondition: identify + fix the original brick's
+   auto-reboot cause; then a maintenance-window cutover plan).
+9. Remote access (cloudflared).
+10. X28 legacy cleanup (v2raya + sing-box/xray trees, ~120 MB on /data).
+
+**Leave alone:** everything listed under "no" in the table, plus the X28's hardening
+posture and the break-glass telnet (it enabled this recovery).
