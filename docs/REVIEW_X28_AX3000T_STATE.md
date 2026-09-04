@@ -201,3 +201,15 @@ X28 note: the operator-watchdog is resumed and the dns-fix.sh HUP patch is deplo
 (backup: /data/proxy/dns-fix.sh.pre-hup.bak). The router-bridge temp IP
 (192.168.1.254 on the X28's br0) and the fw4 rule (Allow-X28-HTTP, WAN:80 from
 192.168.1.0/24) were left in place for remote maintenance — review before hardening.
+
+## EXECUTED (2026-09-04, per the plan above)
+
+- AX3000T clock: set from the workstation epoch; timezone Asia/Tehran (<+0330>-3:30);
+  sysntpd enabled+restarted (busybox ntpd maintains via the pool servers).
+- fw4 rule Allow-X28-HTTP: DELETED (the file-transfer door closed; nft chain verified 0
+  references to 192.168.31.0/24).
+- SQM/cake: installed (apk sqm-scripts), active on lan4, 50M down / 15M up, cake with
+  nat dual-dsthost/dual-srchost, overhead 44, ethernet linklayer. Measured path before
+  sizing: 61 Mbps down through the AX3000T→X28→cellular.
+- X28 dns-fix HUP patch validation: dnsmasq PID unchanged (10933) across the post-patch
+  watchdog cycles; zero restart lines. The 24 h passive watch continues.
