@@ -75,8 +75,10 @@ sed -i '\|^server=127\.0\.0\.1#5353$|d; \|^no-resolv$|d; \|^server=$|d; \|^serve
 
 # Attach the selected upstream
 if [ "$mode" = "tunnel" ]; then
+    sed -i 's|^resolv-file=|#resolv-file=|g' "$CONF"
     printf '\nserver=127.0.0.1#5353\nno-resolv\n' >> "$CONF"
 else
+    sed -i 's|^#resolv-file=|resolv-file=|g' "$CONF"
     isp=$(awk '/^nameserver/{print $2; exit}' /tmp/resolv.conf 2>/dev/null)
     [ -n "$isp" ] || isp=10.201.112.252   # boot race: resolv.conf still empty
     printf '\nno-resolv\nserver=%s\n' "$isp" >> "$CONF"
