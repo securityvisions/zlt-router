@@ -13,19 +13,20 @@
   },
   "inbounds": [
     {
-      "type": "tun",
-      "tag": "tun-in",
-      "interface_name": "singtun",
-      "address": ["172.19.0.1/30"],
-      "mtu": 1400,
-      "auto_route": true,
-      "auto_redirect": true,
-      "strict_route": false,
-      "stack": "mixed"
+      "type": "socks",
+      "tag": "socks-in",
+      "listen": "127.0.0.1",
+      "listen_port": 1080
+    },
+    {
+      "type": "redirect",
+      "tag": "redir-in",
+      "listen": "0.0.0.0",
+      "listen_port": 12345
     }
   ],
   "outbounds": [
-    { "type": "urltest", "tag": "auto", "outbounds": ["vps-reality", "cdn-ws", "hy2", "babaii"], "url": "https://www.gstatic.com/generate_204", "interval": "1m", "tolerance": 100 },
+    { "type": "urltest", "tag": "auto", "outbounds": ["hy2", "vps-reality", "cdn-ws"], "url": "https://www.gstatic.com/generate_204", "interval": "1m", "tolerance": 100 },
     {
       "type": "vless",
       "tag": "vps-reality",
@@ -62,15 +63,6 @@
       "obfs": { "type": "salamander", "password": "bwne4pabf0tzt00f" },
       "tls": { "enabled": true, "insecure": true }
     },
-    {
-      "type": "vless",
-      "tag": "babaii",
-      "server": "216.45.52.132",
-      "server_port": 23993,
-      "uuid": "c5716edc-2be0-40d8-cb8a-866f5ce785b6",
-      "flow": "xtls-rprx-vision",
-      "tls": { "enabled": true, "utls": { "enabled": true, "fingerprint": "chrome" } }
-    },
     { "type": "direct", "tag": "direct" }
   ],
   "route": {
@@ -79,6 +71,7 @@
       { "action": "sniff" },
       { "protocol": "dns", "action": "hijack-dns" },
       { "ip_is_private": true, "outbound": "direct" },
+      { "ip_cidr": ["85.121.124.158/32", "188.114.98.0/24", "216.45.52.132/32"], "outbound": "direct" },
       { "rule_set": ["geosite-ir"], "outbound": "direct" },
       { "rule_set": ["geoip-ir"], "outbound": "direct" },
       { "domain_suffix": ["saymyname.website", "strem.fun", "pirategames.ir"], "outbound": "direct" },
