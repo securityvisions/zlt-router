@@ -12,7 +12,10 @@
 
 set -eu
 
-EXCLUDE="${X28_EXCLUDE:-192.168.70.167}"          # the AX3000T's WAN IP
+EXCLUDE="${X28_EXCLUDE:-}"                         # set only for hosts running their OWN proxy
+                                                   # (2026-09: the AX3000T is a clean OpenWrt router and
+                                                   # MUST NOT be excluded — the house's circumvention rides
+                                                   # the X28 tproxy via the AX3000T's WAN IP)
 LAN="${X28_LAN_SUBNET:-192.168.70.0/24}"
 TPROXY_PORT="${X28_TPROXY_PORT:-12345}"
 XRAY_CONF="${XRAY_CONF:-/data/proxy/sing-box/xray-proxy.json}"
@@ -69,9 +72,15 @@ sleep 2
 # REDIRECT LAN TCP (excluding the AX3000T) into the transparent inbound.
 iptables -t nat -N X28_TPROXY 2>/dev/null || iptables -t nat -F X28_TPROXY
 iptables -t nat -A X28_TPROXY -d 192.168.70.0/24 -j RETURN
-iptables -t nat -A X28_TPROXY -s "$EXCLUDE" -j RETURN
+if [ -n "$EXCLUDE" ]; then
+    iptables -t nat -A X28_TPROXY -s "$EXCLUDE" -j RETURN
+fi
 iptables -t nat -A X28_TPROXY -p tcp -j REDIRECT --to-ports "$TPROXY_PORT"
 iptables -t nat -D PREROUTING -i br0 -j X28_TPROXY 2>/dev/null || true
 iptables -t nat -A PREROUTING -i br0 -j X28_TPROXY
 
-echo "X28 transparent proxy enabled (excluding $EXCLUDE). Disable: /data/proxy/tproxy-disable.sh"
+if [ -n "$EXCLUDE" ]; then
+    echo "X28 transparent proxy enabled (excluding $EXCLUDE). Disable: /data/proxy/tproxy-disable.sh"
+else
+    echo "X28 transparent proxy enabled (no exclusions). Disable: /data/proxy/tproxy-disable.sh"
+fi
