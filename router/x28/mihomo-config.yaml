@@ -134,6 +134,23 @@ rules:
   - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
   - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
   - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+  # C&C Red Alert 3 / Generals Evolution (RA3BattleNet / GameSpy)
+  - DOMAIN-SUFFIX,ra3battle.net,auto
+  - DOMAIN-SUFFIX,ra3battle.cn,auto
+  - DOMAIN-SUFFIX,cor-games.com,auto
+  - DOMAIN-SUFFIX,gamespy.com,auto
+  - DOMAIN-SUFFIX,gamestats.com,auto
+  - DOMAIN-SUFFIX,cnc-online.net,auto
+  - DST-PORT,6667,auto
+  - DST-PORT,28910,auto
+  - DST-PORT,29900,auto
+  - DST-PORT,29901,auto
+  - DST-PORT,27900,auto
+  - DST-PORT,27901,auto
+  - DST-PORT,6500,auto
+  - DST-PORT,8086,auto
+  - DST-PORT,8087,auto
+  - DST-PORT,13139,auto
   - GEOIP,IR,DIRECT
   - DOMAIN-SUFFIX,strem.fun,DIRECT   # Torrentio et al: Cloudflare 403s the VPS IP; direct works (2026-08-26)
   - GEOSITE,youtube,auto
