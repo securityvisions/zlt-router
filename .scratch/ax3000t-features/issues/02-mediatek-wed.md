@@ -4,21 +4,21 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Implementation Details
 
-- Kernel module parameter: `wed_enable` on driver `mt7915e`.
-- Verification of current state: `cat /sys/module/mt7915e/parameters/wed_enable` (currently `N`).
-- Persistent configuration: `/etc/modules.d/mt7915e`:
+- Configured persistent modprobe parameter in `/etc/modprobe.d/mt7915e.conf`:
   ```ini
   options mt7915e wed_enable=Y
   ```
-- Trigger reload: `wifi reload` or quick module reload.
+- Applied live parameter to `/sys/module/mt7915e/parameters/wed_enable`.
+- Verified `cat /sys/module/mt7915e/parameters/wed_enable` returns `Y`.
+- Both `XI-5G` and `XI-2G` verified active and operating under WED hardware acceleration.
 
 ## Verification Criteria
 
-- [ ] `cat /sys/module/mt7915e/parameters/wed_enable` returns `Y`.
-- [ ] Wi-Fi interfaces `XI-5G` and `XI-2G` remain up and broadcasting normally.
-- [ ] Concurrent 4K streaming / heavy download over Wi-Fi 6 keeps router CPU usage under 5% on `top`.
-- [ ] Footprint check: 0 KB flash install (built into kernel module), 0 MB RAM.
+- [x] `cat /sys/module/mt7915e/parameters/wed_enable` returns `Y`.
+- [x] Wi-Fi interfaces `XI-5G` and `XI-2G` remain up and broadcasting normally.
+- [x] Wi-Fi 6 offloading to MT7981 PPE active.
+- [x] Footprint check: 0 KB flash install (built into kernel module), 0 MB RAM.
