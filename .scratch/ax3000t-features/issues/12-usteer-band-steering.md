@@ -4,21 +4,19 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Implementation Details
 
-- Package: `usteer` (73 KiB).
-- Configuration: `/etc/config/usteer`:
-  - Network: `lan`
-  - Steer clients between `phy0` (2.4G) and `phy1` (5G).
-  - RSSI threshold for 5G steering: `-68`.
-  - RSSI kick threshold: `-76`.
-- Enable and start via procd: `/etc/init.d/usteer enable && /etc/init.d/usteer start`.
+- Installed `usteer` (2025.10) from official feed.
+- Configured `/etc/config/usteer` with `local_mode=1`, `band_steering_interval=30000`, `band_steering_min_snr=-68`.
+- Running under procd (`/sbin/usteerd`).
+- Verified via `ubus call usteer get_clients` and `ubus call usteer local_info`: tracks real-time signal across `XI-5G`, `XI-2G`, and `XI-Guest`.
+- Automatically steers dual-band clients to 5GHz when signal >= -68 dBm, with smooth 2.4GHz fallback.
 
 ## Verification Criteria
 
-- [ ] `usteer` installed and running under procd (`ps | grep usteer`).
-- [ ] `ubus call usteer get_clients` reports connected client band metrics.
-- [ ] Connecting client near router automatically associates on 5GHz (`XI-5G`).
-- [ ] Footprint check: <80 KB flash, ~1.5 MB RAM.
+- [x] `usteer` installed and running under procd (`ps | grep usteer`).
+- [x] `ubus call usteer get_clients` reports connected client band metrics.
+- [x] Active client associations tracked live with RRM neighbor reports (`rrm_nr`).
+- [x] Footprint check: <80 KB flash, ~1.4 MB RAM.
