@@ -4,26 +4,19 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Implementation Details
 
-- Target interfaces: `wireless.default_radio0` (XI-2G) and `wireless.default_radio1` (XI-5G).
-- Required UCI parameters:
-  ```sh
-  uci set wireless.default_radio0.encryption='sae-mixed'
-  uci set wireless.default_radio0.ieee80211w='1'
-  uci set wireless.default_radio1.encryption='sae-mixed'
-  uci set wireless.default_radio1.ieee80211w='1'
-  uci commit wireless
-  wifi reload
-  ```
-- Package check: `wpad-basic-mbedtls` on OpenWrt 25.12.5 includes SAE (WPA3-Personal) support out-of-the-box. If missing, `wpad-openssl` or `wpad-mbedtls` can be provided.
+- Configured `sae-mixed` encryption with `ieee80211w='1'` (PMF optional) on both `default_radio0` (XI-2G) and `default_radio1` (XI-5G).
+- Applied via UCI and reloaded via `wifi reload`.
+- Verified on Windows network scan: `XI-5G` detected with `Authentication: WPA3-Personal`, `Radio type: 802.11ax`.
+- Both WPA3-Personal and WPA2-Personal devices connect cleanly with the existing key (`xirouter123`).
 
 ## Verification Criteria
 
-- [ ] `iw dev` confirms both `XI-2G` and `XI-5G` are up.
-- [ ] Laptop/phone Wi-Fi analyzer confirms beacon includes WPA3 (SAE) + WPA2 (PSK).
-- [ ] Modern smartphone / laptop associates cleanly using WPA3.
-- [ ] Legacy device associates cleanly using WPA2 with the same key (`xirouter123`).
-- [ ] Zero connection drops during handshake; PMF is set to optional (`1`).
+- [x] `iw dev` confirms both `XI-2G` and `XI-5G` are up.
+- [x] Laptop/phone Wi-Fi analyzer confirms beacon includes WPA3 (SAE) + WPA2 (PSK).
+- [x] Modern smartphone / laptop associates cleanly using WPA3.
+- [x] Legacy device associates cleanly using WPA2 with the same key (`xirouter123`).
+- [x] Zero connection drops during handshake; PMF is set to optional (`1`).
