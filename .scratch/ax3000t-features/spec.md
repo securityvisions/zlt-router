@@ -33,16 +33,31 @@ This feature suite layers performance, gaming, privacy, and remote access capabi
 5. `05-adblock-fast.md` — Network-wide lightweight ad & tracker blocking (`adblock-fast`)
 6. `06-guest-iot-wifi.md` — Isolated Guest & Smart Home Wi-Fi network (`XI-Guest`)
 7. `07-wake-on-lan.md` — Remote Wake-on-LAN web control (`etherwake` + `luci-app-wol`)
-8. `08-cloudflare-tunnel.md` — Cloudflare Zero Trust remote mobile access (`cloudflared`)
+8. `08-cloudflare-tunnel.md` — Cloudflare Zero Trust remote mobile access (`cloudflared`, wontfix)
+9. `09-luci-nlbwmon-ui.md` — Visual per-device bandwidth monitor (`luci-app-nlbwmon`)
+10. `10-luci-sqm-ui.md` — Visual CAKE SQM QoS web control (`luci-app-sqm`)
+11. `11-luci-ttyd-terminal.md` — In-browser web terminal (`ttyd` + `luci-app-ttyd`)
+12. `12-usteer-band-steering.md` — Wi-Fi 6 AP roaming & band steering (`usteer`)
+13. `13-iperf3-speedtest.md` — Local Wi-Fi 6 speed benchmark server (`iperf3`)
+14. `14-umdns-discovery.md` — Multicast DNS service discovery reflector (`umdns`)
+15. `15-luci-theme-material.md` — Modern mobile-responsive LuCI theme (`luci-theme-material`)
 
 ## Dependency Graph
 
 ```
 01 (TCP BBR) ──────────────┐
-                           ├──► 08 (Cloudflare Tunnel)
+                           ├──► 08 (Cloudflare Tunnel, wontfix)
 02 (MTK WED) ──────────────┤
                            │
 03 (WPA3-Mixed) ──► 06 (Guest Wi-Fi)
+
+09 (nlbwmon UI)
+10 (sqm UI)
+11 (ttyd terminal)
+12 (usteer band steering)
+13 (iperf3 benchmark)
+14 (umdns reflector)
+15 (Material theme)
 
 Independent:
 04 (UPnP NAT-PMP)
