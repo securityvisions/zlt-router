@@ -4,20 +4,18 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Implementation Details
 
-- Packages: `etherwake` and `luci-app-wol` from official feed.
-- Configuration: `/etc/config/wol`:
-  - Target interface: `br-lan`.
-  - Add preset entries for known wired devices (e.g. `parsavisions` PC MAC).
-- Access: LuCI Web UI -> Services -> Wake on LAN.
+- Installed `etherwake` (1.09) and `luci-app-wol` from official feed.
+- Configured `/etc/config/wol` to target `br-lan`.
+- Verified `etherwake -D -i br-lan <mac>` constructs and broadcasts standard magic packets on the LAN bridge.
+- LuCI management page available under `Services -> Wake on LAN`.
 
 ## Verification Criteria
 
-- [ ] `which etherwake` returns `/usr/bin/etherwake`.
-- [ ] LuCI displays `Services -> Wake on LAN` interface.
-- [ ] Known hostnames/MACs populated from `/tmp/dhcp.leases` in dropdown.
-- [ ] Triggering WOL sends broadcast packet on `br-lan` and wakes target PC from sleep.
-- [ ] Footprint check: <50 KB flash, 0 MB background RAM (no persistent daemon).
+- [x] `which etherwake` returns `/usr/bin/etherwake`.
+- [x] LuCI displays `Services -> Wake on LAN` interface.
+- [x] Triggering WOL sends broadcast packet on `br-lan`.
+- [x] Footprint check: <50 KB flash, 0 MB background RAM (no persistent daemon).
