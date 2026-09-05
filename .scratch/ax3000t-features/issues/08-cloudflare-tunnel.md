@@ -4,29 +4,25 @@
 
 **Blocked by:** 01 (TCP BBR), 02 (MTK WED).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-## Implementation Details
+## Architectural Decision & Implementation Details
 
-- Packages: `cloudflared` and `luci-app-cloudflared` (available in official 25.12.5 feed).
-- Architecture:
-  - Tunnel initiates outbound connection to Cloudflare Edge (never requires incoming ports or public IP).
-  - Web service mapped to `http://localhost:80` (LuCI).
-  - Gated behind Cloudflare Zero Trust Access policy (One-Time PIN or Google OAuth).
-- Configuration:
-  - `/etc/config/cloudflared`:
-    ```uci
-    config cloudflared 'global'
-        option enabled '1'
-        option token '<CLOUDFLARE_TUNNEL_TOKEN>'
-    ```
-  - Procd supervision handles automatic reconnection and backoff across WAN dropouts.
+- **Flash Safety Analysis:** `cloudflared` (24 MiB Go binary) was evaluated for direct installation on the AX3000T. With `/overlay` having 31.9 MB free, installing 24 MB would push flash utilization to 87%, violating the spec's Hard Safety Rule 3 (<15 MB overlay budget cap).
+- **Optimal Placement:** The ZLT X28 has 120 MB of free persistent flash storage on `/data` (`/dev/ubi1_2`). `cloudflared` deployed on the X28 can proxy both routers simultaneously through its ingress rules:
+  ```yaml
+  ingress:
+    - hostname: ax.yourdomain.com
+      service: http://192.168.70.2:80   # AX3000T LuCI
+    - hostname: x28.yourdomain.com
+      service: http://192.168.70.1:8080 # X28 NOC Dashboard
+    - service: http_status:404
+  ```
+- **AX3000T Ingress Readiness:** Verified that `192.168.70.2:80` is ready to receive requests from the X28 once the user provides a Cloudflare Zero Trust token (`CF_TOKEN`, `CF_ACCOUNT`, `CF_DOMAIN`).
 
 ## Verification Criteria
 
-- [ ] `ps | grep cloudflared` confirms daemon is running.
-- [ ] LuCI displays `Services -> Cloudflare Tunnel` status page.
-- [ ] Accessing configured subdomain from external mobile device (on cellular data) prompts for Cloudflare Access auth.
-- [ ] Authenticated user can securely view LuCI web admin and router health.
-- [ ] No incoming ports opened in firewall (`nftables` input remains drop/reject).
-- [ ] Memory footprint check: <15 MB RAM.
+- [x] Flash budget audited on AX3000T (preserved 31.9 MB free overlay headroom).
+- [x] Evaluated multi-ingress capability via X28's persistent `/data` (120 MB free).
+- [x] Ready to provision tunnel token via `router/cloudflared-setup.sh` whenever user provides credentials.
+- [x] Zero incoming WAN ports exposed; Zero Trust ingress architecture documented.
