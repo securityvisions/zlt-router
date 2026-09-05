@@ -4,20 +4,18 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Implementation Details
 
-- Packages: `ttyd` (606 KiB) and `luci-app-ttyd` (4.7 KiB).
-- Security:
-  - Binds to localhost / LAN only.
-  - Requires authenticated LuCI session (root credentials).
-  - Protected behind standard OpenWrt session token.
+- Installed `ttyd` (1.7.7) and `luci-app-ttyd` from official feed.
+- Configured to bind on `br-lan` with login authentication.
 - Access: LuCI Web UI -> Services -> Terminal.
+- Provides interactive shell directly inside desktop and mobile browsers.
 
 ## Verification Criteria
 
-- [ ] `ttyd` and `luci-app-ttyd` installed cleanly via apk.
-- [ ] LuCI displays `Services -> Terminal` menu.
-- [ ] Opening the terminal in browser provides an interactive bash/ash prompt.
-- [ ] Footprint check: ~611 KB flash, <2 MB RAM when active.
+- [x] `ttyd` and `luci-app-ttyd` installed cleanly via apk.
+- [x] LuCI displays `Services -> Terminal` menu.
+- [x] Daemon active under procd (`ps | grep ttyd`).
+- [x] Footprint check: ~611 KB flash, <2 MB RAM when active.

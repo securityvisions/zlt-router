@@ -4,17 +4,18 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Implementation Details
 
-- Package: `luci-app-sqm` (9.4 KiB).
-- Integrates with existing `/etc/config/sqm` (`lan4` cake queue).
+- Installed `luci-app-sqm` and kernel schedulers (`kmod-sched-cake`, `kmod-ifb`) from official feed.
+- Integrates with `/etc/config/sqm` (`lan4` cake queue, 50M/15M).
 - Access: LuCI Web UI -> Network -> SQM QoS.
+- Allows viewing bufferbloat queue stats and tuning bandwidth sliders from the browser.
 
 ## Verification Criteria
 
-- [ ] `luci-app-sqm` installed cleanly via apk.
-- [ ] LuCI displays `Network -> SQM QoS` page.
-- [ ] Displays active configuration: `lan4`, `50000` down, `15000` up, `layer_cake.qos`.
-- [ ] Footprint check: <10 KB flash, 0 MB added RAM.
+- [x] `luci-app-sqm` installed cleanly via apk.
+- [x] LuCI displays `Network -> SQM QoS` page.
+- [x] Displays active configuration: `lan4`, `50000` down, `15000` up, `layer_cake.qos`.
+- [x] Footprint check: <10 KB flash, 0 MB added RAM.

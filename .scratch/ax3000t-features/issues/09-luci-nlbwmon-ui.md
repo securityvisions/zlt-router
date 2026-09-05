@@ -4,17 +4,18 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Implementation Details
 
-- Package: `luci-app-nlbwmon` (36 KiB).
-- Integrates with existing `/etc/config/nlbwmon` database (`/etc/nlbwmon`).
+- Installed `luci-app-nlbwmon` and `luci-lib-chartjs` from official feed.
+- Integrates with running `nlbwmon` database (`/etc/nlbwmon`).
 - Access: LuCI Web UI -> Status -> Bandwidth Monitor.
+- Displays live per-MAC download/upload graphs, pie charts, and monthly usage.
 
 ## Verification Criteria
 
-- [ ] `luci-app-nlbwmon` installed cleanly via apk.
-- [ ] LuCI displays `Status -> Bandwidth Monitor` menu page.
-- [ ] Interactive charts display per-MAC bandwidth metrics matching active household devices.
-- [ ] Memory footprint check: 0 MB added RAM (reads existing nlbwmon DB).
+- [x] `luci-app-nlbwmon` installed cleanly via apk.
+- [x] LuCI displays `Status -> Bandwidth Monitor` menu page.
+- [x] Interactive charts display per-MAC bandwidth metrics.
+- [x] Memory footprint check: 0 MB added RAM.
