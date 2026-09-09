@@ -4,13 +4,19 @@ table inet axproxy {
         ip daddr { 10.0.0.0/8, 127.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } return
         tcp dport 53 return
         udp dport 53 return
-        iifname { "br-lan", "br-guest" } tcp dport { 80, 443, 2053, 2083, 2087, 2096, 6667, 8080, 8443, 28910, 29900, 29901 } redirect to :12345
+        # Standard web, management, game and Minecraft ports
+        iifname { "br-lan", "br-guest" } tcp dport { 80, 443, 2053, 2083, 2087, 2096, 6667, 8080, 8443, 25565, 28910, 29900, 29901 } redirect to :12345
+        # Playit.gg / Tunnel tunnels often used for game hosting (e.g., Minecraft custom high ports)
+        iifname { "br-lan", "br-guest" } ip daddr 147.185.221.0/24 tcp dport 10000-65535 redirect to :12345
     }
     chain tproxy_prerouting {
         type filter hook prerouting priority mangle - 5; policy accept;
         ip daddr { 10.0.0.0/8, 127.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } return
         udp dport 53 return
         iifname { "br-lan", "br-guest" } udp dport 443 drop
-        iifname { "br-lan", "br-guest" } udp dport { 6500, 8086, 8087, 13139, 27900, 27901 } meta mark set 0x1 tproxy to :12346 accept
+        # Bedrock Minecraft (19132), GameSpy, Steam voice
+        iifname { "br-lan", "br-guest" } udp dport { 6500, 8086, 8087, 13139, 19132, 27900, 27901 } meta mark set 0x1 tproxy ip to :12346 accept
+        # Playit.gg UDP custom ports (Bedrock / voice)
+        iifname { "br-lan", "br-guest" } ip daddr 147.185.221.0/24 udp dport 10000-65535 meta mark set 0x1 tproxy ip to :12346 accept
     }
 }
