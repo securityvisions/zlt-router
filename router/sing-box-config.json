@@ -1,9 +1,21 @@
 {
-  "log": { "level": "warn", "timestamp": true },
+  "log": {
+    "level": "warn",
+    "timestamp": true
+  },
   "dns": {
     "servers": [
-      { "type": "udp", "tag": "dns-direct", "server": "192.168.70.1" },
-      { "type": "https", "tag": "dns-proxy", "server": "8.8.8.8", "detour": "auto" }
+      {
+        "type": "udp",
+        "tag": "dns-direct",
+        "server": "192.168.70.1"
+      },
+      {
+        "type": "https",
+        "tag": "dns-proxy",
+        "server": "8.8.8.8",
+        "detour": "proxy-select"
+      }
     ],
     "rules": [
       {
@@ -17,7 +29,18 @@
         ],
         "server": "dns-proxy"
       },
-      { "rule_set": ["geosite-ir"], "server": "dns-direct" }
+      {
+        "domain_suffix": [
+          ".ir"
+        ],
+        "server": "dns-direct"
+      },
+      {
+        "rule_set": [
+          "geosite-ir"
+        ],
+        "server": "dns-direct"
+      }
     ],
     "final": "dns-proxy",
     "strategy": "ipv4_only"
@@ -41,10 +64,40 @@
       "listen": "0.0.0.0",
       "listen_port": 12346,
       "network": "udp"
+    },
+    {
+      "type": "direct",
+      "tag": "dns-in",
+      "listen": "127.0.0.1",
+      "listen_port": 5354,
+      "network": "udp",
+      "override_port": 53
     }
   ],
   "outbounds": [
-    { "type": "urltest", "tag": "auto", "outbounds": ["hy2", "vps-reality", "cdn-ws"], "url": "https://www.gstatic.com/generate_204", "interval": "1m", "tolerance": 100 },
+    {
+      "type": "urltest",
+      "tag": "auto",
+      "outbounds": [
+        "hy2",
+        "vps-reality",
+        "cdn-ws"
+      ],
+      "url": "https://www.gstatic.com/generate_204",
+      "interval": "1m",
+      "tolerance": 100
+    },
+    {
+      "type": "selector",
+      "tag": "proxy-select",
+      "outbounds": [
+        "hy2",
+        "vps-reality",
+        "cdn-ws",
+        "auto"
+      ],
+      "default": "hy2"
+    },
     {
       "type": "vless",
       "tag": "vps-reality",
@@ -55,7 +108,10 @@
       "tls": {
         "enabled": true,
         "server_name": "www.bing.com",
-        "utls": { "enabled": true, "fingerprint": "chrome" },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        },
         "reality": {
           "enabled": true,
           "public_key": "fIZg5mhL-DlLT03aBciQw94x6hPOe2_T6ivsRHRyMWA",
@@ -69,8 +125,17 @@
       "server": "188.114.98.0",
       "server_port": 443,
       "uuid": "5ee543a7-9a11-4d0d-b3e6-153945539f60",
-      "tls": { "enabled": true, "server_name": "cdn.dmbz.ir" },
-      "transport": { "type": "ws", "path": "/v1/status", "headers": { "Host": "cdn.dmbz.ir" } }
+      "tls": {
+        "enabled": true,
+        "server_name": "cdn.dmbz.ir"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/v1/status",
+        "headers": {
+          "Host": "cdn.dmbz.ir"
+        }
+      }
     },
     {
       "type": "hysteria2",
@@ -78,18 +143,83 @@
       "server": "85.121.124.158",
       "server_port": 31800,
       "password": "p4DyJIAuyp",
-      "obfs": { "type": "salamander", "password": "bwne4pabf0tzt00f" },
-      "tls": { "enabled": true, "insecure": true }
+      "obfs": {
+        "type": "salamander",
+        "password": "bwne4pabf0tzt00f"
+      },
+      "tls": {
+        "enabled": true,
+        "insecure": true
+      }
     },
-    { "type": "direct", "tag": "direct" }
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
   ],
   "route": {
-    "default_domain_resolver": { "server": "dns-direct" },
+    "auto_detect_interface": true,
+    "default_domain_resolver": {
+      "server": "dns-direct"
+    },
+    "rule_set": [
+      {
+        "type": "local",
+        "tag": "geosite-ir",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-ir.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geoip-ir",
+        "format": "binary",
+        "path": "/etc/sing-box/geoip-ir.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-youtube",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-youtube.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-google",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-google.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-instagram",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-instagram.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-facebook",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-facebook.srs"
+      }
+    ],
     "rules": [
-      { "action": "sniff" },
-      { "protocol": "dns", "action": "hijack-dns" },
-      { "ip_is_private": true, "outbound": "direct" },
-      { "ip_cidr": ["85.121.124.158/32", "188.114.98.0/24", "216.45.52.132/32"], "outbound": "direct" },
+      {
+        "action": "sniff"
+      },
+      {
+        "protocol": "dns",
+        "action": "hijack-dns"
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "direct"
+      },
+      {
+        "ip_cidr": [
+          "85.121.124.158/32",
+          "188.114.98.0/24",
+          "216.45.52.132/32"
+        ],
+        "outbound": "direct"
+      },
       {
         "domain_suffix": [
           "ra3battle.net",
@@ -99,28 +229,75 @@
           "gamestats.com",
           "cnc-online.net"
         ],
-        "outbound": "auto"
+        "outbound": "proxy-select"
       },
       {
-        "port": [6667, 28910, 29900, 29901, 27900, 27901, 6500, 8086, 8087, 13139],
-        "outbound": "auto"
+        "port": [
+          6667,
+          28910,
+          29900,
+          29901,
+          27900,
+          27901,
+          6500,
+          8086,
+          8087,
+          13139
+        ],
+        "outbound": "proxy-select"
       },
-      { "rule_set": ["geosite-ir"], "outbound": "direct" },
-      { "rule_set": ["geoip-ir"], "outbound": "direct" },
-      { "domain_suffix": ["saymyname.website", "strem.fun", "pirategames.ir"], "outbound": "direct" },
-      { "ip_cidr": ["185.137.27.122/32"], "outbound": "direct" },
-      { "rule_set": ["geosite-youtube", "geosite-google", "geosite-instagram", "geosite-facebook"], "outbound": "auto" }
+      {
+        "domain_suffix": [
+          ".ir"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "rule_set": [
+          "geosite-ir"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "rule_set": [
+          "geoip-ir"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "domain_suffix": [
+          "saymyname.website",
+          "strem.fun",
+          "pirategames.ir"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "ip_cidr": [
+          "185.137.27.122/32"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "rule_set": [
+          "geosite-youtube",
+          "geosite-google",
+          "geosite-instagram",
+          "geosite-facebook"
+        ],
+        "outbound": "proxy-select"
+      }
     ],
-    "rule_set": [
-      { "type": "local", "tag": "geosite-ir", "format": "binary", "path": "/etc/sing-box/geosite-ir.srs" },
-      { "type": "local", "tag": "geoip-ir", "format": "binary", "path": "/etc/sing-box/geoip-ir.srs" },
-      { "type": "local", "tag": "geosite-youtube", "format": "binary", "path": "/etc/sing-box/geosite-youtube.srs" },
-      { "type": "local", "tag": "geosite-google", "format": "binary", "path": "/etc/sing-box/geosite-google.srs" },
-      { "type": "local", "tag": "geosite-instagram", "format": "binary", "path": "/etc/sing-box/geosite-instagram.srs" },
-      { "type": "local", "tag": "geosite-facebook", "format": "binary", "path": "/etc/sing-box/geosite-facebook.srs" }
-    ],
-    "final": "auto",
-    "auto_detect_interface": true
+    "final": "proxy-select"
   },
-  "experimental": { "cache_file": { "enabled": true, "path": "/etc/sing-box/cache.db" } }
+  "experimental": {
+    "cache_file": {
+      "enabled": true,
+      "path": "/etc/sing-box/cache.db"
+    },
+    "clash_api": {
+      "external_controller": "127.0.0.1:9090",
+      "default_mode": "rule"
+    }
+  }
 }

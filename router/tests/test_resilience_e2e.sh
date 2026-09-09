@@ -31,6 +31,10 @@ assert_eq() {
 code=$(curl.exe -s --noproxy '*' --interface 192.168.1.223 -m 10 -o /dev/null -w "%{http_code}" "https://www.digikala.com" 2>/dev/null || echo "000")
 assert_eq "AX3000T domestic traffic (Digikala) flows direct" "200" "$code"
 
+# 1b. Test AX3000T .ir domain direct routing (pirategames.ir on foreign CDN edge)
+code=$(curl.exe -s --noproxy '*' --interface 192.168.1.223 -m 10 -o /dev/null -w "%{http_code}" "https://www.pirategames.ir/online/remnant-ii/" 2>/dev/null || echo "000")
+assert_eq "AX3000T .ir domain traffic (pirategames.ir) flows direct" "200" "$code"
+
 # 2. Test AX3000T transparent circumvention (Google)
 code=$(curl.exe -s --noproxy '*' --interface 192.168.1.223 -m 10 -o /dev/null -w "%{http_code}" "https://www.google.com" 2>/dev/null || echo "000")
 assert_eq "AX3000T circumvention traffic (Google) flows via VPS" "200" "$code"
@@ -46,6 +50,10 @@ assert_eq "X28 independent proxy (Google) is operational" "200" "$code"
 # 5. Test X28 independent SOCKS proxy (YouTube)
 code=$(curl.exe -s --noproxy '*' -m 10 -x "socks5h://$X28_IP:1080" -o /dev/null -w "%{http_code}" "https://www.youtube.com" 2>/dev/null || echo "000")
 assert_eq "X28 independent proxy (YouTube) is operational" "200" "$code"
+
+# 6. Test X28 independent proxy .ir domain direct routing (pirategames.ir)
+code=$(curl.exe -s --noproxy '*' -m 10 -x "socks5h://$X28_IP:1080" -o /dev/null -w "%{http_code}" "https://www.pirategames.ir/online/remnant-ii/" 2>/dev/null || echo "000")
+assert_eq "X28 independent proxy .ir domain (pirategames.ir) flows direct" "200" "$code"
 
 echo "============================================================"
 echo "  RESULTS: $pass passed, $fail failed"

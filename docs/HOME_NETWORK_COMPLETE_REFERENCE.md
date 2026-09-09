@@ -118,11 +118,40 @@ When power drops and restores:
 
 ### 3.3. Independent Dual-VPN Architecture
 - **AX3000T (House Traffic):** Runs local `sing-box` 1.13.18. Transparently redirects LAN/Wi-Fi TCP ports (80, 443, etc.) to `:12345`.
-  - Domestic Iranian websites (`geosite-ir`, `geoip-ir`) bypass the tunnel and connect direct in **0.16s**.
+  - Domestic Iranian websites (`geosite-ir`, `geoip-ir`, and wildcard `.ir` TLD domains) bypass the tunnel and connect direct in **0.16s** (including CDN/WCDN-fronted `.ir` domains whose edge IPs sit outside Iran).
+  - Clean DNS resolution for `.ir` domains routes directly via `192.168.70.1` (`dns-direct`).
   - Foreign / censored platforms (YouTube, Google, Twitter, Telegram, Instagram) route through the VPS in **0.5s**.
+
+---
+
+## 3.1. Proxy Routing & Telegram Performance Analysis
+
+### Why Telegram Upload / Media Transfer & Gemini / Google Services Were Slow
+
+In our dual-router setup (AX3000T upstreaming to X28 / Samantel 5G):
+1. **Routing Path Mismatch (`auto` fallback)**:
+   - Telegram uses direct IP connections to its Data Centers (`149.154.167.0/24`, `91.108.56.0/22`, etc.) rather than simple HTTP hostnames.
+   - When uncategorized by domain-only rules, traffic falls through to sing-box's `final` rule. Previously `final` was bound to `auto` (latency URL-test).
+   - Because `vps-reality` (TCP VLESS) often measures a slightly lower synthetic ping (~303ms) than `hy2` (~348ms), `auto` selected `vps-reality`. Over cellular/MCI uplinks subject to packet loss and throttling, single-stream TCP suffers severe TCP window shrinking on uploads.
+   - **Resolution**: Telegram and default traffic route via `proxy-select` defaulted to `hy2` (Hysteria2 UDP QUIC with Salamander obfuscation), which aggressively recovers from packet loss and saturates the full uplink.
+
+2. **Google / Gemini Services Slowness (`auto` & `cdn-ws` flap)**:
+   - Domains matching `geosite-google`, `geosite-youtube`, etc. and the upstream secure DoH resolver (`dns-proxy`) were explicitly configured with `"outbound": "auto"` and `"detour": "auto"`.
+   - When `auto` rotated between nodes or when `vps-reality` had high jitter, `auto` shifted traffic to `cdn-ws` (VLESS+WS over Cloudflare CDN).
+   - At 17:19–17:20, `gemini.google.com` was routed over `cdn-ws` where measured ping spiked to **1033ms**, while static assets (`gemini.gstatic.com` 4 MB payload) were concurrently downloading over `vps-reality`. The split across different proxy IPs and the high latency of `cdn-ws` caused stalls.
+   - **Fix Applied**: Updated all `geosite-google`, `geosite-youtube`, `geosite-instagram`, `geosite-facebook` routes and the secure DoH resolver in `/etc/sing-box/config.json` to use `"proxy-select"` (`hy2`) directly, avoiding the slow CDN websocket path.
+
+2. **UDP Blocking & Port 443 Drop**:
+   - In firewall rules, UDP 443 (`QUIC`) from LAN clients is dropped (`udp dport 443 drop`) to prevent browsers from attempting direct HTTP/3 to blocked endpoints.
+   - Native Telegram desktop/mobile apps attempt MTProto over both TCP and UDP. SOCKS/redir transparent redirection captures TCP on `:12345`. UDP traffic to arbitrary DC IPs requires TPROXY on `:12346`.
+
+3. **Cellular Upstream Asymmetry (MCI/Samantel 5G)**:
+   - Cellular radio link budget allocates far more downlink resource blocks than uplink. Typical cellular speeds in this region are 50–90 Mbps down vs. 5–12 Mbps up.
+   - High packet drops on the cellular tower during upload burst will stall TCP-based proxies (Reality/WS) dramatically compared to QUIC/BBR-based Hysteria2.
   - Local management traffic (`192.168.0.0/16`, `10.0.0.0/8`, `172.16.0.0/12`) is strictly exempted via `/etc/axproxy.nft` so LuCI and SSH are never blocked.
 - **X28 (Fallback Traffic):** Runs its own `mihomo` proxy.
-  - `tproxy-enable.sh` explicitly bypasses `192.168.70.2` (`RETURN`) to prevent double-proxying or re-encryption.
+  - `tproxy-enable.sh` and `tproxy-fixed-enable.sh` explicitly bypass `192.168.70.2` (`RETURN` in `X28_TPROXY` and `X28_SPLIT`) so AX3000T's outbound traffic (both tunneled and direct) is never double-proxied or re-intercepted.
+  - Mihomo rules route all `.ir` domains directly (`DOMAIN-SUFFIX,ir,DIRECT`) for clients connected to `ZL-5G`.
   - Clients connected to `ZL-5G` use the X28's proxy independently.
   - If either router is rebooted or turned off, the other router's clients continue browsing with zero disruption.
 
