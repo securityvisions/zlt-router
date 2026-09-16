@@ -16,7 +16,9 @@ Label: `wayfinder:map`
 
 ## Decisions so far
 
-<!-- the index: one line per closed ticket, enough to judge relevance, then zoom the link for the detail the ticket holds -->
+- [01 - Build netpull: status, pull, never push](issues/01-netpull.md): netpull shipped with an 11-entry manifest, batched status, pull-only semantics; fixture-tested 10/10 device-free.
+- [02 - Pull proxy-watchdog.sh into the repo](issues/02-pull-proxy-watchdog.md): canonical copy pulled from AX3000T; no-canonical gap closed.
+- [04 - Fix CONTEXT.md naming drift](issues/04-context-naming-drift.md): mihomo is the X28 engine, Hysteria2 availability is IP-pool dependent, linkstate location corrected.
 
 ## Not yet specified
 
