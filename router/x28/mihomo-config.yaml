@@ -12,10 +12,6 @@ geodata-mode: true
 geodata-loader: standard
 geo-auto-update: false
 external-controller: 127.0.0.1:9090
-
-# transparent userspace path for Steam/Valve traffic (no xt_TPROXY on this
-# kernel): steam-tun-enable.sh routes the Valve CIDRs via this device; the
-# engine's rules proxy them. Scoped — everything else keeps its normal path.
 tun:
   enable: true
   stack: gvisor
@@ -36,7 +32,7 @@ dns:
 proxy-providers:
   rescue-pool:
     type: file
-    path: /data/proxy/mihomo/rescue-pool.yaml   # must live under engine home (SAFE_PATHS)
+    path: /data/proxy/mihomo/rescue-pool.yaml
     health-check:
       enable: true
       url: https://www.gstatic.com/generate_204
@@ -44,23 +40,23 @@ proxy-providers:
 proxies:
   - name: vps-reality
     type: vless
-    server: __CLOUDFLARE_EDGE_IP__
+    server: 85.121.124.158
     port: 443
-    uuid: __PARSA_UUID__
+    uuid: 5ee543a7-9a11-4d0d-b3e6-153945539f60
     network: tcp
     udp: true
     tls: true
     servername: www.bing.com
     client-fingerprint: chrome
     reality-opts:
-      public-key: __REALITY_PUBKEY__
-      short-id: __REALITY_SHORTID__
+      public-key: fIZg5mhL-DlLT03aBciQw94x6hPOe2_T6ivsRHRyMWA
+      short-id: 7fa7e3ce4165cba3
 
   - name: cdn-ws
     type: vless
-    server: __CLOUDFLARE_EDGE_IP__
+    server: 188.114.98.0
     port: 443
-    uuid: __PARSA_UUID__
+    uuid: 5ee543a7-9a11-4d0d-b3e6-153945539f60
     network: ws
     tls: true
     servername: cdn.dmbz.ir
@@ -70,28 +66,28 @@ proxies:
         Host: cdn.dmbz.ir
 
   - name: babaii
+    flow: xtls-rprx-vision
     type: vless
-    server: __BABAI_IP__
+    server: 216.45.52.132
     port: 23993
-    uuid: __BABAI_UUID__
+    uuid: c5716edc-2be0-40d8-cb8a-866f5ce785b6
     network: tcp
     udp: true
     tls: true
-    flow: xtls-rprx-vision
 
   - name: hy2
     type: hysteria2
-    server: __CLOUDFLARE_EDGE_IP__
+    server: 85.121.124.158
     port: 31800
-    password: __HY2_PASSWORD__
+    password: p4DyJIAuyp
     obfs: salamander
-    obfs-password: __HY2_OBFS_PASSWORD__
+    obfs-password: bwne4pabf0tzt00f
     skip-cert-verify: true
 
 proxy-groups:
   - name: auto
     type: url-test
-    url: "https://8.8.8.8/"
+    url: https://www.gstatic.com/generate_204
     interval: 60
     tolerance: 100
     proxies:
@@ -108,26 +104,19 @@ proxy-groups:
     use:
       - rescue-pool
   - name: world
-    type: select
+    type: fallback
+    url: https://www.gstatic.com/generate_204
+    interval: 60
     proxies:
-      - auto        # owned nodes — default, pinned by supervisor
-      - rescue      # admitted collected nodes (rescue-pool)
-
+      - auto
+      - rescue
 rule-providers:
-  # Valve/Steam server ranges — pins Steam voice (UDP via the tun path) to a
-  # chosen node; steam-node.sh switches the target below.
   steam-voice:
     type: file
     behavior: classical
     path: /data/proxy/mihomo/steam-voice.yaml
-
 rules:
-  # Iranian domestic traffic — route ALL .ir domains DIRECT (regardless of CDN IP / geoip):
   - DOMAIN-SUFFIX,ir,DIRECT
-  # Iranian academic portals (SRBIAU/IAU family) — pinned DIRECT by domain:
-  # foreign CDN fronting defeats GEOIP,IR, and university SSO rejects
-  # non-Iranian exits. Covers *.iau.ir (stdn2 etc.), *.srbiau.ac.ir
-  # (amoozesh/edu/reg/login), and any host containing "amoozesh".
   - DOMAIN-SUFFIX,iau.ir,DIRECT
   - DOMAIN-SUFFIX,srbiau.ac.ir,DIRECT
   - DOMAIN-KEYWORD,amoozesh,DIRECT
@@ -154,10 +143,22 @@ rules:
   - DST-PORT,8087,auto
   - DST-PORT,13139,auto
   - GEOIP,IR,DIRECT
-  - DOMAIN-SUFFIX,strem.fun,DIRECT   # Torrentio et al: Cloudflare 403s the VPS IP; direct works (2026-08-26)
   - GEOSITE,youtube,auto
   - GEOSITE,google,auto
   - GEOSITE,instagram,auto
   - GEOSITE,facebook,auto
   - RULE-SET,steam-voice,hy2
   - MATCH,world
+
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  sniff:
+    HTTP:
+      ports: [80, 8080-8880]
+      override-destination: true
+    TLS:
+      ports: [443, 8443]
+    QUIC:
+      ports: [443, 8443]

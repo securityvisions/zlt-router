@@ -71,17 +71,17 @@ before=$(md5sum "$CONF" 2>/dev/null | cut -d' ' -f1)
 
 # Strip our upstream lines (tunnel + isp + no-resolv + empty strays the
 # boot race once produced), keep vendor config
-sed -i '\|^server=127\.0\.0\.1#5353$|d; \|^no-resolv$|d; \|^server=$|d; \|^server=10\.[0-9.]*$|d; \|^server=217\.[0-9.]*$|d' "$CONF"
+sed -i '\|^server=127\.0\.0\.1#5353$|d; \|^no-resolv$|d; \|^clear-on-reload$|d; \|^server=$|d; \|^server=10\.[0-9.]*$|d; \|^server=217\.[0-9.]*$|d' "$CONF"
 
 # Attach the selected upstream
 if [ "$mode" = "tunnel" ]; then
     sed -i 's|^resolv-file=|#resolv-file=|g' "$CONF"
-    printf '\nserver=127.0.0.1#5353\nno-resolv\n' >> "$CONF"
+    printf 'server=127.0.0.1#5353\nno-resolv\nclear-on-reload\n' >> "$CONF"
 else
     sed -i 's|^#resolv-file=|resolv-file=|g' "$CONF"
     isp=$(awk '/^nameserver/{print $2; exit}' /tmp/resolv.conf 2>/dev/null)
     [ -n "$isp" ] || isp=10.201.112.252   # boot race: resolv.conf still empty
-    printf '\nno-resolv\nserver=%s\n' "$isp" >> "$CONF"
+    printf 'no-resolv\nserver=%s\n' "$isp" >> "$CONF"
 fi
 
 # Fix vendor DHCP pushing poisoned secondary DNS (114.114.114.114) — keep only X28
@@ -98,18 +98,13 @@ fi
 
 after=$(md5sum "$CONF" 2>/dev/null | cut -d' ' -f1)
 if [ "$before" != "$after" ]; then
-    # HUP instead of pkill+relaunch: dnsmasq re-reads the config seamlessly
-    # (DHCP leases and the listening socket survive). The vendor's lan_mgr
-    # rewrites $CONF every ~60 s, so a full restart here would churn DHCP
-    # once a minute. Only cold-start when no dnsmasq is running.
-    p=$(pidof dnsmasq 2>/dev/null)
-    if [ -n "$p" ]; then
-        kill -HUP $p 2>/dev/null || true
-        echo "dns-fix: mode=$mode (dnsmasq HUP re-read)"
-    else
-        dnsmasq -C "$CONF" -x /tmp/dnsmasq.pid >/dev/null 2>&1 &
-        echo "dns-fix: mode=$mode (dnsmasq launched)"
-    fi
+    # Full relaunch on upstream configuration change: guarantees the in-memory
+    # DNS cache is 100% flushed so zero poisoned ISP records (e.g. 10.10.34.35)
+    # survive into tunnel mode. DHCP leases in /tmp/dnsmasq.leases remain intact.
+    killall dnsmasq 2>/dev/null || true
+    sleep 1
+    dnsmasq -C "$CONF" -x /tmp/dnsmasq.pid >/dev/null 2>&1 &
+    echo "dns-fix: mode=$mode (dnsmasq restarted, cache flushed)"
 else
     echo "dns-fix: mode=$mode (no change)"
 fi

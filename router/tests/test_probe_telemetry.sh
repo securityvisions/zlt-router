@@ -14,7 +14,7 @@ grep -q "probe_check_data" "$PS" && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo
 
 # profile dispatch: vps has no socks, link has default socks
 spec=$(PROBE_URL="http://x" sh "$PS" profiles 2>/dev/null | grep "^link:")
-echo "$spec" | grep -q "127.0.0.1:1070" && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - link default socks"; }
+echo "$spec" | grep -q "192.168.70.1:1080" && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - link default socks"; }
 spec=$(sh "$PS" profiles 2>/dev/null | grep "^vps:")
 echo "$spec" | grep -q "2095" && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - vps panel url"; }
 

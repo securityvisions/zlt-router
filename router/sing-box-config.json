@@ -19,6 +19,33 @@
     ],
     "rules": [
       {
+        "rule_set": [
+          "geosite-ir"
+        ],
+        "domain_suffix": [
+          "telewebion.com",
+          "telewebion.net",
+          "telewebion.ir",
+          "sepehrtv.ir",
+          "anten.ir",
+          "lenz.ir",
+          "irib.ir",
+          "livekadeh.com",
+          "wns.live",
+          "digikala.com",
+          "aparat.com"
+        ],
+        "server": "dns-direct"
+      },
+      {
+        "domain_suffix": [
+          ".ir",
+          ".iau.ir",
+          ".srbiau.ac.ir"
+        ],
+        "server": "dns-direct"
+      },
+      {
         "domain_suffix": [
           "ra3battle.net",
           "ra3battle.cn",
@@ -28,18 +55,6 @@
           "cnc-online.net"
         ],
         "server": "dns-proxy"
-      },
-      {
-        "domain_suffix": [
-          ".ir"
-        ],
-        "server": "dns-direct"
-      },
-      {
-        "rule_set": [
-          "geosite-ir"
-        ],
-        "server": "dns-direct"
       }
     ],
     "final": "dns-proxy",
@@ -79,24 +94,26 @@
       "type": "urltest",
       "tag": "auto",
       "outbounds": [
-        "hy2",
         "vps-reality",
-        "cdn-ws"
+        "via-x28"
       ],
       "url": "https://www.gstatic.com/generate_204",
-      "interval": "1m",
-      "tolerance": 100
+      "interval": "30s",
+      "tolerance": 50,
+      "interrupt_exist_connections": true
     },
     {
       "type": "selector",
       "tag": "proxy-select",
       "outbounds": [
-        "hy2",
+        "auto",
         "vps-reality",
-        "cdn-ws",
-        "auto"
+        "via-x28",
+        "hy2",
+        "cdn-ws"
       ],
-      "default": "hy2"
+      "default": "auto",
+      "interrupt_exist_connections": true
     },
     {
       "type": "vless",
@@ -153,8 +170,26 @@
       }
     },
     {
+      "type": "socks",
+      "tag": "via-x28",
+      "server": "192.168.70.1",
+      "server_port": 1080
+    },
+    {
       "type": "direct",
       "tag": "direct"
+    },
+    {
+      "type": "urltest",
+      "tag": "gaming",
+      "outbounds": [
+        "hy2",
+        "vps-reality"
+      ],
+      "url": "https://www.gstatic.com/generate_204",
+      "interval": "30s",
+      "tolerance": 100,
+      "interrupt_exist_connections": true
     }
   ],
   "route": {
@@ -162,44 +197,6 @@
     "default_domain_resolver": {
       "server": "dns-direct"
     },
-    "rule_set": [
-      {
-        "type": "local",
-        "tag": "geosite-ir",
-        "format": "binary",
-        "path": "/etc/sing-box/geosite-ir.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geoip-ir",
-        "format": "binary",
-        "path": "/etc/sing-box/geoip-ir.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-youtube",
-        "format": "binary",
-        "path": "/etc/sing-box/geosite-youtube.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-google",
-        "format": "binary",
-        "path": "/etc/sing-box/geosite-google.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-instagram",
-        "format": "binary",
-        "path": "/etc/sing-box/geosite-instagram.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-facebook",
-        "format": "binary",
-        "path": "/etc/sing-box/geosite-facebook.srs"
-      }
-    ],
     "rules": [
       {
         "action": "sniff"
@@ -211,6 +208,17 @@
       {
         "ip_is_private": true,
         "outbound": "direct"
+      },
+      {
+        "ip_cidr": [
+          "155.133.128.0/17",
+          "162.254.192.0/18",
+          "146.66.152.0/21",
+          "208.64.200.0/22",
+          "185.25.182.0/23",
+          "146.66.152.0/24"
+        ],
+        "outbound": "gaming"
       },
       {
         "ip_cidr": [
@@ -256,7 +264,18 @@
         "rule_set": [
           "geosite-ir"
         ],
-        "outbound": "direct"
+        "outbound": "direct",
+        "domain_suffix": [
+          "telewebion.com",
+          "telewebion.net",
+          "telewebion.ir",
+          "sepehrtv.ir",
+          "anten.ir",
+          "lenz.ir",
+          "irib.ir",
+          "livekadeh.com",
+          "wns.live"
+        ]
       },
       {
         "rule_set": [
@@ -288,16 +307,54 @@
         "outbound": "proxy-select"
       }
     ],
+    "rule_set": [
+      {
+        "type": "local",
+        "tag": "geosite-ir",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-ir.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geoip-ir",
+        "format": "binary",
+        "path": "/etc/sing-box/geoip-ir.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-youtube",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-youtube.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-google",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-google.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-instagram",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-instagram.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-facebook",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-facebook.srs"
+      }
+    ],
     "final": "proxy-select"
   },
   "experimental": {
-    "cache_file": {
-      "enabled": true,
-      "path": "/etc/sing-box/cache.db"
-    },
     "clash_api": {
       "external_controller": "127.0.0.1:9090",
       "default_mode": "rule"
+    },
+    "cache_file": {
+      "enabled": true,
+      "path": "/etc/sing-box/cache.db"
     }
   }
 }

@@ -2,6 +2,12 @@ table inet axproxy {
     chain prerouting {
         type nat hook prerouting priority dstnat - 5; policy accept;
         ip daddr { 10.0.0.0/8, 127.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } return
+        # Google-DNS transparent capture — apps that hardcode 8.8.8.8/8.8.4.4
+        # (e.g. 9router proxyAwareFetch) get answered by local dnsmasq -> sing-box
+        # DoH, because MCI blocks/poisons direct queries to Google DNS.
+        # MUST sit before the generic "dport 53 return" rules below.
+        iifname { "br-lan", "br-guest" } ip daddr { 8.8.8.8, 8.8.4.4 } udp dport 53 redirect to :53 comment "Google-DNS transparent capture"
+        iifname { "br-lan", "br-guest" } ip daddr { 8.8.8.8, 8.8.4.4 } tcp dport 53 redirect to :53
         tcp dport 53 return
         udp dport 53 return
         # Standard web, management, game and Minecraft ports

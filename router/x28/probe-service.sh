@@ -9,7 +9,7 @@
 
 PROBE_URL="${PROBE_URL:-https://www.gstatic.com/generate_204}"
 PROBE_TIMEOUT="${PROBE_TIMEOUT:-5}"
-PROBE_SOCKS="${PROBE_SOCKS:-127.0.0.1:1070}"
+PROBE_SOCKS="${PROBE_SOCKS:-192.168.70.1:1080}"
 
 # ProbeProfile: profile → url/timeout/socks. Env-overridable per profile so tests
 # can point at fixtures without patching the file.
@@ -65,7 +65,23 @@ probe_profile() {
 }
 
 case "${1:-}" in
-    check) probe_check "${2:-link}" && echo alive || echo dead ;;
-    data)  probe_check_data && echo alive || echo dead ;;
+    check)
+        if probe_check "${2:-link}"; then
+            echo alive
+            exit 0
+        else
+            echo dead
+            exit 1
+        fi
+        ;;
+    data)
+        if probe_check_data; then
+            echo alive
+            exit 0
+        else
+            echo dead
+            exit 1
+        fi
+        ;;
     profiles) probe_profile ;;
 esac

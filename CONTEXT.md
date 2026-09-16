@@ -7,7 +7,8 @@ Shared vocabulary for the home-network project. Use these terms exactly; don't d
 - **Router** — the Xiaomi Mi Router AX3000T running OpenWrt 25.12.5 at `192.168.1.1`. All automation runs here (not in this repo).
 - **PassWall** — the VPN/proxy subsystem on the router (sing-box + xray + chinadns-ng). Provides the filtered-internet path.
 - **REALITY-443-parsa** — the default proxy node: VLESS+REALITY on the VPS server `85.121.124.158:443` (SNI `www.bing.com`), served by the VPS's sing-box core. It is the global TCP node with no automatic failover; the fail-open watchdog switches the network to direct internet if it dies and auto-recovers when it is healthy again.
-- **Hysteria2** — the secondary, manually-selectable proxy node (server `216.45.52.132:11609`), plus a Hysteria2 inbound on the VPS (`85.121.124.158:31800`, salamander obfuscation). "Proxy UP/DOWN" is measured by an HTTP 204 probe (Cloudflare `generate_204`) through the SOCKS port `1070`.
+- **REALITY clock guard** — the background `ntpd -q` one-shot loop in AX3000T `/etc/rc.local` (logs a `clock-guard` syslog marker). REALITY rejects every handshake while client/server clock skew exceeds ~2 minutes, and the RTC-less board cold-boots with a stale `sysfixtime`; this guard re-syncs the clock before proxied internet matters. See §7c of the complete reference.
+- **Hysteria2** — a proxy node and a Hysteria2 inbound on the VPS (`85.121.124.158:31800`, salamander obfuscation). Its usability from the home MCI cellular uplink is **IP-pool dependent**: on the Sept 15 pool MCI dropped all UDP toward the VPS IP; after the Sept 16 re-registration (pool `37.156.153.22`) it came back alive (~292 ms) and now anchors the `gaming` urltest group (fallback: vps-reality). Never rely on it unconditionally — the `gaming` group's health check handles the flip.
 - **s-ui** — the VPS proxy panel running the sing-box core (replaces x-ui/xray): panel `:2095/app/`, subscription `:2096/sub/`.
 - **nlbwmon** — bandwidth accounting on the router; `nlbw -c json -g mac` returns per-device totals. The per-user usage source.
 - **Telegram bot** — @xirouterbot (token/chat in `/etc/tg.conf`). Sends alerts and hosts the interactive Panel.
@@ -31,10 +32,10 @@ Shared vocabulary for the home-network project. Use these terms exactly; don't d
 
 ## X28 smart edge (the WAN appliance)
 
-- **X28** — the ZLT X28 4G/5G cellular router at `192.168.70.1`; the **only WAN path** the home network rides on. It holds the Samantel SIM (camping on MCI 5G NSA at this location; may show Rightel/Irancell/MCI depending on towers). Root access, v2rayA + xray-core, and the smart-edge scripts live here. See `router/x28/README.md`.
-- **Link** — the X28's live connection state: operator (MCI preferred), PLMN (43211), tech (5G(NSA)/4G), RSRP (LTE anchor) / RSRP_5G (NR), signal level. Read via `/root/x28link.sh` → `linkstate.sh`.
+- **X28** — the ZLT X28 4G/5G cellular router at `192.168.70.1`; the **only WAN path** the home network rides on. It holds the Samantel SIM (camping on MCI 5G NSA at this location; may show Rightel/Irancell/MCI depending on towers). Root access, the mihomo proxy engine (SOCKS `192.168.70.1:1080`, DNS `127.0.0.1:5353`), and the smart-edge scripts live here. See `router/x28/README.md`.
+- **Link** — the X28's live connection state: operator (MCI preferred), PLMN (43211), tech (5G(NSA)/4G), RSRP (LTE anchor) / RSRP_5G (NR), signal level. Read via `linkstate.sh` on the X28 (`/data/proxy/linkstate.sh`); a wrapper is deployed to AX3000T as `/root/x28link.sh`.
 - **Link stickiness** — keeping the X28 on the preferred operator: the `x28watch.sh` cron detects operator drift/degradation and re-selects MCI via `x28reselect.sh`.
-- **Crypto engine** — the xray-core SOCKS service on the X28 (`:1080`, `/etc/init.d/x28proxy`) that terminates VLESS+REALITY to the VPS, offloading tunnel crypto from the AX3000T.
+- **Crypto engine** — the mihomo proxy engine on the X28 (`192.168.70.1:1080` SOCKS, `:12345` transparent, `127.0.0.1:5353` DNS) that terminates VLESS+REALITY to the VPS, offloading tunnel crypto from the AX3000T. Superseded the older xray-core/v2rayA setup (`/etc/init.d/x28proxy` is gone).
 - **via_x28** — the PassWall node on the AX3000T pointing at the X28 crypto-engine SOCKS (`192.168.70.1:1080`); switching to it routes PassWall's proxied traffic through the X28.
 - **Smart edge** — the role this effort gives the X28: link stickiness + link telemetry + management hardening + backup proxy engine, integrated into the existing home-network control plane.
 
