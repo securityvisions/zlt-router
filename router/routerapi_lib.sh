@@ -113,10 +113,18 @@ ra_proxy_node() {
 }
 ra_usage_today() { "$RA_USAGE_SH" --today 2>/dev/null; }   # name|meta|bytes lines
 ra_usage_month_rows() {  # [YYYY-MM] -> "key|bytes" summed per key (tolerant parse)
-    local f
-    f="$RA_USAGE_LOG_DIR/${1:-$(date +%Y-%m)}.log"
+    local log_file="" month_target="${1:-${RA_USAGE_MONTH:-}}"
+    if [ -z "$month_target" ]; then
+        month_target=$(date +%Y-%m)
+        if [ ! -f "$RA_USAGE_LOG_DIR/$month_target.log" ]; then
+            local latest
+            latest=$(ls "$RA_USAGE_LOG_DIR"/[0-9][0-9][0-9][0-9]-[0-9][0-9].log 2>/dev/null | sort | tail -n 1)
+            [ -n "$latest" ] && log_file="$latest"
+        fi
+    fi
+    [ -n "$log_file" ] || log_file="$RA_USAGE_LOG_DIR/$month_target.log"
     awk -F'|' '{ b=$NF; k=$(NF-1); if (b ~ /^[0-9]+$/ && k ~ /./) { s[k]+=b } }
-        END { for (k in s) print k "|" s[k] }' "$f" 2>/dev/null
+        END { for (k in s) print k "|" s[k] }' "$log_file" 2>/dev/null
 }
 ra_nlbw_macs() { hn_sys_nlbw_macs; }
 ra_wan_bytes() {
@@ -202,11 +210,11 @@ ra_json_status() {
     echo "{\"uptime\":\"$(ra_esc "$up")\",\"load\":\"$(ra_esc "$load")\",\"ram\":{\"used_mb\":${used:-0},\"total_mb\":${total:-0}},\"temp_c\":${temp:-null},\"disk\":{\"pct\":${dpct:-0},\"free\":\"$(ra_esc "$dfree")\"},\"proxy\":{\"state\":\"$pstate\",\"latency_s\":${plat:-0},\"node\":\"$(ra_esc "$pnode")\"}}"
 }
 
-ra_json_usage() {  # <today|month>
-    local period="${1:-today}" out= first=1
+ra_json_usage() {  # <today|month> [YYYY-MM]
+    local period="${1:-today}" target="${2:-}" out= first=1
     if [ "$period" = "month" ]; then
         local rows line key bytes name mac gb
-        rows=$(ra_usage_month_rows | sort -t'|' -k2 -rn)
+        rows=$(ra_usage_month_rows "$target" | sort -t'|' -k2 -rn)
         while IFS='|' read -r key bytes; do
             [ -z "$key" ] && continue
             case "$key" in *:*) mac="$key";; *) mac="";; esac
@@ -589,7 +597,7 @@ ra_route() {
     else
         case "$PATH_INFO" in
             /status)        ra_json_status ;;
-            /usage)         ra_json_usage "$(ra_qp period)" ;;
+            /usage)         ra_json_usage "$(ra_qp period)" "$(ra_qp month)" ;;
             /cost)          ra_json_cost "$(ra_qp friday)" ;;
             /bill)          ra_json_bill "$(ra_qp friday)" "$(ra_qp month)" ;;
             /balance)       ra_json_balance ;;

@@ -33,6 +33,7 @@ x28-vps-heal|device|/data/proxy/x28-vps-heal.sh|router/x28/x28-vps-heal.sh|x28
 probe-service|repo|/data/proxy/probe-service.sh|router/x28/probe-service.sh|x28
 tproxy-fixed-enable|repo|/data/proxy/tproxy-fixed-enable.sh|router/x28/tproxy-fixed-enable.sh|x28
 linkstate|repo|/data/proxy/linkstate.sh|router/x28/linkstate.sh|x28
+probe-service-ax|repo|/usr/sbin/probe-service.sh|router/x28/probe-service.sh|ax
 proxy-watchdog|device|/usr/sbin/proxy-watchdog.sh|router/proxy-watchdog.sh|ax
 axproxy-nft|repo|/etc/axproxy.nft|router/axproxy.nft|ax
 axproxy-sh|repo|/etc/axproxy.sh|router/axproxy.sh|ax

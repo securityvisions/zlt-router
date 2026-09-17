@@ -5,17 +5,25 @@
 . /root/hnlib.sh 2>/dev/null || { echo "hnlib.sh missing" >&2; exit 1; }
 
 tg_send() {
-    local text="$1"
+    local text="$1" proxy_arg=""
     [ -z "$text" ] && return 0
-    curl -s -m 8 "https://api.telegram.org/bot$TOKEN/sendMessage" \
+    if [ -n "${TG_PROXY:-}" ]; then
+        proxy_arg="-x $TG_PROXY"
+    elif nc -z -w 1 127.0.0.1 1080 >/dev/null 2>&1; then
+        proxy_arg="-x socks5h://127.0.0.1:1080"
+    elif nc -z -w 1 192.168.70.1 1080 >/dev/null 2>&1; then
+        proxy_arg="-x socks5h://192.168.70.1:1080"
+    fi
+    curl -s -m 12 $proxy_arg "https://api.telegram.org/bot$TOKEN/sendMessage" \
         --data-urlencode "chat_id=$CHAT_ID" \
         --data-urlencode "parse_mode=HTML" \
+        --data-urlencode 'link_preview_options={"is_disabled":true}' \
         --data-urlencode "text=$text" >> /tmp/tg.log 2>&1 || true
 }
 
 tg_card() {  # tg_card <title> <body>  — send an alert Card (alert_text + tg_send)
     local text
-    text=$(alert_text "$1" "$(esc "$2")")
+    text=$(alert_text "$(esc "$1")" "$(esc "$2")")
     tg_send "$text"
 }
 

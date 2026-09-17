@@ -20,18 +20,22 @@ if [ -f "$STATE_FILE" ]; then
 fi
 
 probe_proxy() {
-    # Try Google 204 first
+    if [ -x /usr/sbin/probe-service.sh ]; then
+        /usr/sbin/probe-service.sh check passwall >/dev/null 2>&1 && return 0 || return 1
+    fi
+    # Inline fallback
     code=$(curl -s -m 5 -x socks5h://127.0.0.1:1080 -o /dev/null -w "%{http_code}" "$URL_GOOGLE" 2>/dev/null)
     [ "$code" = "204" ] && return 0
-    
-    # If Google fails, fallback to Cloudflare 204 before declaring failure
     code=$(curl -s -m 5 -x socks5h://127.0.0.1:1080 -o /dev/null -w "%{http_code}" "$URL_CLOUDFLARE" 2>/dev/null)
     [ "$code" = "204" ] && return 0
-    
     return 1
 }
 
 probe_direct() {
+    if [ -x /usr/sbin/probe-service.sh ]; then
+        /usr/sbin/probe-service.sh direct >/dev/null 2>&1 && return 0 || return 1
+    fi
+    # Inline fallback
     code=$(curl -s -m 4 -o /dev/null -w "%{http_code}" "$URL_GOOGLE" 2>/dev/null)
     [ "$code" = "204" ] && return 0
     code=$(curl -s -m 4 -o /dev/null -w "%{http_code}" "$URL_CLOUDFLARE" 2>/dev/null)

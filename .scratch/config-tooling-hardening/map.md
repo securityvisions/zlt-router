@@ -18,12 +18,15 @@ Label: `wayfinder:map`
 
 - [01 - Build netpull: status, pull, never push](issues/01-netpull.md): netpull shipped with an 11-entry manifest, batched status, pull-only semantics; fixture-tested 10/10 device-free.
 - [02 - Pull proxy-watchdog.sh into the repo](issues/02-pull-proxy-watchdog.md): canonical copy pulled from AX3000T; no-canonical gap closed.
+- [03 - ProbeService seam for BOTH devices](issues/03-probeservice-seam.md): unified ProbeService with socks5h remote resolution, dual-endpoint fallback, auto SOCKS selection, and delegated callers.
 - [04 - Fix CONTEXT.md naming drift](issues/04-context-naming-drift.md): mihomo is the X28 engine, Hysteria2 availability is IP-pool dependent, linkstate location corrected.
+- [05 - Repair the Usage Engine Seam & Deterministic Time Injection](issues/05-usage-core-date-seam.md): parameterized month target in `ra_json_usage` and tolerant latest-log fallback in `ra_usage_month_rows`, making entire repo test suite 100% green.
+- [06 - Encapsulate Telegram Transport & Format Guarding](issues/06-tg-transport-guard.md): guarded HTML escaping for alert titles, SOCKS proxy auto-discovery, and link-preview suppression in `tg.sh`.
+- [07 - Decouple Bot Command Execution from Telegram UI](issues/07-bot-command-dispatcher.md): pure rendering seam `bot_render_card` unifying inline button callbacks and slash commands with zero output divergence.
 
 ## Not yet specified
 
-- Lib prelude consolidation (`esc()` ×3, two Telegram senders, per-script loader chains → one `lib/prelude.sh`) — real duplication but no incident forces it yet; graduate when a Telegram API change actually bites, or after the probe seam proves the pattern.
-- Drift alarm automation: cron that runs `netpull status` and alerts Telegram on divergence — shape depends on what `netpull status` outputs, so ticket it after ticket 01.
+- Drift alarm automation: cron that runs `netpull status` and alerts Telegram on divergence — shape depends on what `netpull status` outputs.
 
 ## Out of scope
 
@@ -33,4 +36,4 @@ Label: `wayfinder:map`
 
 ## Blocking
 
-- 02 and 04 are unblocked; 01 is the recommended first pull (its manifest decides what 02 covers); 03 is an independent grilling ticket.
+- 03 (ProbeService cross-device), 05 (usage-core date seam), 06 (tg-transport), and 07 (bot-dispatcher) are unblocked and ready for implementation.

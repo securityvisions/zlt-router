@@ -69,6 +69,9 @@ opname() {
 
 # check_data: true if any endpoint answers HTTPS by IP (no DNS involved)
 check_data() {
+    if [ -x /data/proxy/probe-service.sh ]; then
+        sh /data/proxy/probe-service.sh data >/dev/null 2>&1 && return 0 || return 1
+    fi
     for ep in $ENDPOINTS; do
         code=$(curl -k -s -m 8 -o /dev/null -w '%{http_code}' "$ep" 2>/dev/null)
         case "$code" in 200|204|301|302) return 0 ;; esac

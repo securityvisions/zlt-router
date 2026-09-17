@@ -8,8 +8,12 @@
 # Test seam: PROBE_URL, PROBE_TIMEOUT, PROBE_SOCKS, and per-profile overrides.
 
 PROBE_URL="${PROBE_URL:-https://www.gstatic.com/generate_204}"
+PROBE_FALLBACK_URL="${PROBE_FALLBACK_URL:-http://cp.cloudflare.com/generate_204}"
 PROBE_TIMEOUT="${PROBE_TIMEOUT:-5}"
-PROBE_SOCKS="${PROBE_SOCKS:-192.168.70.1:1080}"
+
+DEFAULT_SOCKS="192.168.70.1:1080"
+[ -f /etc/sing-box/config.json ] && DEFAULT_SOCKS="127.0.0.1:1080"
+PROBE_SOCKS="${PROBE_SOCKS:-$DEFAULT_SOCKS}"
 
 # ProbeProfile: profile → url/timeout/socks. Env-overridable per profile so tests
 # can point at fixtures without patching the file.
@@ -27,22 +31,37 @@ probe_profile_get() {
     printf '%s|%s|%s' "$url" "$timeout" "$socks"
 }
 
+_check_endpoint() {  # _check_endpoint <url> <timeout> [socks]
+    local url="$1" timeout="$2" socks="${3:-}" code proxy_arg=""
+    [ -n "$socks" ] && proxy_arg="-x socks5h://$socks"
+    code=$(curl -sS -m "$timeout" $proxy_arg -o /dev/null -w '%{http_code}' "$url" 2>/dev/null)
+    case "$code" in 200|204) return 0 ;; esac
+    return 1
+}
+
 # probe_check <profile> [url_override] — 0 when path alive (HTTP 200/204), else 1.
 # One implementation for dns-fix:tunnel_ok, x28-vps-heal:mihomo_auto_dead,
 # x28-health:proxied_path, operator-watchdog:check_data, snap.sh proxy_state.
 probe_check() {
-    local profile="${1:-link}" url_override="$2" spec url timeout socks code
+    local profile="${1:-link}" url_override="$2" spec url timeout socks
     spec=$(probe_profile_get "$profile")
     url=$(printf '%s' "$spec" | cut -d'|' -f1)
     timeout=$(printf '%s' "$spec" | cut -d'|' -f2)
     socks=$(printf '%s' "$spec" | cut -d'|' -f3)
     [ -n "$url_override" ] && url="$url_override"
-    if [ -n "$socks" ]; then
-        code=$(curl -sS -m "$timeout" --socks5 "$socks" -o /dev/null -w '%{http_code}' "$url" 2>/dev/null)
-    else
-        code=$(curl -sS -m "$timeout" -o /dev/null -w '%{http_code}' "$url" 2>/dev/null)
+    _check_endpoint "$url" "$timeout" "$socks" && return 0
+    if [ -z "$url_override" ] && [ -n "$PROBE_FALLBACK_URL" ] && [ "$url" != "$PROBE_FALLBACK_URL" ]; then
+        _check_endpoint "$PROBE_FALLBACK_URL" "$timeout" "$socks" && return 0
     fi
-    case "$code" in 200|204) return 0 ;; *) return 1 ;; esac
+    return 1
+}
+
+# probe_check_direct — fail-open direct connectivity check with gateway ping fallback
+probe_check_direct() {
+    local timeout="${PROBE_TIMEOUT:-4}" gw="${PROBE_GATEWAY:-192.168.70.1}"
+    _check_endpoint "$PROBE_URL" "$timeout" && return 0
+    [ -n "$PROBE_FALLBACK_URL" ] && _check_endpoint "$PROBE_FALLBACK_URL" "$timeout" && return 0
+    ping -c 2 -W 2 "$gw" >/dev/null 2>&1
 }
 
 # probe_check_data — direct-IP data probe (no DNS), used by watchdog/bot/status.
@@ -76,6 +95,15 @@ case "${1:-}" in
         ;;
     data)
         if probe_check_data; then
+            echo alive
+            exit 0
+        else
+            echo dead
+            exit 1
+        fi
+        ;;
+    direct)
+        if probe_check_direct; then
             echo alive
             exit 0
         else

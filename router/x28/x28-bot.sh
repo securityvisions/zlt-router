@@ -401,6 +401,56 @@ html_send_owner_panel() {
     timeout 20 curl -s -m 18 -x "$PROXY" "$API/sendMessage"         --data-urlencode "chat_id=${CHAT_ID:-}"         --data-urlencode "text=$body"         --data-urlencode "parse_mode=HTML"         --data-urlencode "reply_markup=$kb"         --data-urlencode 'link_preview_options={"is_disabled":true}' >/dev/null 2>&1 || true
 }
 
+# bot_render_card <cmd> [arg] — pure rendering seam shared by inline taps, slash cmds and CLI
+bot_render_card() {
+    local cmd="$1" arg="${2:-}" hv act res
+    case "$cmd" in
+        status)
+            hv=$(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)
+            printf '<b>📊 Status</b> · %s\n%s\n\n%s' "$(now_hm)" "$(verdict_emoji "$hv")" "$(esc "$(fmt_status)")"
+            ;;
+        link)
+            printf '<b>📶 Link detail</b> · %s\n<blockquote expandable>%s</blockquote>' "$(now_hm)" "$(esc "$(timeout 20 sh /data/proxy/linkstate.sh 2>/dev/null)")"
+            ;;
+        usage)
+            printf '<b>💾 Usage today</b>\n<pre>%s</pre>' "$(esc "$(sh /data/proxy/usage/x28-usage.sh today 2>/dev/null)")"
+            ;;
+        bill)
+            printf '<b>🧾 Weekly bill</b>\n<pre>%s</pre>' "$(esc "$(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null)")"
+            ;;
+        balance)
+            printf '<b>💰 Balance</b> · %s\n%s' "$(now_hm)" "$(esc "$(bal_card | head -20)")"
+            ;;
+        devices)
+            printf '<b>📱 Devices</b>\n<pre>%s</pre>' "$(esc "$(fmt_devices)")"
+            ;;
+        proxy)
+            act=$(curl -s -m 5 http://127.0.0.1:9090/proxies/auto 2>/dev/null | grep -o '"now":"[^"]*"' | cut -d'"' -f4)
+            hv=$(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)
+            res=$(sh /data/proxy/x28-rescue.sh status 2>/dev/null | tr '\n' ' ')
+            printf '<b>🛰️ Proxy</b> · %s\nactive : <code>%s</code>\nhealth : %s\nrescue : %s' "$(now_hm)" "$act" "$(verdict_emoji "$hv")" "$res"
+            ;;
+        budget)
+            printf '<b>💰 Budget</b>\n%s' "$(esc "$(sh /data/proxy/x28-budget.sh --card 2>/dev/null)")"
+            ;;
+        outages)
+            printf '<b>📉 Outages</b>\n%s' "$(esc "$(sh /data/proxy/x28-outage-ledger.sh report $arg 2>/dev/null)")"
+            ;;
+        digest)
+            printf '%s' "$(esc "$(sh /data/proxy/x28-digest.sh 2>/dev/null)")"
+            ;;
+        people|month)
+            printf '%s' "$(sh /data/proxy/x28-people.sh $arg 2>/dev/null)"
+            ;;
+        help|start|panel)
+            help_text
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 # ---- bot mode ----
 bot() {
     load_conf_or_die
@@ -459,64 +509,49 @@ bot() {
                     log "cb: skipped stale tap=$action (age $(( $(date +%s) - cbdate ))s)"
                 else
                     log "cb: tap=$action"
-                    case "$action" in
-                        status)  body="<b>📊 Status</b> · $(now_hm)
-$(esc "$(fmt_status)")" ;;
-                        link)    body="<b>📶 Link detail</b> · $(now_hm)
-<blockquote expandable>$(esc "$(timeout 20 sh /data/proxy/linkstate.sh 2>/dev/null)")</blockquote>" ;;
-                        usage)   body="<b>💾 Usage today</b>
-<pre>$(esc "$(sh /data/proxy/usage/x28-usage.sh today 2>/dev/null)")</pre>" ;;
-                        balance) body="<b>💰 Balance</b> · $(now_hm)
-$(esc "$(bal_card | head -12)")" ;;
-                        devices) body="<b>📱 Devices</b>
-<pre>$(esc "$(fmt_devices)")</pre>" ;;
-                        bill)    body="<b>🧾 Weekly bill</b>
-<pre>$(esc "$(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null)")</pre>" ;;
-                        proxy)   body="<b>🛰️ Proxy</b> · $(now_hm)
-active : <code>$(curl -s -m 5 http://127.0.0.1:9090/proxies/auto 2>/dev/null | grep -o '"now":"[^"]*"' | cut -d'"' -f4)</code>
-health : $(verdict_emoji "$(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)")
-rescue : $(sh /data/proxy/x28-rescue.sh status 2>/dev/null | tr '\n' ' ')" ;;
-                        budget)  body="<b>💰 Budget</b>
-$(esc "$(sh /data/proxy/x28-budget.sh --card 2>/dev/null)")" ;;
-                        outages) body="<b>📉 Outages</b>
-$(esc "$(sh /data/proxy/x28-outage-ledger.sh report 2>/dev/null)")" ;;
-                        digest)  body="$(esc "$(sh /data/proxy/x28-digest.sh 2>/dev/null)")" ;;
-                        people)  body="$(esc "$(sh /data/proxy/x28-people.sh 2>/dev/null)")" ;;
-                        wifi)
-                            if path=$(sh /data/proxy/x28-wifi.sh qr 2>/dev/null); then
-                                cap=$(sh /data/proxy/x28-wifi.sh card 2>/dev/null | head -n 3 | esc)
-                                send_photo "$path" "$cap" || html_send "$(esc "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)")"
-                            else
-                                html_send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
-                            fi
-                            body="" ;;
-                        ledg:*)
-                            lf=${action#ledg:}
-                            if [ -f "$lf" ]; then body=$(cat "$lf"); else body="page not found"; fi ;;
-                        ownd:*)
-                            mac=${action#ownd:}
-                            body="<b>👤 Assign device</b>
+                    if card=$(bot_render_card "$action"); then
+                        body="$card"
+                    else
+                        case "$action" in
+                            wifi)
+                                if path=$(sh /data/proxy/x28-wifi.sh qr 2>/dev/null); then
+                                    cap=$(sh /data/proxy/x28-wifi.sh card 2>/dev/null | head -n 3 | esc)
+                                    send_photo "$path" "$cap" || html_send "$(esc "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)")"
+                                else
+                                    html_send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
+                                fi
+                                body="" ;;
+                            ledg:*)
+                                lf=${action#ledg:}
+                                if [ -f "$lf" ]; then body=$(cat "$lf"); else body="page not found"; fi ;;
+                            ownd:*)
+                                mac=${action#ownd:}
+                                body="<b>👤 Assign device</b>
 Device: <code>$(esc "$mac")</code>
 
 Reply with: <code>/owner assign $mac &lt;name&gt;</code>"
-                            kb='{"inline_keyboard":[[{"text":"⬜ Unassigned","callback_data":"ownu:'"$mac"'"}]]}'
-                            answer_cbq "$cbid"
-                            timeout 20 curl -s -m 18 -x "$PROXY" "$API/sendMessage"                                 --data-urlencode "chat_id=$CHAT_ID"                                 --data-urlencode "text=$body"                                 --data-urlencode "parse_mode=HTML"                                 --data-urlencode "reply_markup=$kb" >/dev/null 2>&1 || true
-                            body="" ;;
-                        ownp:*)
-                            pname=$(printf '%s' "${action#ownp:}" | base64 -d 2>/dev/null)
-                            body="<b>👤 $pname's devices</b> · $(now_hm)
+                                kb='{"inline_keyboard":[[{"text":"⬜ Unassigned","callback_data":"ownu:'"$mac"'"}]]}'
+                                answer_cbq "$cbid"
+                                timeout 20 curl -s -m 18 -x "$PROXY" "$API/sendMessage" \
+                                    --data-urlencode "chat_id=$CHAT_ID" \
+                                    --data-urlencode "text=$body" \
+                                    --data-urlencode "parse_mode=HTML" \
+                                    --data-urlencode "reply_markup=$kb" >/dev/null 2>&1 || true
+                                body="" ;;
+                            ownp:*)
+                                pname=$(printf '%s' "${action#ownp:}" | base64 -d 2>/dev/null)
+                                body="<b>👤 $pname's devices</b> · $(now_hm)
 $(grep -i "|$pname\$" /data/proxy/owners.conf 2>/dev/null | while IFS='|' read -r mac person; do
     host=$(grep "$mac" /tmp/dnsmasq.leases 2>/dev/null | awk '{print \$4}')
     printf '• %s <code>%s</code>\n' "\${host:-?}" "\$mac"
 done)" ;;
-                        ownl:*) body="<b>👤 All assignments</b>
+                            ownl:*) body="<b>👤 All assignments</b>
 \$(sh /data/proxy/x28-owners.sh list 2>/dev/null | esc)" ;;
-                        ownr:*) html_send_owner_panel; body="" ;;
-                        help)    body="$(help_text)" ;;
-                        panel|start) body="$(help_text)" ;;
-                        *)       body="unknown tap" ;;
-                    esac
+                            ownr:*) html_send_owner_panel; body="" ;;
+                            help|panel|start) body="$(help_text)" ;;
+                            *)       body="unknown tap" ;;
+                        esac
+                    fi
                     [ -n "$cbmid" ] && edit_panel "$cbmid" "$body"
                 fi
             elif [ "$cid" = "$CHAT_ID" ] && [ -n "$text" ]; then
@@ -525,54 +560,23 @@ done)" ;;
                 else
                 cmd=$(printf '%s' "$text" | awk '{print $1}')
                 log "cmd: $cmd"
-                case "$cmd" in
-                    /start|/help) html_send "$(help_text)"; send_panel ;;
-                    /panel)       send_panel ;;
-                    /privacy)
-                        arg=$(printf '%s' "$text" | awk '{print $2}' | tr 'A-Z' 'a-z')
-                        privacy_set "$arg" || :   # on/off set; bare/bogus = no state change
-                        st=$(privacy_state)
-                        if [ "$st" = "on" ]; then
-                            html_send "🔒 <b>privacy mode ON</b> — sensitive data (names, MACs, IPs, device names) is masked in every card."
-                        else
-                            html_send "👁 <b>privacy mode OFF</b> — cards show real data again."
-                        fi ;;
-                    /status)
-                        hv=$(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)
-                        html_send "<b>📊 Status</b> · $(now_hm)
-$(verdict_emoji "$hv")
-
-$(esc "$(fmt_status)")" ;;
-                    /link)
-                        html_send "<b>📶 Link detail</b> · $(now_hm)
-<blockquote expandable>$(esc "$(timeout 20 sh /data/proxy/linkstate.sh 2>/dev/null)")</blockquote>" ;;
-                    /usage)
-                        html_send "<b>💾 Usage today</b>
-<pre>$(esc "$(sh /data/proxy/usage/x28-usage.sh today 2>/dev/null)")</pre>" ;;
-                    /bill)
-                        html_send "<b>🧾 Weekly bill</b>
-<pre>$(esc "$(sh /data/proxy/usage/x28-usage.sh week 2>/dev/null)")</pre>" ;;
-                    /balance)
-                        html_send "<b>💰 Balance</b> · $(now_hm)
-$(esc "$(bal_card | head -20)")" ;;
-                    /devices)
-                        html_send "<b>📱 Devices</b>
-<pre>$(esc "$(fmt_devices)")</pre>" ;;
-                    /proxy)
-                        html_send "<b>🛰️ Proxy</b> · $(now_hm)
-active : <code>$(curl -s -m 5 http://127.0.0.1:9090/proxies/auto 2>/dev/null | grep -o '"now":"[^"]*"' | cut -d'"' -f4)</code>
-health : $(verdict_emoji "$(sh /data/proxy/x28-health.sh 2>/dev/null | tail -1)")
-rescue : $(sh /data/proxy/x28-rescue.sh status 2>/dev/null | tr '\n' ' ')" ;;
-                    /budget)
-                        html_send "<b>💰 Budget</b>
-$(esc "$(sh /data/proxy/x28-budget.sh --card 2>/dev/null)")" ;;
-                    /outages)
-                        arg=$(safe_arg "$(printf '%s' "$text" | awk '{print $2}')")
-                        html_send "<b>📉 Outages</b>
-$(esc "$(sh /data/proxy/x28-outage-ledger.sh report $arg 2>/dev/null)")" ;;
-                    /people|/month)
-                        arg=$(safe_arg "$(printf '%s' "$text" | awk '{print $2}')")
-                        html_send "$(sh /data/proxy/x28-people.sh $arg 2>/dev/null)" ;;
+                card_cmd="${cmd#/}"
+                card_arg=$(safe_arg "$(printf '%s' "$text" | awk '{print $2}')")
+                if card=$(bot_render_card "$card_cmd" "$card_arg"); then
+                    html_send "$card"
+                else
+                    case "$cmd" in
+                        /start|/help) html_send "$(help_text)"; send_panel ;;
+                        /panel)       send_panel ;;
+                        /privacy)
+                            arg=$(printf '%s' "$text" | awk '{print $2}' | tr 'A-Z' 'a-z')
+                            privacy_set "$arg" || :   # on/off set; bare/bogus = no state change
+                            st=$(privacy_state)
+                            if [ "$st" = "on" ]; then
+                                html_send "🔒 <b>privacy mode ON</b> — sensitive data (names, MACs, IPs, device names) is masked in every card."
+                            else
+                                html_send "👁 <b>privacy mode OFF</b> — cards show real data again."
+                            fi ;;
                     /owner)
                         sub=$(printf '%s' "$text" | awk '{print $2}')
                         rest=$(printf '%s' "$text" | cut -s -d' ' -f3-)
@@ -637,6 +641,7 @@ $(esc "$(sh /data/proxy/x28-rescue.sh status 2>/dev/null)")$( [ -n "$rarg" ] && 
                     /switch_rightel) do_switch "$RIGHTEL" "Rightel" ;;
                     *) html_send "❓ Unknown command — <code>/help</code> lists everything." ;;
                 esac
+                fi
                 fi
             elif [ -n "$cid" ] && [ "$cid" != "$CHAT_ID" ]; then
                 log "ignored update from chat $cid"

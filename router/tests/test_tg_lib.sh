@@ -40,4 +40,9 @@ printf '%s' "$v" | grep -qF '✅' && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
 grep -qF 'parse_mode=HTML' "$TGLIB" && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
 grep -qF 'link_preview_options' "$TGLIB" && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
 
+# tg.sh contract checks
+TG_SH="$HERE/../tg.sh"
+grep -qF 'alert_text "$(esc "$1")"' "$TG_SH" && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - tg.sh title unescaped"; }
+grep -qF 'link_preview_options' "$TG_SH" && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "FAIL - tg.sh link_preview_options missing"; }
+
 summary
