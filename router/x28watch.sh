@@ -62,16 +62,27 @@ x28w_note() {  # x28w_note <action> — stamp the action time (now).
     hn_cooldown_note "$STATE" "$1"
 }
 
+# run_with_timeout <seconds> <cmd...>
+run_with_timeout() {
+    local sec="$1"
+    shift
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$sec" "$@"
+    else
+        "$@"
+    fi
+}
+
 # read_link — run the X28 link-state reader (talks to the X28 HTTP API).
 read_link() {
-    timeout 20 "$X28_LINK_SH" 2>/dev/null
+    run_with_timeout 20 "$X28_LINK_SH" 2>/dev/null
 }
 link_field() { printf '%s\n' "$1" | sed -n "s/^$2=//p" | head -1; }
 
 # fix_operator — re-select the preferred operator on the X28 (can take ~90s).
 fix_operator() {
     log "re-selecting preferred operator on X28"
-    timeout 110 env X28_TARGET_PLMN="$X28_TARGET_PLMN" X28_TARGET_ACT="$X28_TARGET_ACT" \
+    run_with_timeout 110 env X28_TARGET_PLMN="$X28_TARGET_PLMN" X28_TARGET_ACT="$X28_TARGET_ACT" \
         sh "$X28_RESELECT_SH" >/dev/null 2>&1
     hn_event_record operator_reselected "X28 drifted off $X28_PREF_OPERATOR; re-selecting" x28watch >/dev/null 2>&1 || true
 }

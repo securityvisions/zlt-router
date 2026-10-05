@@ -4,8 +4,35 @@
 . /root/botlib.sh 2>/dev/null || { echo "botlib.sh missing" >&2; exit 1; }
 . /root/hnlib.sh 2>/dev/null || { echo "hnlib.sh missing" >&2; exit 1; }
 
-tg_send() {
-    local text="$1" proxy_arg=""
+MAXMSG="${MAXMSG:-4000}"
+
+split_chunks() {
+    printf '%s\n' "${1:-}" | awk -v max="${MAXMSG:-4000}" '
+    BEGIN { if (max !~ /^[0-9]+$/ || max == 0) max = 4000 }
+    {
+        line = $0 "\n"
+        while (length(line) > max) { print substr(line, 1, max); line = substr(line, max+1) }
+        if (length(buf) + length(line) > max) { printf "%s", buf; buf = "" }
+        buf = buf line
+    }
+    END { sub(/\n$/, "", buf); printf "%s", buf }'
+}
+
+join_chunks() {
+    _jf=$(mktemp 2>/dev/null) || return 0
+    split_chunks "${1:-}" > "$_jf"
+    awk -v max="${MAXMSG:-4000}" -v sep="[[C]]" '
+    {
+        piece = $0 "\n"
+        if (length(buf) > 0 && length(buf) + length(piece) > max) { printf "%s%s", buf, sep; buf = "" }
+        buf = buf piece
+    }
+    END { sub(/\n$/, "", buf); printf "%s", buf }' "$_jf"
+    rm -f "$_jf"
+}
+
+tg_send_one() {
+    local text="$1" proxy_arg="" resp ok
     [ -z "$text" ] && return 0
     if [ -n "${TG_PROXY:-}" ]; then
         proxy_arg="-x $TG_PROXY"
@@ -14,11 +41,35 @@ tg_send() {
     elif nc -z -w 1 192.168.70.1 1080 >/dev/null 2>&1; then
         proxy_arg="-x socks5h://192.168.70.1:1080"
     fi
-    curl -s -m 12 $proxy_arg "https://api.telegram.org/bot$TOKEN/sendMessage" \
+    resp=$(curl -s -m 12 $proxy_arg "https://api.telegram.org/bot$TOKEN/sendMessage" \
         --data-urlencode "chat_id=$CHAT_ID" \
         --data-urlencode "parse_mode=HTML" \
         --data-urlencode 'link_preview_options={"is_disabled":true}' \
-        --data-urlencode "text=$text" >> /tmp/tg.log 2>&1 || true
+        --data-urlencode "text=$text" 2>&1)
+    if [ -n "$resp" ]; then
+        echo "$resp" >> /tmp/tg.log 2>&1
+        ok=$(printf '%s' "$resp" | jq -r '.ok // "false"' 2>/dev/null || true)
+        if [ "$ok" != "true" ] && [ -n "$ok" ]; then
+            echo "$(date '+%Y-%m-%d %H:%M:%S') tg_send failed: $resp" >> /tmp/tg-error.log 2>&1 || true
+        fi
+    fi
+}
+
+tg_send() {
+    local text="$1" rest part
+    [ -z "$text" ] && return 0
+    if [ "${#text}" -le "${MAXMSG:-4000}" ]; then
+        tg_send_one "$text"
+        return
+    fi
+    rest=$(join_chunks "$text")
+    while [ -n "$rest" ]; do
+        case "$rest" in
+            *"[[C]]"*) part=${rest%%"[[C]]"*}; rest=${rest#*"[[C]]"} ;;
+            *)         part=$rest;             rest="" ;;
+        esac
+        [ -n "$part" ] && tg_send_one "$part"
+    done
 }
 
 tg_card() {  # tg_card <title> <body>  — send an alert Card (alert_text + tg_send)

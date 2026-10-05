@@ -14,6 +14,15 @@ log() { echo "[$(date '+%F %T')] $*" >> "$LOG"; }
 # ── Rendering core (chat-beauty-v2: shared botlib) ──────────────────────────
 . /root/botlib.sh 2>/dev/null || { echo "botlib.sh missing" >&2; exit 1; }
 . /root/hnlib.sh 2>/dev/null || { echo "hnlib.sh missing" >&2; exit 1; }
+. /root/device-registry.sh 2>/dev/null || true
+
+bot_dev_name() {
+    if command -v dev_reg_name >/dev/null 2>&1; then
+        dev_reg_name "$1"
+    else
+        /root/usage.sh --name "$1"
+    fi
+}
 
 # ── Telegram send (Q12: all botcmd output is HTML) ─────────────────────────
 send() {  # send <chat_id> <text> [reply_markup]
@@ -154,7 +163,7 @@ cmd_clients() {
         while read -r ts mac ip lname rest; do
             [ -z "$mac" ] && continue
             count=$((count+1))
-            name=$(/root/usage.sh --name "$mac")
+            name=$(bot_dev_name "$mac")
             [ -z "$name" ] && name="unknown(${mac})"
             bytes=$(echo "$today" | awk -F'|' -v n="$name" '$1==n{b=$3} END{o=(b==""?0:b); print (o<0)?-o:o}')
             printf '%s|0|%s\n' "$name" "$bytes"
@@ -418,7 +427,7 @@ while :; do
             ;;
         /watchlist)
             if [ -s /etc/usage-log/watchlist ]; then
-                body=$( { while read -r m; do [ -n "$m" ] && printf "\n• %s" "$(/root/usage.sh --name "$m") ($m)"; done < /etc/usage-log/watchlist; } )
+                body=$( { while read -r m; do [ -n "$m" ] && printf "\n• %s" "$(bot_dev_name "$m") ($m)"; done < /etc/usage-log/watchlist; } )
                 send "$FROM" "$(card "<b>👀 Watched Devices</b>" "$body")"
             else
                 send "$FROM" "$(card "<b>👀 Watched Devices</b>" "No watched devices.")"

@@ -31,14 +31,23 @@ remember_name() {
     echo "$mac $name" >> "$NAMES_CACHE"
 }
 
+# Sourcing deep device registry
+HERE_REG="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
+[ -f "$HERE_REG/device-registry.sh" ] && . "$HERE_REG/device-registry.sh"
+[ -f "/root/device-registry.sh" ] && . "/root/device-registry.sh"
+
 # name for a mac: user-set name wins, then live DHCP lease, then auto cache
 dev_name() {
-    local mac="$1" name
-    name=$(awk -v m="$mac" '$1==m {print $2; exit}' "$USER_NAMES" 2>/dev/null)
-    [ -n "$name" ] && { echo "$name"; return 0; }
-    name=$(awk -v m="$mac" 'tolower($2)==tolower(m) {print $4; exit}' "$DHCP_LEASES" 2>/dev/null)
-    [ -n "$name" ] && { echo "$name"; return 0; }
-    awk -v m="$mac" '$1==m {print $2; exit}' "$NAMES_CACHE" 2>/dev/null
+    if command -v dev_reg_name >/dev/null 2>&1; then
+        dev_reg_name "$1"
+    else
+        local mac="$1" name
+        name=$(awk -v m="$mac" '$1==m {print $2; exit}' "$USER_NAMES" 2>/dev/null)
+        [ -n "$name" ] && { echo "$name"; return 0; }
+        name=$(awk -v m="$mac" 'tolower($2)==tolower(m) {print $4; exit}' "$DHCP_LEASES" 2>/dev/null)
+        [ -n "$name" ] && { echo "$name"; return 0; }
+        awk -v m="$mac" '$1==m {print $2; exit}' "$NAMES_CACHE" 2>/dev/null
+    fi
 }
 
 # every known device mac (nlbw + leases + caches), router macs excluded
@@ -97,7 +106,11 @@ resolve_mac() {
 is_router_mac() {
     local mac="$1"
     [ "$mac" = "00:00:00:00:00:00" ] && return 0
-    ip link show 2>/dev/null | grep -q "link/ether $mac"
+    ip link show 2>/dev/null | grep -q "link/ether $mac" && return 0
+    # Upstream gateway MAC (X28 CPE modem on lan4/wan)
+    ip neigh show dev lan4 2>/dev/null | grep -q "$mac" && return 0
+    [ "$mac" = "98:a9:42:6b:67:b8" ] && return 0
+    return 1
 }
 
 # current cumulative per device: name|mac|bytes (router macs excluded)
@@ -105,6 +118,8 @@ device_usage() {
     usage_rows | while IFS="$(printf '\t')" read -r mac bytes; do
         [ -z "$mac" ] && continue
         is_router_mac "$mac" && continue
+        # Ignore negligible noise (< 10 KB)
+        [ "$bytes" -lt 10240 ] 2>/dev/null && continue
         # learn a live lease name into the auto cache (user names always win in dev_name)
         lname=$(awk -v m="$mac" 'tolower($2)==tolower(m) {print $4; exit}' "$DHCP_LEASES" 2>/dev/null)
         [ -n "$lname" ] && remember_name "$mac" "$lname"
@@ -164,8 +179,142 @@ month_usage() {
     done
 }
 
+# human formatted table: name (mac) | X.XX GB / MB
+pretty_usage() {
+    local filter="${1:-all}"
+    local data
+    if [ "$filter" = "--month" ]; then
+        data=$(month_usage "${2:-$(date +%Y-%m)}")
+    else
+        data=$(today_usage)
+    fi
+
+    printf '%-30s %-12s %-10s %-10s\n' "DEVICE / NAME" "USAGE" "STATUS" "MAC"
+    printf '%-30s %-12s %-10s %-10s\n' "------------------------------" "------------" "----------" "----------"
+    printf '%s\n' "$data" | sort -t'|' -k3 -nr | while IFS='|' read -r name mac bytes; do
+        [ -z "$bytes" ] && continue
+        local human=""
+        if awk -v b="$bytes" 'BEGIN{exit (b >= 1073741824) ? 0 : 1}'; then
+            human=$(awk -v b="$bytes" 'BEGIN{printf "%.2f GB", b/1073741824}')
+        elif awk -v b="$bytes" 'BEGIN{exit (b >= 1048576) ? 0 : 1}'; then
+            human=$(awk -v b="$bytes" 'BEGIN{printf "%.1f MB", b/1048576}')
+        else
+            human="${bytes} B"
+        fi
+
+        local status="OFFLINE"
+        if iw dev phy1-ap0 station dump 2>/dev/null | grep -qi "$mac" || \
+           iw dev phy0-ap0 station dump 2>/dev/null | grep -qi "$mac" || \
+           ip neigh show 2>/dev/null | grep -i "$mac" | grep -Eqi "REACHABLE|DELAY" || \
+           awk -v m="$mac" 'tolower($2)==tolower(m) {found=1; exit} END{exit !found}' "$DHCP_LEASES" 2>/dev/null; then
+            status="ONLINE"
+        fi
+
+        [ "$filter" = "--active" ] && [ "$status" = "OFFLINE" ] && continue
+
+        case "$name" in
+            Unknown-*)
+                if [ "$status" = "OFFLINE" ]; then
+                    name="[Old-Session] ${name#Unknown-}"
+                fi
+                ;;
+        esac
+
+        local short_mac
+        short_mac=$(printf '%s' "$mac" | cut -c1-8)
+        printf '%-30s %-12s %-10s %-10s\n' "$name" "$human" "$status" "$short_mac"
+    done
+}
+
+# Unified usage: merges multiple rotating MACs per canonical device
+unified_usage() {
+    local period="${1:---today}"
+    local data
+    if [ "$period" = "--month" ]; then
+        data=$(month_usage "${2:-$(date +%Y-%m)}")
+    else
+        data=$(today_usage)
+    fi
+
+    local unifier="/root/device-unifier.sh"
+    [ -x "$unifier" ] || unifier="/usr/sbin/device-unifier.sh"
+    [ -x "$unifier" ] || unifier="$(dirname "$0")/device-unifier.sh"
+
+    local tmp_map="/tmp/usage_unified.$$"
+    rm -f "$tmp_map"
+
+    printf '%s\n' "$data" | while IFS='|' read -r raw_name mac bytes; do
+        [ -z "$bytes" ] && continue
+        local cname=""
+        if [ -x "$unifier" ]; then
+            cname=$("$unifier" get "$mac" 2>/dev/null || true)
+        fi
+        [ -z "$cname" ] && cname="$raw_name"
+
+        local online="0"
+        if iw dev phy1-ap0 station dump 2>/dev/null | grep -qi "$mac" || \
+           iw dev phy0-ap0 station dump 2>/dev/null | grep -qi "$mac" || \
+           ip neigh show 2>/dev/null | grep -i "$mac" | grep -Eqi "REACHABLE|DELAY" || \
+           awk -v m="$mac" 'tolower($2)==tolower(m) {found=1; exit} END{exit !found}' "$DHCP_LEASES" 2>/dev/null; then
+            online="1"
+        fi
+
+        printf '%s\t%s\t%s\t%s\n' "$cname" "$mac" "$bytes" "$online" >> "$tmp_map"
+    done
+
+    printf '%-28s %-12s %-10s %-16s\n' "DEVICE / NAME" "USAGE" "STATUS" "DETAILS"
+    printf '%-28s %-12s %-10s %-16s\n' "----------------------------" "------------" "----------" "----------------"
+
+    if [ -f "$tmp_map" ]; then
+        awk -F'\t' '{
+            cname = $1; bytes = $3 + 0; online = $4 + 0;
+            sum[cname] += bytes;
+            count[cname] += 1;
+            if (online > 0) is_on[cname] = 1;
+        } END {
+            for (c in sum) {
+                st = (is_on[c] ? "ONLINE" : "OFFLINE");
+                det = (count[c] > 1 ? count[c] " MACs merged" : "1 MAC");
+                printf "%s|%d|%s|%s\n", c, sum[c], st, det;
+            }
+        }' "$tmp_map" | sort -t'|' -k2 -nr | while IFS='|' read -r dev bytes st det; do
+            local human=""
+            if awk -v b="$bytes" 'BEGIN{exit (b >= 1073741824) ? 0 : 1}'; then
+                human=$(awk -v b="$bytes" 'BEGIN{printf "%.2f GB", b/1073741824}')
+            elif awk -v b="$bytes" 'BEGIN{exit (b >= 1048576) ? 0 : 1}'; then
+                human=$(awk -v b="$bytes" 'BEGIN{printf "%.1f MB", b/1048576}')
+            else
+                human="${bytes} B"
+            fi
+            printf '%-28s %-12s %-10s %-16s\n' "$dev" "$human" "$st" "$det"
+        done
+        rm -f "$tmp_map"
+    fi
+}
+
 case "$1" in
     --today)    today_usage ;;
+    --pretty|--summary|--unified) unified_usage "${2:---today}" "${3:-}" ;;
+    --raw-pretty) pretty_usage "${2:-all}" "${3:-}" ;;
+    --active)   pretty_usage "--active" ;;
+    --link)
+        _unifier="/root/device-unifier.sh"
+        [ -x "$_unifier" ] || _unifier="/usr/sbin/device-unifier.sh"
+        [ -x "$_unifier" ] || _unifier="$(dirname "$0")/device-unifier.sh"
+        "$_unifier" link "$2" "$3"
+        ;;
+    --unlink)
+        _unifier="/root/device-unifier.sh"
+        [ -x "$_unifier" ] || _unifier="/usr/sbin/device-unifier.sh"
+        [ -x "$_unifier" ] || _unifier="$(dirname "$0")/device-unifier.sh"
+        "$_unifier" unlink "$2"
+        ;;
+    --devices)
+        _unifier="/root/device-unifier.sh"
+        [ -x "$_unifier" ] || _unifier="/usr/sbin/device-unifier.sh"
+        [ -x "$_unifier" ] || _unifier="$(dirname "$0")/device-unifier.sh"
+        "$_unifier" list
+        ;;
     --snapshot) snapshot ;;
     --month)    month_usage "${2:-$(date +%Y-%m)}" ;;
     --raw)      device_usage ;;
@@ -173,6 +322,17 @@ case "$1" in
         n=$(dev_name "$2")
         [ -z "$n" ] && n="Unknown-$(printf '%s' "$2" | cut -c1-8)"
         echo "$n"
+        ;;
+    --set-name)
+        mac=$(printf '%s' "${2:-}" | tr 'A-F' 'a-f')
+        name="${3:-}"
+        [ -z "$mac" ] || [ -z "$name" ] && { echo "usage: $0 --set-name <mac> <name>"; exit 1; }
+        mkdir -p "$USAGE_DIR" 2>/dev/null
+        touch "$USER_NAMES"
+        grep -v "^$mac " "$USER_NAMES" 2>/dev/null > "$USER_NAMES.tmp" || true
+        echo "$mac $name" >> "$USER_NAMES.tmp"
+        mv -f "$USER_NAMES.tmp" "$USER_NAMES"
+        echo "OK: $mac set to $name"
         ;;
     --names)    list_names ;;
     --resolve)  resolve_mac "$2" ;;

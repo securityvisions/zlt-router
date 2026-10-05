@@ -6,6 +6,12 @@ set -euo pipefail
 
 AX_IP="192.168.1.1"
 X28_IP="192.168.70.1"
+CURL_IFACE_OPT=""
+if [ -n "${CURL_IFACE:-}" ]; then
+    CURL_IFACE_OPT="--interface $CURL_IFACE"
+fi
+CURL_CMD="curl"
+command -v curl.exe >/dev/null 2>&1 && CURL_CMD="curl.exe"
 
 echo "============================================================"
 echo "  DUAL-ROUTER RESILIENCE & AUTO-PORT E2E VERIFICATION"
@@ -28,31 +34,31 @@ assert_eq() {
 }
 
 # 1. Test AX3000T domestic direct routing
-code=$(curl.exe -s --noproxy '*' --interface 192.168.1.223 -m 10 -o /dev/null -w "%{http_code}" "https://www.digikala.com" 2>/dev/null || echo "000")
+code=$($CURL_CMD -s --noproxy '*' $CURL_IFACE_OPT -m 10 -o /dev/null -w "%{http_code}" "https://www.digikala.com" 2>/dev/null || echo "000")
 assert_eq "AX3000T domestic traffic (Digikala) flows direct" "200" "$code"
 
 # 1b. Test AX3000T .ir domain direct routing (pirategames.ir on foreign CDN edge)
-code=$(curl.exe -s --noproxy '*' --interface 192.168.1.223 -m 10 -o /dev/null -w "%{http_code}" "https://www.pirategames.ir/online/remnant-ii/" 2>/dev/null || echo "000")
+code=$($CURL_CMD -s --noproxy '*' $CURL_IFACE_OPT -m 10 -o /dev/null -w "%{http_code}" "https://www.pirategames.ir/online/remnant-ii/" 2>/dev/null || echo "000")
 assert_eq "AX3000T .ir domain traffic (pirategames.ir) flows direct" "200" "$code"
 
 # 2. Test AX3000T transparent circumvention (Google)
-code=$(curl.exe -s --noproxy '*' --interface 192.168.1.223 -m 10 -o /dev/null -w "%{http_code}" "https://www.google.com" 2>/dev/null || echo "000")
+code=$($CURL_CMD -s --noproxy '*' $CURL_IFACE_OPT -m 10 -o /dev/null -w "%{http_code}" "https://www.google.com" 2>/dev/null || echo "000")
 assert_eq "AX3000T circumvention traffic (Google) flows via VPS" "200" "$code"
 
 # 3. Test AX3000T transparent circumvention (YouTube)
-code=$(curl.exe -s --noproxy '*' --interface 192.168.1.223 -m 10 -o /dev/null -w "%{http_code}" "https://www.youtube.com" 2>/dev/null || echo "000")
+code=$($CURL_CMD -s --noproxy '*' $CURL_IFACE_OPT -m 10 -o /dev/null -w "%{http_code}" "https://www.youtube.com" 2>/dev/null || echo "000")
 assert_eq "AX3000T circumvention traffic (YouTube) flows via VPS" "200" "$code"
 
 # 4. Test X28 independent SOCKS proxy (Google)
-code=$(curl.exe -s --noproxy '*' -m 10 -x "socks5h://$X28_IP:1080" -o /dev/null -w "%{http_code}" "https://www.google.com" 2>/dev/null || echo "000")
+code=$($CURL_CMD -s --noproxy '*' -m 10 -x "socks5h://$X28_IP:1080" -o /dev/null -w "%{http_code}" "https://www.google.com" 2>/dev/null || echo "000")
 assert_eq "X28 independent proxy (Google) is operational" "200" "$code"
 
 # 5. Test X28 independent SOCKS proxy (YouTube)
-code=$(curl.exe -s --noproxy '*' -m 10 -x "socks5h://$X28_IP:1080" -o /dev/null -w "%{http_code}" "https://www.youtube.com" 2>/dev/null || echo "000")
+code=$($CURL_CMD -s --noproxy '*' -m 10 -x "socks5h://$X28_IP:1080" -o /dev/null -w "%{http_code}" "https://www.youtube.com" 2>/dev/null || echo "000")
 assert_eq "X28 independent proxy (YouTube) is operational" "200" "$code"
 
 # 6. Test X28 independent proxy .ir domain direct routing (pirategames.ir)
-code=$(curl.exe -s --noproxy '*' -m 10 -x "socks5h://$X28_IP:1080" -o /dev/null -w "%{http_code}" "https://www.pirategames.ir/online/remnant-ii/" 2>/dev/null || echo "000")
+code=$($CURL_CMD -s --noproxy '*' -m 10 -x "socks5h://$X28_IP:1080" -o /dev/null -w "%{http_code}" "https://www.pirategames.ir/online/remnant-ii/" 2>/dev/null || echo "000")
 assert_eq "X28 independent proxy .ir domain (pirategames.ir) flows direct" "200" "$code"
 
 echo "============================================================"

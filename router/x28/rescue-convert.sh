@@ -229,14 +229,47 @@ BEGIN{ initb64(); nodes=0; lines=0 }
     # vmess handled outside (see shell)
 }' "$SRC" > "$TMPD/uri.ndjson" || true
 
-# ---- pass 2: vmess via jq (strict, typed) ----------------------------------
-grep '^vmess://' "$SRC" 2>/dev/null | head -"$MAX_NODES" | while IFS= read -r v; do
-    printf '%s' "$v" | cut -c9- | tr '_-' '/+' | {
-        read -r payload
-        case "$payload" in *'=') ;; *) pad=$(( (4 - ${#payload} % 4) % 4 )); [ $pad -ne 0 ] && payload="$payload$(printf '=%.0s' $(seq 1 $pad))" ;; esac
-        printf '%s' "$payload"
-    } | "$JQ" -rR '@base64d' 2>/dev/null | "$JQ" -ce -f "${CONV_DIR}/rescue-vmess.jq" >> "$TMPD/uri.ndjson" || true
-done
+# ---- pass 2: vmess via batch stream (zero per-node forks) ------------------
+grep '^vmess://' "$SRC" 2>/dev/null | head -"$MAX_NODES" | "$JQ" -R -c '
+def pad_b64:
+  gsub("-"; "+") | gsub("_"; "/") |
+  . + ("=" * ((4 - (length % 4)) % 4));
+def num: tonumber? // 0;
+
+rtrimstr("\r") |
+select(startswith("vmess://")) |
+sub("^vmess://"; "") |
+pad_b64 |
+(try (@base64d | fromjson) catch null) |
+select(. != null) |
+. as $in |
+((($in.add // "") | type) == "string") and
+(($in.id // "") | test("^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"))
+| select(.)
+| {
+    type: "vmess",
+    name: ("rc-vm " + (($in.ps // "") | tostring | .[0:40])),
+    server: $in.add,
+    port: (($in.port | tostring | num) | floor),
+    uuid: ($in.id | ascii_downcase),
+    alterId: (($in.aid // 0) | num | floor),
+    security: ((($in.scy // "auto") | tostring)),
+    network: ({tcp:"tcp",ws:"ws",h2:"http",grpc:"grpc"}[$in.net // "tcp"] // "tcp"),
+    udp: true,
+    tls: ($in.tls == "tls"),
+    servername: ((($in.sni // "")) | tostring)
+  }
+| select(.port > 0 and .port < 65536)
+| select(.network == "tcp" or .network == "ws" or .network == "http" or .network == "grpc")
+| if .network == "ws" or .network == "http"
+  then . + {"ws-opts": ({"path": ((($in.path // "/")) | tostring)} +
+        (if ($in.host // "") != "" then {"headers": {"Host": ($in.host | tostring)}} else {} end))}
+  else . end
+| if .network == "grpc"
+  then . + {"grpc-opts": {"grpc-service-name": ((.path // "") | tostring)}}
+  else . end
+| del(.path, .host)
+' >> "$TMPD/uri.ndjson" 2>/dev/null || true
 
 # ---- assemble provider payload (dedupe + cap) ------------------------------
 "$JQ" -sc '

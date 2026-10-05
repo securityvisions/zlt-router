@@ -21,7 +21,7 @@ CAL_LIB="$_cal_dir/cal-lib.sh"
 [ -f "$CAL_LIB" ] && . "$CAL_LIB"
 
 # ---- household rules (re-exported from ledger-rules.sh) ----
-for _rd in "$(dirname "${BASH_SOURCE[0]:-$0}")" "$(dirname "$0")" /data/proxy /root; do
+for _rd in "$(dirname "$0")" /data/proxy /root; do
     [ -f "$_rd/ledger-rules.sh" ] && . "$_rd/ledger-rules.sh" && break
 done 2>/dev/null
 
@@ -176,11 +176,11 @@ hn_sys_uptime() {
     uptime | sed 's/.*up \([^,]*\),.*/\1/'
 }
 
-# hn_sys_proxy_state — "up|<latency_s>" or "down|" via the SOCKS 1070 204 probe.
+# hn_sys_proxy_state — "up|<latency_s>" or "down|" via the SOCKS 1080 204 probe.
 # Sources configurable via env (HN_SYS_PROXY_SOCKS, HN_SYS_PROXY_URL, HN_SYS_PROXY_TIMEOUT).
 hn_sys_proxy_state() {
     local out code t
-    out=$(curl -sS -m "${HN_SYS_PROXY_TIMEOUT:-5}" --socks5 "${HN_SYS_PROXY_SOCKS:-127.0.0.1:1070}" -o /dev/null \
+    out=$(curl -sS -m "${HN_SYS_PROXY_TIMEOUT:-5}" --socks5 "${HN_SYS_PROXY_SOCKS:-127.0.0.1:1080}" -o /dev/null \
         -w '%{http_code}|%{time_total}' "${HN_SYS_PROXY_URL:-https://www.gstatic.com/generate_204}" 2>/dev/null)
     code=${out%%|*}; t=${out##*|}
     if [ "$code" = "204" ]; then echo "up|${t:-0}"; else echo "down|"; fi

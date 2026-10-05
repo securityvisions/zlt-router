@@ -32,6 +32,7 @@ RA_PACKAGES_JSON="${RA_PACKAGES_JSON:-/tmp/samantel_packages.json}"
 RA_USER_NAMES="${RA_USER_NAMES:-$RA_USAGE_LOG_DIR/user-names}"
 RA_WATCHLIST="${RA_WATCHLIST:-$RA_USAGE_LOG_DIR/watchlist}"
 RA_BILLING_CONF="${RA_BILLING_CONF:-/etc/billing.conf}"
+
 RA_USAGE_SH="${RA_USAGE_SH:-/root/usage.sh}"
 RA_EXCLUDED_MACS="${RA_EXCLUDED_MACS:-}"
 RA_NODES="${RA_NODES:-$(uci show passwall 2>/dev/null | sed -n "s/^passwall\.\([^@.][^.]*\)\.remarks='\([^']*\)'/\2|\1/p")}"
@@ -45,9 +46,12 @@ DIV=1073741824
 # implementation. Tests point HN_LIB at the repo copy.
 HN_LIB="${HN_LIB:-/root/hnlib.sh}"
 [ -f "$HN_LIB" ] && . "$HN_LIB"
-# health model (re-exported from hnlib, now a separate module)
-_hm_dir="$(dirname "$HN_LIB")"
-[ -f "$_hm_dir/health-model.sh" ] && . "$_hm_dir/health-model.sh"
+_hn_dir="$(dirname "$HN_LIB")"
+[ -f "$_hn_dir/health-model.sh" ] && . "$_hn_dir/health-model.sh"
+[ -f "$_hn_dir/device-registry.sh" ] && . "$_hn_dir/device-registry.sh"
+[ -f "$_hn_dir/billing.sh" ] && . "$_hn_dir/billing.sh"
+[ -f "/root/device-registry.sh" ] && . "/root/device-registry.sh"
+[ -f "/root/billing.sh" ] && . "/root/billing.sh"
 
 # ---------- tiny JSON helpers ----------
 ra_esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
@@ -78,10 +82,10 @@ ra_authed() {
     local want decoded
     want=$(sed -n 's/^TOKEN=//p' "$RA_CONF" 2>/dev/null | head -1 | tr -d '"' | tr -d ' ')
     [ -n "$want" ] || return 1
-    if [ -n "$HTTP_X_ROUTER_TOKEN" ] && [ "$HTTP_X_ROUTER_TOKEN" = "$want" ]; then
+    if [ -n "${HTTP_X_ROUTER_TOKEN:-}" ] && [ "$HTTP_X_ROUTER_TOKEN" = "$want" ]; then
         return 0
     fi
-    case "$HTTP_AUTHORIZATION" in
+    case "${HTTP_AUTHORIZATION:-}" in
         Basic*|basic*)
             decoded=$(printf '%s' "${HTTP_AUTHORIZATION#* }" | base64 -d 2>/dev/null)
             [ "$decoded" = "$want" ] && return 0
@@ -258,44 +262,11 @@ ra_cost_json_parts() {
 }
 
 ra_json_cost() {  # <yes|no>
-    local friday="${1:-no}" rate_full rate_friday rate round res parts rows rest total_gb total_toman
-    rate_full=$(ra_conf_val "$RA_BILLING_CONF" RATE_FULL_TOMAN);   [ -z "$rate_full" ]  && rate_full=7700
-    rate_friday=$(ra_conf_val "$RA_BILLING_CONF" RATE_FRIDAY_TOMAN); [ -z "$rate_friday" ] && rate_friday=4620
-    if [ "$friday" = "yes" ]; then rate=$rate_friday; else rate=$rate_full; fi
-    round=$(ra_conf_val "$RA_BILLING_CONF" ROUND); [ -z "$round" ] && round=1000
-    res=$(ra_usage_today | while IFS='|' read -r name meta bytes; do
-        [ -z "$name" ] && continue
-        case "$meta" in *:*) mac="$meta";; *) mac="";; esac
-        ra_is_excluded_mac "$mac" && continue
-        echo "$name|$mac|${bytes:-0}"
-    done | hn_cost_table "$rate" "$round")
-    parts=$(echo "$res" | ra_cost_json_parts)
-    rows=${parts%%|*}; rest=${parts#*|}
-    total_gb=${rest%%|*}; total_toman=${rest#*|}
-    echo "{\"friday\":$([ "$friday" = "yes" ] && echo true || echo false),\"rate_full\":$rate_full,\"rate_friday\":$rate_friday,\"rows\":[$rows],\"total_gb\":${total_gb:-0},\"total_toman\":${total_toman:-0}}"
+    BILLING_CONF="$RA_BILLING_CONF" billing_render json today "${1:-no}"
 }
 
 ra_json_bill() {  # <yes|no> [YYYY-MM]
-    local friday="${1:-no}" month="${2:-$(date +%Y-%m)}" rate_full rate_friday rate round res parts
-    local rows rest total_gb total_toman key mac name
-    rate_full=$(ra_conf_val "$RA_BILLING_CONF" RATE_FULL_TOMAN);   [ -z "$rate_full" ]  && rate_full=7700
-    rate_friday=$(ra_conf_val "$RA_BILLING_CONF" RATE_FRIDAY_TOMAN); [ -z "$rate_friday" ] && rate_friday=4620
-    if [ "$friday" = "yes" ]; then rate=$rate_friday; else rate=$rate_full; fi
-    round=$(ra_conf_val "$RA_BILLING_CONF" ROUND); [ -z "$round" ] && round=1000
-    res=$(ra_usage_month_rows "$month" | while IFS='|' read -r key bytes; do
-        [ -z "$key" ] && continue
-        case "$key" in *:*) mac="$key";; *) mac="";; esac
-        ra_is_excluded_mac "$mac" && continue
-        name=$(ra_name_for_key "$key")
-        if [ -z "$name" ]; then
-            case "$key" in *:*) name="Unknown-$(echo "$key" | cut -c1-8)";; *) name="$key";; esac
-        fi
-        echo "$name|$mac|$bytes"
-    done | hn_cost_table "$rate" "$round")
-    parts=$(echo "$res" | ra_cost_json_parts)
-    rows=${parts%%|*}; rest=${parts#*|}
-    total_gb=${rest%%|*}; total_toman=${rest#*|}
-    echo "{\"period\":\"$month\",\"friday\":$([ "$friday" = "yes" ] && echo true || echo false),\"rate_full\":$rate_full,\"rate_friday\":$rate_friday,\"rows\":[$rows],\"total_gb\":${total_gb:-0},\"total_toman\":${total_toman:-0}}"
+    BILLING_CONF="$RA_BILLING_CONF" billing_render json month "${1:-no}" "${2:-$(date +%Y-%m)}"
 }
 
 ra_json_balance() {
@@ -432,18 +403,18 @@ ra_link_state() {
 }
 
 ra_json_link() {
-    local s op tech signal rsrp rsrp5g band plmn flow_dl flow_ul
-    s=$(ra_link_state)
-    [ -n "$s" ] || { RA_STATUS=500; echo '{"error":"link unavailable"}'; return; }
-    op=$(hn_link_field "$s" operator)
-    tech=$(hn_link_field "$s" tech)
-    signal=$(hn_link_field "$s" signal)
-    rsrp=$(hn_link_field "$s" rsrp)
-    rsrp5g=$(hn_link_field "$s" rsrp_5g)
-    band=$(hn_link_field "$s" band)
-    plmn=$(hn_link_field "$s" plmn)
-    flow_dl=$(hn_link_field "$s" flow_dl)
-    flow_ul=$(hn_link_field "$s" flow_ul)
+    local link_raw op tech signal rsrp rsrp5g band plmn flow_dl flow_ul
+    link_raw=$(ra_link_state)
+    [ -n "$link_raw" ] || { RA_STATUS=500; echo '{"error":"link unavailable"}'; return; }
+    op=$(hn_link_field "$link_raw" operator)
+    tech=$(hn_link_field "$link_raw" tech)
+    signal=$(hn_link_field "$link_raw" signal)
+    rsrp=$(hn_link_field "$link_raw" rsrp)
+    rsrp5g=$(hn_link_field "$link_raw" rsrp_5g)
+    band=$(hn_link_field "$link_raw" band)
+    plmn=$(hn_link_field "$link_raw" plmn)
+    flow_dl=$(hn_link_field "$link_raw" flow_dl)
+    flow_ul=$(hn_link_field "$link_raw" flow_ul)
     num() { [ -n "$1" ] && printf '%s' "$1" | grep -qE '^-?[0-9.]+$' && echo "$1" || echo null; }
     echo "{\"operator\":\"$(ra_esc "$op")\",\"tech\":\"$(ra_esc "$tech")\",\"signal\":$(num "$signal"),\"rsrp\":$(num "$rsrp"),\"rsrp_5g\":$(num "$rsrp5g"),\"band\":\"$(ra_esc "$band")\",\"plmn\":\"$(ra_esc "$plmn")\",\"flow\":{\"dl\":$(num "$flow_dl"),\"ul\":$(num "$flow_ul")}}"
 }
@@ -540,15 +511,15 @@ ra_watch_device() {
 }
 
 ra_set_friday() {
-    local f val
-    f=$(echo "$RA_BODY" | jq -r '.friday // false' 2>/dev/null)
-    [ "$f" = "true" ] && val=yes || val=no
+    local friday_flag val
+    friday_flag=$(echo "$RA_BODY" | jq -r '.friday // false' 2>/dev/null)
+    [ "$friday_flag" = "true" ] && val=yes || val=no
     if grep -q '^LAST_FRIDAY=' "$RA_BILLING_CONF" 2>/dev/null; then
         sed -i "s/^LAST_FRIDAY=.*/LAST_FRIDAY=$val/" "$RA_BILLING_CONF" 2>/dev/null
     else
         echo "LAST_FRIDAY=$val" >> "$RA_BILLING_CONF"
     fi
-    echo "{\"ok\":true,\"friday\":$f}"
+    echo "{\"ok\":true,\"friday\":$friday_flag}"
 }
 
 ra_test_url() {
@@ -579,14 +550,71 @@ ra_reboot() {
     echo '{"ok":true}'
 }
 
-# ---------- routing ----------
+# ---------- routing & response pipeline ----------
 ra_qp() {  # ra_qp <name> — from QUERY_STRING
     echo "$QUERY_STRING" | tr '&' '\n' | sed -n "s/^$1=//p" | head -1
 }
 
+ra_respond() {
+    local code="${1:-200}" body="$2" reason=""
+    printf 'Content-Type: application/json\r\n'
+    if [ "$code" != "200" ]; then
+        case "$code" in
+            400) reason="400 Bad Request" ;;
+            401) reason="401 Unauthorized" ;;
+            404) reason="404 Not Found" ;;
+            500) reason="500 Internal Server Error" ;;
+            *)   reason="$code" ;;
+        esac
+        printf 'Status: %s\r\n' "$reason"
+    fi
+    printf '\r\n'
+    printf '%s\n' "$body"
+}
+
+ra_dispatch_endpoint() {
+    case "$1" in
+        /status)        ra_json_status ;;
+        /usage)         ra_json_usage "$(ra_qp period)" "$(ra_qp month)" ;;
+        /cost)          ra_json_cost "$(ra_qp friday)" ;;
+        /bill)          ra_json_bill "$(ra_qp friday)" "$(ra_qp month)" ;;
+        /balance)       ra_json_balance ;;
+        /link)          ra_json_link ;;
+        /clients)       ra_json_clients ;;
+        /live)          ra_json_live ;;
+        /history)       ra_json_history "$(ra_qp kind)" "$(ra_qp days)" ;;
+        /events)        ra_json_events "$(ra_qp limit)" "$(ra_qp category)" ;;
+        /health)        ra_json_health ;;
+        /quality)       ra_json_quality "$(ra_qp hours)" ;;
+        /devices)       ra_json_devices ;;
+        /device/rename) ra_rename_device ;;
+        /device/watch)  ra_watch_device ;;
+        /friday)        ra_set_friday ;;
+        /test)          ra_test_url ;;
+        /proxy/switch)  ra_switch_proxy ;;
+        /reboot)        ra_reboot ;;
+        *)              RA_STATUS=404; echo '{"error":"unknown endpoint"}' ;;
+    esac
+}
+
+ra_handle_request() {
+    local output status body
+    output=$(ra_route)
+    if [ "$output" != "${output##*@@STATUS:}" ]; then
+        status="${output##*@@STATUS:}"
+        # Strip trailing carriage return or newline from status
+        status=$(printf '%s' "$status" | tr -d '\r\n ')
+        body="${output%@@STATUS:*}"
+    else
+        status=200
+        body="$output"
+    fi
+    ra_respond "$status" "$body"
+}
+
 ra_route() {
     RA_STATUS=200
-    if [ "$REQUEST_METHOD" = "POST" ]; then
+    if [ "${REQUEST_METHOD:-GET}" = "POST" ]; then
         RA_BODY=$(cat)
     else
         RA_BODY=""
@@ -595,30 +623,8 @@ ra_route() {
         RA_STATUS=401
         echo '{"error":"unauthorized"}'
     else
-        case "$PATH_INFO" in
-            /status)        ra_json_status ;;
-            /usage)         ra_json_usage "$(ra_qp period)" "$(ra_qp month)" ;;
-            /cost)          ra_json_cost "$(ra_qp friday)" ;;
-            /bill)          ra_json_bill "$(ra_qp friday)" "$(ra_qp month)" ;;
-            /balance)       ra_json_balance ;;
-            /link)          ra_json_link ;;
-            /clients)       ra_json_clients ;;
-            /live)          ra_json_live ;;
-            /history)       ra_json_history "$(ra_qp kind)" "$(ra_qp days)" ;;
-            /events)        ra_json_events "$(ra_qp limit)" "$(ra_qp category)" ;;
-            /health)        ra_json_health ;;
-            /quality)       ra_json_quality "$(ra_qp hours)" ;;
-            /devices)       ra_json_devices ;;
-            /device/rename) ra_rename_device ;;
-            /device/watch)  ra_watch_device ;;
-            /friday)        ra_set_friday ;;
-            /test)          ra_test_url ;;
-            /proxy/switch)  ra_switch_proxy ;;
-            /reboot)        ra_reboot ;;
-            *)              RA_STATUS=404; echo '{"error":"unknown endpoint"}' ;;
-        esac
+        ra_dispatch_endpoint "$PATH_INFO"
     fi
-    # Status marker for the dispatcher: it runs us in a subshell so it cannot
-    # read RA_STATUS; it strips this trailing line before emitting the JSON.
+    # Status marker for backwards compatibility with tests expecting @@STATUS:
     echo "@@STATUS:$RA_STATUS"
 }

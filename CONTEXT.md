@@ -41,6 +41,8 @@ Shared vocabulary for the home-network project. Use these terms exactly; don't d
 
 ## Resilience (the proxy path)
 
+- **dnstt-emergency** — the emergency DNS tunneling node (`127.0.0.1:5300`) backed by `/usr/local/bin/dnstt-client` on AX3000T, routing Base32 DNS queries over recursive resolvers to `dnstt-server` on VPS 1 (`85.121.124.158`). Activated during total national network isolation when all non-DNS UDP/TCP traffic is dropped. See ADR-0008.
+
 - **Fail-open** — the deliberate terminal state of the failover chain: when every proxy node fails its probe, PassWall drops to direct internet rather than taking the network down. The last rung of the chain, never the first.
   _Avoid_: direct mode, fallback (both used loosely elsewhere)
 
@@ -116,3 +118,20 @@ Shared vocabulary for the home-network project. Use these terms exactly; don't d
   _Avoid_: aggregate cache (it is a permanent, self-healing history store)
 - **Ledger history** — the append-forever stores that make up the household Ledger's source of truth: `owners-d/` daily files, the Rollup store, and frozen Ledger pages. Never pruned; `ledger-guard.sh` alerts if the span ever shrinks, `ledger-backup.sh` ships it off-router weekly.
   _Avoid_: usage history (ambiguous — raw `day/` files ARE pruned after 35 days)
+
+## Deep Architectural Subsystems (Rounds 1–4)
+
+- **Proxy watchdog state machine** — the unified 5-state supervisor (`HEALTHY`, `DEGRADED`, `ROTATING`, `FAILOPEN`, `RECOVERING`) on AX3000T managing sing-box fail-open and recovery via nftables and dnsmasq without reboots.
+  _Avoid_: restart script (it never restarts the device)
+- **Cellular gateway** — the decoupled link reader and operator reselection seam (`router/x28link.sh`, `router/x28reselect.sh`, `router/x28/modem-supervisor.sh`) with 600s cooldown and 3/hr storm guard.
+  _Avoid_: modem reset (it is a stateful AT/API switch)
+- **Media gateway** — the unified Smart TV lifecycle and IPTV proxy (`router/media-gateway.sh`) managing Samsung Q70C WOL, Tizen REST API polling, and Telewebion HLS manifest sequence sanitization (64-bit to 9-digit) to prevent 32-bit integer overflow crashes.
+  _Avoid_: IPTV m3u scraper (it is a real-time sanitizing streaming gateway)
+- **Rescue engine** — the consolidated aliveness and ingestion supervisor (`router/x28/rescue-engine.sh`) using a single O(1) `/proxies` bulk query in `jq` and 4-min/10-min hysteresis promotion/demotion.
+  _Avoid_: proxy rotator (it manages survival pool admission)
+- **Telemetry engine** — the unified subsystem evaluator (`router/telemetry-engine.sh`) calculating composite Network Health Score (0–100) across Link, Proxy, DNS, and Compute, maintaining `/etc/telemetry/hourly.jsonl`.
+  _Avoid_: speedtest monitor (it is a multi-dimensional health engine)
+- **HomeLab Server** — the repurposed legacy PC (Intel Pentium G2030, ASUS H61M-K, 10 GB DDR3, 500GB HDD) connected via Gigabit Ethernet to AX3000T (`192.168.1.110`), configured for 24/7 silent headless operation (discrete GPU depopulated, CPU Q-Fan Silent, HDD spindown) to host Docker, Jellyfin 4K media, qBittorrent downloads, and heavy proxy crypto offload. See [`docs/DEVICE_LEGACY_HOMELAB_PC.md`](docs/DEVICE_LEGACY_HOMELAB_PC.md).
+- **Workstation Laptop** — the primary developer/gaming laptop (Lenovo Legion 5 16IAX10, Intel Core Ultra 9 275HX 24C/24T, RTX 5060 Laptop 8GB Blackwell, 32GB DDR5, 1TB NVMe, 240Hz WQXGA) running Omarchy Linux (Hyprland) with Windows 11 dual boot, serving as the SSH/NOC control station and Sunshine 4K120 GameStream host for the Samsung Q70C TV. See [`docs/DEVICE_LENOVO_LEGION_5_LAPTOP.md`](docs/DEVICE_LENOVO_LEGION_5_LAPTOP.md).
+
+

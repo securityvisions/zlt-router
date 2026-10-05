@@ -42,36 +42,28 @@ put_world() {  # put_world <auto|rescue>
     [ "$DRYRUN" = "1" ] && { log "DRYRUN: would set world=$1"; return 0; }
     curl -s -m 8 -X PUT "$CTL/proxies/world" -d "{\"name\":\"$1\"}" >/dev/null 2>&1
 }
-owned_alive_count() {
-    if [ -n "${HEALTH_AUTO_CMD:-}" ]; then sh -c "$HEALTH_AUTO_CMD" 2>/dev/null; return; fi
-    local members alive n=0
-    members=$(api "$CTL/proxies/auto" | "$JQ" -r '.all[]?' 2>/dev/null)
-    for m in $members; do
-        alive=$(api "$CTL/proxies/$m" 2>/dev/null | "$JQ" -r '.alive // "false"' 2>/dev/null)
-        [ "$alive" = "true" ] && n=$((n + 1))
-    done
-    echo "$n"
+
+# Bulk count alive members of a group in one single API call (zero N+1 loop)
+group_alive_count() {
+    local group="$1"
+    if [ -n "${HEALTH_AUTO_CMD:-}" ] && [ "$group" = "auto" ]; then
+        sh -c "$HEALTH_AUTO_CMD" 2>/dev/null
+        return
+    fi
+    api "$CTL/proxies" 2>/dev/null | "$JQ" -r --arg g "$group" '
+        .proxies as $p |
+        ($p[$g].all // []) |
+        map(select($p[.].alive == true)) |
+        length
+    ' 2>/dev/null || echo 0
 }
 
-# simpler, accurate-enough owned health: count alive among known member list
 owned_alive_count() {
-    local members alive n=0
-    members=$(api "$CTL/proxies/auto" | "$JQ" -r '.all[]?' 2>/dev/null)
-    for m in $members; do
-        alive=$(api "$CTL/proxies/$m" 2>/dev/null | "$JQ" -r '.alive // "false"' 2>/dev/null)
-        [ "$alive" = "true" ] && n=$((n + 1))
-    done
-    echo "$n"
+    group_alive_count "auto"
 }
 
 rescue_alive_count() {
-    local members alive n=0
-    members=$(api "$CTL/proxies/rescue" | "$JQ" -r '.all[]?' 2>/dev/null)
-    for m in $members; do
-        alive=$(api "$CTL/proxies/$m" 2>/dev/null | "$JQ" -r '.alive // "false"' 2>/dev/null)
-        [ "$alive" = "true" ] && n=$((n + 1))
-    done
-    echo "$n"
+    group_alive_count "rescue"
 }
 
 do_convert() {

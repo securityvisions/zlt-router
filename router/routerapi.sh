@@ -14,25 +14,5 @@
 DIR=$(cd "$(dirname "$0")" 2>/dev/null && pwd)
 . "$DIR/routerapi_lib.sh"
 
-# ra_route runs in a subshell under the redirection, so RA_STATUS would be lost
-# there; it instead emits a trailing "@@STATUS:NNN" line the dispatcher strips.
-ra_route 2>/dev/null > "/tmp/routerapi_body.$$"
-code=$(sed -n 's/.*@@STATUS:\([0-9]*\).*/\1/p' "/tmp/routerapi_body.$$")
-[ -z "$code" ] && code=200
-sed '/@@STATUS:/d' "/tmp/routerapi_body.$$" > "/tmp/routerapi_json.$$"
+ra_handle_request
 
-printf 'Content-Type: application/json\n'
-if [ "$code" != "200" ]; then
-    # uhttpd ignores a bare "Status: NNN" — it needs the reason phrase too.
-    case "$code" in
-        400) reason="400 Bad Request" ;;
-        401) reason="401 Unauthorized" ;;
-        404) reason="404 Not Found" ;;
-        500) reason="500 Internal Server Error" ;;
-        *)   reason="$code" ;;
-    esac
-    printf 'Status: %s\n' "$reason"
-fi
-printf '\n'
-cat "/tmp/routerapi_json.$$"
-rm -f "/tmp/routerapi_body.$$" "/tmp/routerapi_json.$$"

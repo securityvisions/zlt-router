@@ -42,6 +42,10 @@ TGLIB="$(dirname "$0")/tg-lib.sh"
 PLIB="$(dirname "$0")/privacy-lib.sh"
 [ -f "$PLIB" ] || PLIB="/data/proxy/privacy-lib.sh"
 [ -f "$PLIB" ] && . "$PLIB"
+# Command & action dispatcher module
+DISPATCH_LIB="$(dirname "$0")/bot-dispatch.sh"
+[ -f "$DISPATCH_LIB" ] || DISPATCH_LIB="/data/proxy/bot-dispatch.sh"
+[ -f "$DISPATCH_LIB" ] && . "$DISPATCH_LIB"
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOGF"; tail -c 8192 "$LOGF" > "$LOGF.t" 2>/dev/null && mv "$LOGF.t" "$LOGF"; return 0; }
 hb()  { echo $(date +%s) > "$HB.w"; mv "$HB.w" "$HB"; }
@@ -182,9 +186,9 @@ panel_keyboard() {
  [{"text":"📊 Status","callback_data":"panel:status"},{"text":"📶 Link","callback_data":"panel:link"}],
  [{"text":"💾 Usage","callback_data":"panel:usage"},{"text":"💰 Balance","callback_data":"panel:balance"}],
  [{"text":"📱 Devices","callback_data":"panel:devices"},{"text":"🧾 Bill","callback_data":"panel:bill"}],
- [{"text":"🛰️ Proxy","callback_data":"panel:proxy"},{"text":"❓ Help","callback_data":"panel:help"}],
+ [{"text":"🛰️ Proxy","callback_data":"panel:proxy"},{"text":"📺 TV","callback_data":"panel:tv"}],
  [{"text":"💰 Budget","callback_data":"panel:budget"},{"text":"📉 Outages","callback_data":"panel:outages"}],
- [{"text":"👥 People","callback_data":"panel:people"},{"text":"📶 WiFi","callback_data":"panel:wifi"}]]}'
+ [{"text":"👥 People","callback_data":"panel:people"},{"text":"❓ Help","callback_data":"panel:help"}]]}'
 }
 
 send_panel() {
@@ -442,6 +446,13 @@ bot_render_card() {
         people|month)
             printf '%s' "$(sh /data/proxy/x28-people.sh $arg 2>/dev/null)"
             ;;
+        tv)
+            if [ -x /data/proxy/x28-tv.sh ]; then
+                sh /data/proxy/x28-tv.sh status
+            else
+                sh "$ROOT/x28-tv.sh" status 2>/dev/null || echo "📺 TV integration ready"
+            fi
+            ;;
         help|start|panel)
             help_text
             ;;
@@ -564,10 +575,11 @@ done)" ;;
                 card_arg=$(safe_arg "$(printf '%s' "$text" | awk '{print $2}')")
                 if card=$(bot_render_card "$card_cmd" "$card_arg"); then
                     html_send "$card"
+                    case "$cmd" in
+                        /start|/help|/panel) send_panel ;;
+                    esac
                 else
                     case "$cmd" in
-                        /start|/help) html_send "$(help_text)"; send_panel ;;
-                        /panel)       send_panel ;;
                         /privacy)
                             arg=$(printf '%s' "$text" | awk '{print $2}' | tr 'A-Z' 'a-z')
                             privacy_set "$arg" || :   # on/off set; bare/bogus = no state change
@@ -610,6 +622,22 @@ $out" ;;
                             html_send "$(sh /data/proxy/x28-wifi.sh card 2>/dev/null)"
                         fi
                         ;;
+                    /tv)
+                        sub=$(printf '%s' "$text" | awk '{print $2}')
+                        case "$sub" in
+                            on|wake)
+                                if [ -x /data/proxy/x28-tv.sh ]; then
+                                    html_send "$(sh /data/proxy/x28-tv.sh wake)"
+                                else
+                                    html_send "⚡ WOL sent to Samsung TV"
+                                fi
+                                ;;
+                            *)
+                                card=$(bot_render_card tv)
+                                html_send "$card"
+                                ;;
+                        esac
+                        ;;
                     /rescue)
                         rarg=$(safe_arg "$(printf '%s' "$text" | awk '{print $2}')")
                         case "$rarg" in
@@ -618,8 +646,6 @@ $out" ;;
                         esac
                         html_send "🛟 Rescue · $(now_hm)
 $(esc "$(sh /data/proxy/x28-rescue.sh status 2>/dev/null)")$( [ -n "$rarg" ] && printf '\n<i>switched: %s</i>' "$rarg" )" ;;
-                    /digest)
-                        html_send "$(sh /data/proxy/x28-digest.sh 2>/dev/null)" ;;
                     /ledger)
                         ldir="/data/proxy/usage/ledger"
                         if [ -d "$ldir" ] && ls "$ldir"/J-*.txt >/dev/null 2>&1; then

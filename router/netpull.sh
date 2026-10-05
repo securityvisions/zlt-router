@@ -38,6 +38,7 @@ proxy-watchdog|device|/usr/sbin/proxy-watchdog.sh|router/proxy-watchdog.sh|ax
 axproxy-nft|repo|/etc/axproxy.nft|router/axproxy.nft|ax
 axproxy-sh|repo|/etc/axproxy.sh|router/axproxy.sh|ax
 sing-box-config|repo|/etc/sing-box/config.json|router/sing-box-config.json|ax
+rc-local|device|/etc/rc.local|router/rc.local|ax
 M_EOF
 }
 

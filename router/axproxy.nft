@@ -1,7 +1,7 @@
 table inet axproxy {
     chain prerouting {
         type nat hook prerouting priority dstnat - 5; policy accept;
-        ip daddr { 10.0.0.0/8, 127.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } return
+        ip daddr { 10.0.0.0/8, 127.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 89.39.208.0/24, 103.132.228.0/24 } return
         # Google-DNS transparent capture — apps that hardcode 8.8.8.8/8.8.4.4
         # (e.g. 9router proxyAwareFetch) get answered by local dnsmasq -> sing-box
         # DoH, because MCI blocks/poisons direct queries to Google DNS.
@@ -10,19 +10,31 @@ table inet axproxy {
         iifname { "br-lan", "br-guest" } ip daddr { 8.8.8.8, 8.8.4.4 } tcp dport 53 redirect to :53
         tcp dport 53 return
         udp dport 53 return
-        # Standard web, management, game and Minecraft ports
-        iifname { "br-lan", "br-guest" } tcp dport { 80, 443, 2053, 2083, 2087, 2096, 6667, 8080, 8443, 25565, 28910, 29900, 29901 } redirect to :12345
+        # Valve SDR IP ranges (TCP fallback)
+        iifname { "br-lan", "br-guest" } meta l4proto tcp ip daddr { 146.66.152.0/21, 146.66.152.0/24, 155.133.128.0/17, 162.254.192.0/18, 185.25.182.0/23, 208.64.200.0/22 } redirect to :12345
+        # Standard web, management, game, Minecraft, Steam, Photon
+        iifname { "br-lan", "br-guest" } tcp dport { 80, 443, 2053, 2083, 2087, 2096, 4530-4534, 6667, 8080, 8443, 25565, 27015-27050, 28910, 29900, 29901 } redirect to :12345
         # Playit.gg / Tunnel tunnels often used for game hosting (e.g., Minecraft custom high ports)
         iifname { "br-lan", "br-guest" } ip daddr 147.185.221.0/24 tcp dport 10000-65535 redirect to :12345
     }
     chain tproxy_prerouting {
         type filter hook prerouting priority mangle - 5; policy accept;
-        ip daddr { 10.0.0.0/8, 127.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } return
+        ip daddr { 10.0.0.0/8, 127.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 89.39.208.0/24, 103.132.228.0/24 } return
         udp dport 53 return
         iifname { "br-lan", "br-guest" } udp dport 443 drop
-        # Bedrock Minecraft (19132), GameSpy, Steam voice
-        iifname { "br-lan", "br-guest" } udp dport { 6500, 8086, 8087, 13139, 19132, 27900, 27901 } meta mark set 0x1 tproxy ip to :12346 accept
+        # Valve SDR IP ranges (UDP Steam Datagram Relay)
+        iifname { "br-lan", "br-guest" } meta l4proto udp ip daddr { 146.66.152.0/21, 146.66.152.0/24, 155.133.128.0/17, 162.254.192.0/18, 185.25.182.0/23, 208.64.200.0/22 } meta mark set 0x1 tproxy ip to :12346 accept
+        # Real-time gaming (Steam, Photon, Bedrock Minecraft, GameSpy, STUN/Voice)
+        iifname { "br-lan", "br-guest" } udp dport { 3478-3480, 4379-4380, 5055-5058, 6500, 8086, 8087, 13139, 19132, 27000-27200, 27900, 27901 } meta mark set 0x1 tproxy ip to :12346 accept
         # Playit.gg UDP custom ports (Bedrock / voice)
         iifname { "br-lan", "br-guest" } ip daddr 147.185.221.0/24 udp dport 10000-65535 meta mark set 0x1 tproxy ip to :12346 accept
+    }
+    chain postrouting {
+        type filter hook postrouting priority mangle; policy accept;
+        # Gaming & Voice DSCP Priority (CS6) for CAKE SQM Priority/Voice tin
+        ip daddr { 146.66.152.0/21, 146.66.152.0/24, 155.133.128.0/17, 162.254.192.0/18, 185.25.182.0/23, 208.64.200.0/22 } ip dscp set cs6
+        udp dport { 3478-3480, 4379-4380, 5055-5058, 27000-27200 } ip dscp set cs6
+        udp sport { 3478-3480, 4379-4380, 5055-5058, 27000-27200 } ip dscp set cs6
+        tcp dport { 4530-4534, 27015-27050 } ip dscp set cs6
     }
 }

@@ -58,9 +58,17 @@ probe_check() {
 
 # probe_check_direct — fail-open direct connectivity check with gateway ping fallback
 probe_check_direct() {
-    local timeout="${PROBE_TIMEOUT:-4}" gw="${PROBE_GATEWAY:-192.168.70.1}"
+    local timeout="${PROBE_TIMEOUT:-4}" gw="${PROBE_GATEWAY:-}"
     _check_endpoint "$PROBE_URL" "$timeout" && return 0
     [ -n "$PROBE_FALLBACK_URL" ] && _check_endpoint "$PROBE_FALLBACK_URL" "$timeout" && return 0
+    if [ -z "$gw" ]; then
+        if [ -f /etc/sing-box/config.json ]; then
+            gw="192.168.70.1"
+        else
+            gw=$(ip route 2>/dev/null | awk '/default/ {print $3; exit}')
+            [ -z "$gw" ] && gw="1.1.1.1"
+        fi
+    fi
     ping -c 2 -W 2 "$gw" >/dev/null 2>&1
 }
 
