@@ -106,6 +106,54 @@ and `router/hnlib.sh` to `/root/hnlib.sh`, `chmod 755`, and write `/etc/routerap
 module (balance report reader + cost table) sourced by the bot, the telemetry snapshot, the
 billing report and the Router API. Contract: `~/router-app/API_CONTRACT.md`.
 
+## Emergency Blackout Operations (DNS Tunneling — dnstt)
+
+When a severe national blackout ("روز قطعی") occurs and all standard outbound TCP/UDP connections to VPS nodes are severed:
+
+### 1. Router AX3000T
+- **Start Daemon (UCI configured under `/etc/config/dnstt`)**:
+  ```sh
+  /etc/init.d/dnstt start
+  ```
+- **Verify Local SOCKS5 Listener (`127.0.0.1:5300`)**:
+  ```sh
+  netstat -tlpn | grep 5300
+  # Direct test through tunnel:
+  curl -x socks5h://127.0.0.1:5300 --connect-timeout 15 -m 30 -s http://ip-api.com/json
+  ```
+- **Switch Sing-Box to Emergency DNS Outbound**:
+  ```sh
+  curl -s -X PUT http://127.0.0.1:9090/proxies/proxy-select -H 'Content-Type: application/json' -d '{"name":"dnstt-emergency"}'
+  # Verify delay via Clash API:
+  curl -s 'http://127.0.0.1:9090/proxies/dnstt-emergency/delay?timeout=15000&url=http://cp.cloudflare.com/generate_204'
+  ```
+- **Stop Daemon**:
+  ```sh
+  /etc/init.d/dnstt stop
+  ```
+
+### 2. Workstation / Laptop
+- **Start Standalone Client**:
+  ```sh
+  ~/blackout_binaries/start_dnstt_laptop.sh 1.1.1.1:53
+  ```
+  *(Primary resolver: `1.1.1.1:53` [~4ms benchmarked]. Fallbacks: `4.2.2.4:53`, `8.8.8.8:53`, or local router `192.168.1.1:53`)*
+- Configure application / Telegram / browser proxy: SOCKS5 $\to$ `127.0.0.1:5300`.
+
+### 3. Rooted Android (Redmi Note 9S Curtana)
+- Open Termux or root shell:
+  ```sh
+  su -c "sh /sdcard/Blackout-Prep/start_dnstt_phone.sh 1.1.1.1:53"
+  ```
+- Point NekoBox, PattNG, or Telegram proxy to SOCKS5 `127.0.0.1:5300`.
+
+### 4. VPS Server Health & Logs
+- Verify service status on VPS 1 (`85.121.124.158`):
+  ```sh
+  ssh vps "systemctl status dnstt"
+  ssh vps "journalctl -u dnstt -f -n 50"
+  ```
+
 ## Useful commands (from the router)
 
 ```sh

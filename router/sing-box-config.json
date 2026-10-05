@@ -6,22 +6,52 @@
   "dns": {
     "servers": [
       {
-        "type": "udp",
         "tag": "dns-direct",
-        "server": "192.168.70.1"
+        "type": "udp",
+        "server": "127.0.0.1",
+        "server_port": 6053
       },
       {
-        "type": "https",
         "tag": "dns-proxy",
+        "type": "https",
         "server": "8.8.8.8",
-        "detour": "proxy-select"
+        "detour": "auto"
+      },
+      {
+        "tag": "dns-proxy-backup",
+        "type": "https",
+        "server": "1.1.1.1",
+        "detour": "auto"
       }
     ],
     "rules": [
       {
-        "rule_set": [
-          "geosite-ir"
+        "domain_suffix": [
+          "dariasepehr.com"
         ],
+        "server": "dns-proxy"
+      },
+      {
+        "domain_suffix": [
+          "ra3battle.net",
+          "ra3battle.cn",
+          "cor-games.com",
+          "gamespy.com",
+          "gamestats.com",
+          "cnc-online.net",
+          "photonengine.io",
+          "photonengine.cn",
+          "exitgames.com"
+        ],
+        "server": "dns-proxy"
+      },
+      {
+        "rule_set": [
+          "geosite-category-bank-ir"
+        ],
+        "server": "dns-direct"
+      },
+      {
         "domain_suffix": [
           "telewebion.com",
           "telewebion.net",
@@ -33,7 +63,20 @@
           "livekadeh.com",
           "wns.live",
           "digikala.com",
-          "aparat.com"
+          "digikala.work",
+          "digikalacloud.com",
+          "aparat.com",
+          "soft98.ir",
+          "filimo.com",
+          "filmnet.ir",
+          "torob.com",
+          "divar.ir",
+          "snapp.ir",
+          "tapsi.ir",
+          "rubika.ir",
+          "eitaa.com",
+          "bale.ai",
+          "shaparak.ir"
         ],
         "server": "dns-direct"
       },
@@ -46,15 +89,10 @@
         "server": "dns-direct"
       },
       {
-        "domain_suffix": [
-          "ra3battle.net",
-          "ra3battle.cn",
-          "cor-games.com",
-          "gamespy.com",
-          "gamestats.com",
-          "cnc-online.net"
+        "rule_set": [
+          "geosite-ir"
         ],
-        "server": "dns-proxy"
+        "server": "dns-direct"
       }
     ],
     "final": "dns-proxy",
@@ -94,12 +132,15 @@
       "type": "urltest",
       "tag": "auto",
       "outbounds": [
+        "hy2",
         "vps-reality",
+        "cdn-ws",
         "via-x28"
       ],
       "url": "https://www.gstatic.com/generate_204",
       "interval": "30s",
       "tolerance": 50,
+      "idle_timeout": "15m",
       "interrupt_exist_connections": true
     },
     {
@@ -110,7 +151,9 @@
         "vps-reality",
         "via-x28",
         "hy2",
-        "cdn-ws"
+        "cdn-ws",
+        "cdn-grpc",
+        "dnstt-emergency"
       ],
       "default": "auto",
       "interrupt_exist_connections": true
@@ -125,33 +168,37 @@
       "tls": {
         "enabled": true,
         "server_name": "www.bing.com",
-        "utls": {
-          "enabled": true,
-          "fingerprint": "chrome"
-        },
         "reality": {
           "enabled": true,
           "public_key": "fIZg5mhL-DlLT03aBciQw94x6hPOe2_T6ivsRHRyMWA",
           "short_id": "7fa7e3ce4165cba3"
-        }
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        },
+        "record_fragment": true
       }
     },
     {
       "type": "vless",
-      "tag": "cdn-ws",
-      "server": "188.114.98.0",
+      "server": "5.175.234.113",
       "server_port": 443,
       "uuid": "5ee543a7-9a11-4d0d-b3e6-153945539f60",
+      "packet_encoding": "xudp",
       "tls": {
         "enabled": true,
-        "server_name": "cdn.dmbz.ir"
-      },
-      "transport": {
-        "type": "ws",
-        "path": "/v1/status",
-        "headers": {
-          "Host": "cdn.dmbz.ir"
-        }
+        "server_name": "www.bing.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "fIZg5mhL-DlLT03aBciQw94x6hPOe2_T6ivsRHRyMWA",
+          "short_id": "7fa7e3ce4165cba3"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        },
+        "record_fragment": true
       }
     },
     {
@@ -170,6 +217,57 @@
       }
     },
     {
+      "type": "hysteria2",
+      "server": "5.175.234.113",
+      "server_port": 31800,
+      "password": "p4DyJIAuyp",
+      "obfs": {
+        "type": "salamander",
+        "password": "bwne4pabf0tzt00f"
+      },
+      "tls": {
+        "enabled": true,
+        "insecure": true
+      },
+      "up_mbps": 40,
+      "down_mbps": 150
+    },
+    {
+      "type": "vless",
+      "tag": "cdn-ws",
+      "server": "188.114.99.0",
+      "server_port": 443,
+      "uuid": "5ee543a7-9a11-4d0d-b3e6-153945539f60",
+      "transport": {
+        "type": "ws",
+        "path": "/v1/status",
+        "headers": {
+          "Host": "cdn.dmbz.ir"
+        }
+      },
+      "tls": {
+        "enabled": true,
+        "server_name": "cdn.dmbz.ir",
+        "record_fragment": true
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "cdn-grpc",
+      "server": "188.114.99.0",
+      "server_port": 443,
+      "uuid": "5ee543a7-9a11-4d0d-b3e6-153945539f60",
+      "transport": {
+        "type": "grpc",
+        "service_name": "vless-grpc"
+      },
+      "tls": {
+        "enabled": true,
+        "server_name": "cdn.dmbz.ir",
+        "record_fragment": true
+      }
+    },
+    {
       "type": "socks",
       "tag": "via-x28",
       "server": "192.168.70.1",
@@ -180,16 +278,20 @@
       "tag": "direct"
     },
     {
-      "type": "urltest",
+      "type": "selector",
       "tag": "gaming",
       "outbounds": [
         "hy2",
+        "direct",
         "vps-reality"
       ],
-      "url": "https://www.gstatic.com/generate_204",
-      "interval": "30s",
-      "tolerance": 100,
-      "interrupt_exist_connections": true
+      "default": "hy2"
+    },
+    {
+      "type": "socks",
+      "tag": "dnstt-emergency",
+      "server": "127.0.0.1",
+      "server_port": 5300
     }
   ],
   "route": {
@@ -197,6 +299,62 @@
     "default_domain_resolver": {
       "server": "dns-direct"
     },
+    "rule_set": [
+      {
+        "tag": "geosite-ir",
+        "type": "local",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-ir.srs"
+      },
+      {
+        "tag": "geoip-ir",
+        "type": "local",
+        "format": "binary",
+        "path": "/etc/sing-box/geoip-ir.srs"
+      },
+      {
+        "tag": "geosite-youtube",
+        "type": "local",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-youtube.srs"
+      },
+      {
+        "tag": "geosite-google",
+        "type": "local",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-google.srs"
+      },
+      {
+        "tag": "geosite-instagram",
+        "type": "local",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-instagram.srs"
+      },
+      {
+        "tag": "geosite-facebook",
+        "type": "local",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-facebook.srs"
+      },
+      {
+        "tag": "geosite-category-bank-ir",
+        "type": "local",
+        "format": "binary",
+        "path": "/etc/sing-box/geosite-category-bank-ir.srs"
+      },
+      {
+        "tag": "geoip-arvancloud",
+        "type": "local",
+        "format": "binary",
+        "path": "/etc/sing-box/geoip-arvancloud.srs"
+      },
+      {
+        "tag": "geoip-derakcloud",
+        "type": "local",
+        "format": "binary",
+        "path": "/etc/sing-box/geoip-derakcloud.srs"
+      }
+    ],
     "rules": [
       {
         "action": "sniff"
@@ -207,6 +365,95 @@
       },
       {
         "ip_is_private": true,
+        "outbound": "direct"
+      },
+      {
+        "domain": [
+          "dariasepehr.com"
+        ],
+        "domain_suffix": [
+          "dariasepehr.com"
+        ],
+        "ip_cidr": [
+          "89.39.208.251/32",
+          "89.39.208.0/24"
+        ],
+        "outbound": "proxy-select"
+      },
+      {
+        "ip_cidr": [
+          "85.121.124.158/32",
+          "5.175.234.113/32",
+          "188.114.98.0/24",
+          "188.114.99.0/24",
+          "216.45.52.132/32",
+          "192.168.70.0/24"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "rule_set": [
+          "geosite-category-bank-ir",
+          "geoip-arvancloud",
+          "geoip-derakcloud"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "domain_suffix": [
+          "telewebion.com",
+          "telewebion.net",
+          "telewebion.ir",
+          "sepehrtv.ir",
+          "anten.ir",
+          "lenz.ir",
+          "irib.ir",
+          "livekadeh.com",
+          "wns.live",
+          "digikala.com",
+          "digikala.work",
+          "digikalacloud.com",
+          "aparat.com",
+          "soft98.ir",
+          "filimo.com",
+          "filmnet.ir",
+          "torob.com",
+          "divar.ir",
+          "snapp.ir",
+          "tapsi.ir",
+          "rubika.ir",
+          "eitaa.com",
+          "bale.ai",
+          "shaparak.ir",
+          "saymyname.website",
+          "strem.fun",
+          "pirategames.ir",
+          "dariasepehr.com"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "domain_suffix": [
+          ".ir"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "rule_set": [
+          "geosite-ir"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "rule_set": [
+          "geoip-ir"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "ip_cidr": [
+          "185.137.27.122/32"
+        ],
         "outbound": "direct"
       },
       {
@@ -221,12 +468,23 @@
         "outbound": "gaming"
       },
       {
-        "ip_cidr": [
-          "85.121.124.158/32",
-          "188.114.98.0/24",
-          "216.45.52.132/32"
+        "domain_suffix": [
+          "photonengine.io",
+          "photonengine.cn",
+          "exitgames.com"
         ],
-        "outbound": "direct"
+        "outbound": "gaming"
+      },
+      {
+        "port_range": [
+          "27000:27200",
+          "5055:5058",
+          "3478:3480",
+          "4379:4380",
+          "27015:27050",
+          "4530:4534"
+        ],
+        "outbound": "gaming"
       },
       {
         "domain_suffix": [
@@ -255,49 +513,6 @@
         "outbound": "proxy-select"
       },
       {
-        "domain_suffix": [
-          ".ir"
-        ],
-        "outbound": "direct"
-      },
-      {
-        "rule_set": [
-          "geosite-ir"
-        ],
-        "outbound": "direct",
-        "domain_suffix": [
-          "telewebion.com",
-          "telewebion.net",
-          "telewebion.ir",
-          "sepehrtv.ir",
-          "anten.ir",
-          "lenz.ir",
-          "irib.ir",
-          "livekadeh.com",
-          "wns.live"
-        ]
-      },
-      {
-        "rule_set": [
-          "geoip-ir"
-        ],
-        "outbound": "direct"
-      },
-      {
-        "domain_suffix": [
-          "saymyname.website",
-          "strem.fun",
-          "pirategames.ir"
-        ],
-        "outbound": "direct"
-      },
-      {
-        "ip_cidr": [
-          "185.137.27.122/32"
-        ],
-        "outbound": "direct"
-      },
-      {
         "rule_set": [
           "geosite-youtube",
           "geosite-google",
@@ -307,54 +522,16 @@
         "outbound": "proxy-select"
       }
     ],
-    "rule_set": [
-      {
-        "type": "local",
-        "tag": "geosite-ir",
-        "format": "binary",
-        "path": "/etc/sing-box/geosite-ir.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geoip-ir",
-        "format": "binary",
-        "path": "/etc/sing-box/geoip-ir.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-youtube",
-        "format": "binary",
-        "path": "/etc/sing-box/geosite-youtube.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-google",
-        "format": "binary",
-        "path": "/etc/sing-box/geosite-google.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-instagram",
-        "format": "binary",
-        "path": "/etc/sing-box/geosite-instagram.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-facebook",
-        "format": "binary",
-        "path": "/etc/sing-box/geosite-facebook.srs"
-      }
-    ],
     "final": "proxy-select"
   },
   "experimental": {
-    "clash_api": {
-      "external_controller": "127.0.0.1:9090",
-      "default_mode": "rule"
-    },
     "cache_file": {
       "enabled": true,
       "path": "/etc/sing-box/cache.db"
+    },
+    "clash_api": {
+      "external_controller": "127.0.0.1:9090",
+      "default_mode": "rule"
     }
   }
 }
