@@ -4,3 +4,15 @@
 /SUMMARY.md
 /PHASE1_COMPLETE.md
 .secrets/
+
+# Build artifacts & temp exports
+build/
+bundle.js
+architecture_showcase.html
+build_executive_pdf.py
+
+# Media & subtitles
+*.srt
+*.mp4
+*.mkv
+
