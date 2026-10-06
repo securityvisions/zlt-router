@@ -4,6 +4,7 @@ Guidance for coding agents working in this repo.
 
 ## Master Documentation
 
+- **First-Step Diagnostics:** For ANY network connectivity, proxy, or DNS diagnostics: NEVER run local host curl/ping tests first. Read [`docs/HOME_NETWORK_COMPLETE_REFERENCE.md`](docs/HOME_NETWORK_COMPLETE_REFERENCE.md) and execute diagnostic probes directly on the AX3000T router (`192.168.1.1`) via SSH.
 - **Single Source of Truth:** Read [`docs/HOME_NETWORK_COMPLETE_REFERENCE.md`](docs/HOME_NETWORK_COMPLETE_REFERENCE.md) before diagnosing, configuring, or modifying any system component. It contains the complete architecture, network topology, credential vault, and operational runbook.
 - **Resilience Engineering:** Read [`docs/RESEARCH_FAILSAFE_DNS_PROXY_RESILIENCE.md`](docs/RESEARCH_FAILSAFE_DNS_PROXY_RESILIENCE.md) for root-cause analysis of DNS/proxy failover, sing-box URLTest mechanics, and fail-open watchdog specifications.
 - **FTTH & Infrastructure Strategy:** Read [`docs/FTTH_DEPLOYMENT_AND_MINIPC_STRATEGY.md`](docs/FTTH_DEPLOYMENT_AND_MINIPC_STRATEGY.md) for the 12-unit residential FTTH deployment plan in Ponak and Mini-PC HomeLab architecture.
