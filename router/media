@@ -1,0 +1,7 @@
+#!/bin/sh
+# /www/cgi-bin/media — CGI IPTV manifest endpoint (Facade to media-gateway.sh)
+MG="/usr/sbin/media-gateway.sh"
+[ -f "$MG" ] || MG="/root/media-gateway.sh"
+[ -f "$MG" ] || MG="$(dirname "$0")/media-gateway.sh"
+
+exec "$MG" cgi-media

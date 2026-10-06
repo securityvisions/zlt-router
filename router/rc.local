@@ -1,0 +1,9 @@
+# Put your custom commands here that should be executed once
+# the system init finished. By default this file does nothing.
+
+# REALITY clock guard: after a cold boot the RTC-less board restores a stale
+# sysfixtime; REALITY rejects every handshake while the skew is >~2 min.
+# One-shot NTP sync (direct UDP:123, tunnel-independent) BEFORE sing-box.
+(     for i in 1 2 3 4 5 6 7 8 9 10 11 12; do         ntpd -q -p 0.openwrt.pool.ntp.org -p 1.openwrt.pool.ntp.org >/dev/null 2>&1 && break;         sleep 10;     done;     logger -t clock-guard "NTP one-shot done, clock=$(date -u +%FT%TZ)"; ) &
+
+exit 0
